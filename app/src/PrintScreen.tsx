@@ -409,7 +409,11 @@ export default function PrintScreen() {
                                             )}
 
                                             {/* Left Page (or Center Page if 1-up) */}
-                                            <div className="flex-1 relative flex items-center justify-center overflow-hidden bg-white">
+                                            <div className="flex-1 relative flex items-center justify-center overflow-hidden bg-white"
+                                                 style={{ 
+                                                     paddingLeft: (settings.auto_snap_content !== false && settings.binding_method === 'perfect' && is1up && !sheet.isCover) ? `${settings.binding_margin_mm * pxPerMm}px` : '0px',
+                                                     paddingRight: (settings.auto_snap_content !== false && settings.binding_method === 'perfect' && !is1up && !sheet.isCover) ? `${settings.binding_margin_mm * pxPerMm}px` : '0px'
+                                                 }}>
                                                 {sheet.front.left !== null ? (
                                                     <div className="w-full h-full flex flex-col items-center justify-center relative">
                                                         <img 
@@ -432,7 +436,10 @@ export default function PrintScreen() {
                                             
                                             {/* Right Page (Only if not 1-up) */}
                                             {!is1up && (
-                                            <div className="flex-1 relative flex items-center justify-center overflow-hidden bg-white">
+                                            <div className="flex-1 relative flex items-center justify-center overflow-hidden bg-white"
+                                                 style={{ 
+                                                     paddingLeft: (settings.auto_snap_content !== false && settings.binding_method === 'perfect' && !is1up && !sheet.isCover) ? `${settings.binding_margin_mm * pxPerMm}px` : '0px'
+                                                 }}>
                                                 {sheet.front.right !== null ? (
                                                     <div className="w-full h-full flex flex-col items-center justify-center relative">
                                                         <img 
@@ -509,7 +516,10 @@ export default function PrintScreen() {
                                                 )}
 
                                                 {/* Left Page (Back) */}
-                                                <div className="flex-1 relative flex items-center justify-center overflow-hidden bg-white">
+                                                <div className="flex-1 relative flex items-center justify-center overflow-hidden bg-white"
+                                                     style={{ 
+                                                         paddingRight: (settings.auto_snap_content !== false && settings.binding_method === 'perfect' && !sheet.isCover) ? `${settings.binding_margin_mm * pxPerMm}px` : '0px'
+                                                     }}>
                                                     {sheet.back.left !== null ? (
                                                         <div className="w-full h-full flex flex-col items-center justify-center relative">
                                                             <img 
@@ -532,7 +542,10 @@ export default function PrintScreen() {
                                                 
                                                 {/* Right Page (Back) */}
                                                 {!is1up && (
-                                                <div className="flex-1 relative flex items-center justify-center overflow-hidden bg-white">
+                                                <div className="flex-1 relative flex items-center justify-center overflow-hidden bg-white"
+                                                     style={{ 
+                                                         paddingLeft: (settings.auto_snap_content !== false && settings.binding_method === 'perfect' && !is1up && !sheet.isCover) ? `${settings.binding_margin_mm * pxPerMm}px` : '0px'
+                                                     }}>
                                                     {sheet.back.right !== null ? (
                                                         <div className="w-full h-full flex flex-col items-center justify-center relative">
                                                             <img 
