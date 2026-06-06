@@ -136,10 +136,11 @@ export default function PrintScreen() {
     }, [projectState?.visible_images, settings]);
 
     // Track loaded image natural dimensions for content-level crop lines
-    const [imageDims, setImageDims] = useState<Record<number, { w: number; h: number }>({});
+    type ImgDimMap = { [key: number]: { w: number; h: number } };
+    const [imageDims, setImageDims] = useState({} as ImgDimMap);
     const handleImageLoad = (pageIndex: number, e: React.SyntheticEvent<HTMLImageElement>) => {
         const img = e.currentTarget;
-        setImageDims(prev => {
+        setImageDims((prev: ImgDimMap) => {
             if (prev[pageIndex]?.w === img.naturalWidth && prev[pageIndex]?.h === img.naturalHeight) return prev;
             return { ...prev, [pageIndex]: { w: img.naturalWidth, h: img.naturalHeight } };
         });
