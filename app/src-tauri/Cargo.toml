@@ -32,3 +32,7 @@ reqwest = { version = "0.13.3", features = ["json"] }
 sha2 = "0.10.9"
 hex = "0.4.3"
 chrono = "0.4.45"
+tauri-plugin-store = "2.4.3"
+tauri-plugin-dialog = "2.7.1"
+zip = "4.2.0"
+walkdir = "2.5.0"
