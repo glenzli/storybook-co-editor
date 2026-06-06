@@ -175,6 +175,9 @@ export default function PrintScreen() {
     }, [projectState?.global_script]);
 
     // Helper: render text overlay for a page
+    // Editor text is positioned in a container of height ~85vh with absolute px values.
+    // In print preview, the container is bookBlockHeightPx (before fitScale).
+    // We scale all px values by the ratio to maintain proportional positioning.
     const renderTextOverlay = (pageIdx: number) => {
         const text = parsedScript.get(pageIdx);
         if (!text) return null;
@@ -182,14 +185,26 @@ export default function PrintScreen() {
         const ts = isCover ? projectState?.cover_text_settings : projectState?.inner_text_settings;
         const ff = ts?.font_family || 'serif';
         const fontFamily = ff === 'sans' ? 'ui-sans-serif, system-ui, sans-serif' : ff === 'serif' ? 'ui-serif, Georgia, serif' : `'${ff}', sans-serif`;
+        
+        // Scale factor: print container height / editor container height
+        const editorRefHeight = typeof window !== 'undefined' ? window.innerHeight * 0.85 : 800;
+        const textScale = bookBlockHeightPx / editorRefHeight;
+        
+        const fontSize = (ts?.font_size || (isCover ? 40 : 20)) * textScale;
+        const bottomPx = 40 * textScale;   // editor's bottom-10 = 2.5rem ≈ 40px
+        const padXPx = 48 * textScale;     // editor's px-12 = 3rem ≈ 48px
+        const offsetX = (ts?.offset_x || 0) * textScale;
+        const offsetY = (ts?.offset_y || 0) * textScale;
+        
         return (
-            <div className="absolute bottom-10 left-0 w-full px-12 pointer-events-none flex justify-center z-10">
+            <div className="absolute left-0 w-full pointer-events-none flex justify-center z-10"
+                 style={{ bottom: `${bottomPx}px`, paddingLeft: `${padXPx}px`, paddingRight: `${padXPx}px` }}>
                 <div className="text-center tracking-wide whitespace-pre-wrap" style={{
                     fontFamily,
-                    fontSize: `${ts?.font_size || (isCover ? 40 : 20)}px`,
+                    fontSize: `${fontSize}px`,
                     color: ts?.text_color || '#ffffff',
                     filter: getShadowStyle(ts?.text_color || '#ffffff', ts?.has_shadow ?? true),
-                    transform: `translate(${ts?.offset_x || 0}px, ${ts?.offset_y || 0}px)`,
+                    transform: `translate(${offsetX}px, ${offsetY}px)`,
                 }}>
                     {text}
                 </div>
