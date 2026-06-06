@@ -183,13 +183,13 @@ export default function PrintScreen() {
         const ff = ts?.font_family || 'serif';
         const fontFamily = ff === 'sans' ? 'ui-sans-serif, system-ui, sans-serif' : ff === 'serif' ? 'ui-serif, Georgia, serif' : `'${ff}', sans-serif`;
         return (
-            <div className="absolute bottom-[8%] left-0 w-full px-[8%] pointer-events-none flex justify-center z-10">
+            <div className="absolute bottom-10 left-0 w-full px-12 pointer-events-none flex justify-center z-10">
                 <div className="text-center tracking-wide whitespace-pre-wrap" style={{
                     fontFamily,
-                    fontSize: `${(ts?.font_size || (isCover ? 40 : 20)) * 0.5}px`,
+                    fontSize: `${ts?.font_size || (isCover ? 40 : 20)}px`,
                     color: ts?.text_color || '#ffffff',
                     filter: getShadowStyle(ts?.text_color || '#ffffff', ts?.has_shadow ?? true),
-                    transform: `translate(${(ts?.offset_x || 0) * 0.5}px, ${(ts?.offset_y || 0) * 0.5}px)`,
+                    transform: `translate(${ts?.offset_x || 0}px, ${ts?.offset_y || 0}px)`,
                 }}>
                     {text}
                 </div>
@@ -360,7 +360,7 @@ export default function PrintScreen() {
 
                         <label className="flex items-center gap-2 cursor-pointer mt-1">
                             <input type="checkbox" checked={settings.duplex_printing ?? false} onChange={e => updateSettings({ duplex_printing: e.target.checked })} className="accent-primary w-4 h-4" />
-                            <span className="text-sm">双面打印 (跳过反面生成)</span>
+                            <span className="text-sm">打印机管理双面翻转</span>
                         </label>
                         
                         <label className="flex items-center gap-2 cursor-pointer">
@@ -714,14 +714,36 @@ export default function PrintScreen() {
                                         const bbTopPos = backTop + settings.offset_y;
                                         const bbRight = bbLeft + scaledW;
                                         const bbBottom = bbTopPos + scaledH;
-                                        return (
-                                            <>
-                                                {bbRight + 2 < w && <div className="absolute top-0 bottom-0 pointer-events-none z-50" style={{ left: `${bbRight}px`, width: 0, borderLeft: '1px dashed rgba(0,0,0,0.4)' }} />}
-                                                {bbTopPos > 2 && <div className="absolute left-0 right-0 pointer-events-none z-50" style={{ top: `${bbTopPos}px`, height: 0, borderTop: '1px dashed rgba(0,0,0,0.4)' }} />}
-                                                {bbBottom + 2 < h && <div className="absolute left-0 right-0 pointer-events-none z-50" style={{ top: `${bbBottom}px`, height: 0, borderTop: '1px dashed rgba(0,0,0,0.4)' }} />}
-                                                {bbLeft > 2 && <div className="absolute top-0 bottom-0 pointer-events-none z-50" style={{ left: `${bbLeft}px`, width: 0, borderLeft: '1px dashed rgba(0,0,0,0.4)' }} />}
-                                            </>
-                                        );
+                                        const lines: React.ReactNode[] = [];
+                                        if (bbRight + 2 < w) lines.push(<div key="r" className="absolute top-0 bottom-0 pointer-events-none z-50" style={{ left: `${bbRight}px`, width: 0, borderLeft: '1px dashed rgba(0,0,0,0.4)' }} />);
+                                        if (bbTopPos > 2) lines.push(<div key="t" className="absolute left-0 right-0 pointer-events-none z-50" style={{ top: `${bbTopPos}px`, height: 0, borderTop: '1px dashed rgba(0,0,0,0.4)' }} />);
+                                        if (bbBottom + 2 < h) lines.push(<div key="b" className="absolute left-0 right-0 pointer-events-none z-50" style={{ top: `${bbBottom}px`, height: 0, borderTop: '1px dashed rgba(0,0,0,0.4)' }} />);
+                                        if (bbLeft > 2) lines.push(<div key="l" className="absolute top-0 bottom-0 pointer-events-none z-50" style={{ left: `${bbLeft}px`, width: 0, borderLeft: '1px dashed rgba(0,0,0,0.4)' }} />);
+
+                                        // Content-level crop lines (back side)
+                                        const backPageIdx = is1up ? sheet.back!.left : sheet.back!.left;
+                                        if (backPageIdx !== null && imageDims[backPageIdx] && !sheet.isCover) {
+                                            const dims = imageDims[backPageIdx];
+                                            const imgAspect = dims.w / dims.h;
+                                            const padR = (settings.binding_method === 'perfect' && is1up) ? (settings.binding_margin_mm + effectiveOffsetX) * pxPerMm : 0;
+                                            const padL = (settings.binding_method === 'perfect' && !is1up) ? (settings.binding_margin_mm + effectiveOffsetX) * pxPerMm : 0;
+                                            const cW = bookBlockWidthPx * (is1up ? 1 : 0.5) - padL - padR;
+                                            const cH = bookBlockHeightPx;
+                                            const containerAspect = cW / cH;
+                                            if (containerAspect > imgAspect) {
+                                                const imgW = cH * imgAspect;
+                                                // Back side is mirrored: for 1-up, glue is right, content goes left, so crop on left side
+                                                const cropX = bbLeft + (is1up ? (cW - imgW) : (padL + imgW)) * fitScale;
+                                                if (cropX > 2 && cropX + 2 < w) lines.push(<div key="cr" className="absolute top-0 bottom-0 pointer-events-none z-50" style={{ left: `${cropX}px`, width: 0, borderLeft: '1px dashed rgba(0,0,0,0.5)' }} />);
+                                            } else if (containerAspect < imgAspect) {
+                                                const imgH = cW / imgAspect;
+                                                const cropYTop = bbTopPos + ((cH - imgH) / 2) * fitScale;
+                                                const cropYBot = bbTopPos + ((cH + imgH) / 2) * fitScale;
+                                                if (cropYTop > 2) lines.push(<div key="crt" className="absolute left-0 right-0 pointer-events-none z-50" style={{ top: `${cropYTop}px`, height: 0, borderTop: '1px dashed rgba(0,0,0,0.5)' }} />);
+                                                if (cropYBot + 2 < h) lines.push(<div key="crb" className="absolute left-0 right-0 pointer-events-none z-50" style={{ top: `${cropYBot}px`, height: 0, borderTop: '1px dashed rgba(0,0,0,0.5)' }} />);
+                                            }
+                                        }
+                                        return <>{lines}</>;
                                     })()}
                                     </div>
                                 </div>
