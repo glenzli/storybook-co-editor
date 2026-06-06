@@ -132,15 +132,6 @@ export default function PrintScreen() {
         return calculateImposition(projectState.visible_images, settings);
     }, [projectState?.visible_images, settings]);
 
-    const getAlignmentClasses = (side: 'front' | 'back') => {
-        const align = settings.paper_alignment || 'left';
-        switch (align) {
-            case 'left': return side === 'front' ? 'items-center justify-start' : 'items-center justify-end';
-            case 'top-left': return side === 'front' ? 'items-start justify-start' : 'items-start justify-end';
-            case 'center':
-            default: return 'items-center justify-center';
-        }
-    };
 
     return (
         <div className="flex flex-1 overflow-hidden relative bg-muted text-foreground">
@@ -352,20 +343,8 @@ export default function PrintScreen() {
                     let w_mm = isLandscape ? pH_mm : pW_mm;
                     let h_mm = isLandscape ? pW_mm : pH_mm;
 
-                    let bW_mm = settings.book_size === 'A4' ? 210 : 148.5;
-                    let bH_mm = settings.book_size === 'A4' ? 297 : 210;
-
-                    // Intelligent Book Orientation based on Paper Orientation and Layout Mode
-                    const globalIs1up = settings.binding_method === 'perfect' && settings.layout_mode === '1-up';
-                    if (globalIs1up) {
-                        if (isLandscape) {
-                            const temp = bW_mm; bW_mm = bH_mm; bH_mm = temp;
-                        }
-                    } else {
-                        if (!isLandscape) {
-                            const temp = bW_mm; bW_mm = bH_mm; bH_mm = temp;
-                        }
-                    }
+                    const bW_mm = settings.book_size === 'A4' ? 210 : 148.5;
+                    const bH_mm = settings.book_size === 'A4' ? 297 : 210;
 
                     if (sheet.isCover) {
                         w_mm = bW_mm * 2 + settings.spine_mm;
@@ -389,9 +368,36 @@ export default function PrintScreen() {
                     const scaleY = innerH / bookBlockHeightPx;
                     const fitScale = Math.min(1, scaleX, scaleY);
 
+                    // Compute alignment position using absolute coordinates
+                    const scaledW = bookBlockWidthPx * fitScale;
+                    const scaledH = bookBlockHeightPx * fitScale;
+                    const gapX = Math.max(0, innerW - scaledW);
+                    const gapY = Math.max(0, innerH - scaledH);
                     const align = settings.paper_alignment || 'left';
-                    const transformOriginFront = align === 'left' ? 'left center' : (align === 'top-left' ? 'left top' : 'center center');
-                    const transformOriginBack = align === 'left' ? 'right center' : (align === 'top-left' ? 'right top' : 'center center');
+
+                    let frontLeft: number, frontTop: number;
+                    let backLeft: number, backTop: number;
+                    switch (align) {
+                        case 'left':
+                            frontLeft = hwMargin;
+                            frontTop = hwMargin + gapY / 2;
+                            backLeft = hwMargin + gapX;
+                            backTop = hwMargin + gapY / 2;
+                            break;
+                        case 'top-left':
+                            frontLeft = hwMargin;
+                            frontTop = hwMargin;
+                            backLeft = hwMargin + gapX;
+                            backTop = hwMargin;
+                            break;
+                        case 'center':
+                        default:
+                            frontLeft = hwMargin + gapX / 2;
+                            frontTop = hwMargin + gapY / 2;
+                            backLeft = hwMargin + gapX / 2;
+                            backTop = hwMargin + gapY / 2;
+                            break;
+                    }
 
                     return (
                     <div key={sheet.id} className="flex flex-col gap-4 items-center w-full">
@@ -411,16 +417,18 @@ export default function PrintScreen() {
                                          backgroundColor: 'white'
                                      }}>
                                     
-                                    <div className={`flex-1 relative flex ${getAlignmentClasses('front')} overflow-hidden`} style={{ padding: `${hwMargin}px` }}>
+                                    <div className="flex-1 relative overflow-hidden" style={{ padding: `${hwMargin}px` }}>
                                         <div className="absolute inset-0 border border-gray-100 pointer-events-none" />
                                         
                                         {/* STRICT BOOK BLOCK CONTAINER */}
-                                        <div className="relative flex bg-white ring-1 ring-black/5 shrink-0" 
+                                        <div className="absolute flex bg-white ring-1 ring-black/5" 
                                              style={{ 
                                                  width: `${bookBlockWidthPx}px`, 
                                                  height: `${bookBlockHeightPx}px`,
-                                                 transformOrigin: transformOriginFront,
-                                                 transform: `scale(${fitScale}) translate(${settings.offset_x}px, ${settings.offset_y}px)`
+                                                 left: `${frontLeft + settings.offset_x}px`,
+                                                 top: `${frontTop + settings.offset_y}px`,
+                                                 transformOrigin: 'top left',
+                                                 transform: `scale(${fitScale})`
                                              }}>
                                              
                                             {/* Crop Marks (bounds exactly the Book Block) */}
@@ -524,16 +532,18 @@ export default function PrintScreen() {
                                              height: `${h}px`,
                                              backgroundColor: 'white'
                                          }}>
-                                        <div className={`flex-1 relative flex ${getAlignmentClasses('back')} overflow-hidden`} style={{ padding: `${hwMargin}px` }}>
+                                        <div className="flex-1 relative overflow-hidden" style={{ padding: `${hwMargin}px` }}>
                                             <div className="absolute inset-0 border border-gray-100 pointer-events-none" />
                                             
                                             {/* STRICT BOOK BLOCK CONTAINER (BACK SIDE INVERTS OFFSET_X) */}
-                                            <div className="relative flex bg-white ring-1 ring-black/5 shrink-0" 
+                                            <div className="absolute flex bg-white ring-1 ring-black/5" 
                                                  style={{ 
                                                      width: `${bookBlockWidthPx}px`, 
                                                      height: `${bookBlockHeightPx}px`,
-                                                     transformOrigin: transformOriginBack,
-                                                     transform: `scale(${fitScale}) translate(${-settings.offset_x}px, ${settings.offset_y}px)`
+                                                     left: `${backLeft - settings.offset_x}px`,
+                                                     top: `${backTop + settings.offset_y}px`,
+                                                     transformOrigin: 'top left',
+                                                     transform: `scale(${fitScale})`
                                                  }}>
                                                  
                                                 {/* Crop Marks (bounds exactly the Book Block) */}
