@@ -626,6 +626,9 @@ export default function EditorScreen() {
             </div>
           </aside>
       </div>
+      ) : (
+        <PrintScreen />
+      )}
 
       {/* Bottom Status Bar */}
       <footer className="h-10 bg-card border-t border-border flex items-center justify-between px-4 text-xs flex-shrink-0 relative z-20">
@@ -696,8 +699,6 @@ export default function EditorScreen() {
             </div>
           </div>
         </div>
-      ) : (
-        <PrintScreen />
       )}
 
     </div>

@@ -1,7 +1,91 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { useProject } from './ProjectContext';
-import { Settings, Printer, Download, AlertTriangle } from 'lucide-react';
+import { Settings, Printer, Download, AlertTriangle, FileText } from 'lucide-react';
 import { invoke } from '@tauri-apps/api/core';
+
+export interface ImposedSheet {
+  id: string;
+  isCover?: boolean;
+  front: { left: number | null, right: number | null };
+  back?: { left: number | null, right: number | null };
+}
+
+function calculateImposition(images: string[], settings: any): ImposedSheet[] {
+  if (images.length === 0) return [];
+  const sheets: ImposedSheet[] = [];
+
+  const total = images.length;
+  const hasBack = settings.has_back_cover;
+  
+  const coverIdx = 0;
+  const backCoverIdx = hasBack ? total - 1 : null;
+  
+  const innerPages: number[] = [];
+  for (let i = 1; i < (hasBack ? total - 1 : total); i++) {
+    innerPages.push(i);
+  }
+
+  sheets.push({
+    id: 'sheet-cover',
+    isCover: true,
+    front: { left: backCoverIdx, right: coverIdx }
+  });
+
+  if (innerPages.length === 0) return sheets;
+
+  const method = settings.binding_method;
+  
+  if (method === 'saddle') {
+    while (innerPages.length % 4 !== 0) {
+      innerPages.push(-1);
+    }
+    const numSheets = innerPages.length / 4;
+    for (let i = 0; i < numSheets; i++) {
+      const p1 = innerPages[innerPages.length - 1 - i * 2];
+      const p2 = innerPages[i * 2];
+      const p3 = innerPages[i * 2 + 1];
+      const p4 = innerPages[innerPages.length - 2 - i * 2];
+
+      sheets.push({
+        id: `sheet-saddle-${i+1}`,
+        front: { left: p1 === -1 ? null : p1, right: p2 === -1 ? null : p2 },
+        back: { left: p3 === -1 ? null : p3, right: p4 === -1 ? null : p4 }
+      });
+    }
+  } else if (method === 'perfect') {
+    while (innerPages.length % 4 !== 0) {
+      innerPages.push(-1);
+    }
+    const totalInner = innerPages.length;
+    const half = totalInner / 2;
+    for (let i = 0; i < totalInner / 4; i++) {
+        const idx1 = i * 2;
+        const idx2 = half + i * 2;
+        const idx3 = idx1 + 1;
+        const idx4 = idx2 + 1;
+        
+        sheets.push({
+            id: `sheet-perfect-${i+1}`,
+            front: { left: innerPages[idx1] === -1 ? null : innerPages[idx1], right: innerPages[idx2] === -1 ? null : innerPages[idx2] },
+            back: { left: innerPages[idx3] === -1 ? null : innerPages[idx3], right: innerPages[idx4] === -1 ? null : innerPages[idx4] }
+        });
+    }
+  } else if (method === 'butterfly') {
+    while (innerPages.length % 2 !== 0) {
+      innerPages.push(-1);
+    }
+    for (let i = 0; i < innerPages.length / 2; i++) {
+      const p1 = innerPages[i * 2];
+      const p2 = innerPages[i * 2 + 1];
+      sheets.push({
+        id: `sheet-butterfly-${i+1}`,
+        front: { left: p1 === -1 ? null : p1, right: p2 === -1 ? null : p2 }
+      });
+    }
+  }
+
+  return sheets;
+}
 
 export default function PrintScreen() {
     const { projectState, updateProjectState } = useProject();
@@ -25,6 +109,11 @@ export default function PrintScreen() {
     
     // Saddle stitch warning
     const showSaddleWarning = settings.binding_method === 'saddle' && totalPages % 4 !== 0;
+
+    const imposedSheets = useMemo(() => {
+        if (!projectState?.visible_images) return [];
+        return calculateImposition(projectState.visible_images, settings);
+    }, [projectState?.visible_images, settings]);
 
     return (
         <div className="flex flex-1 overflow-hidden relative bg-muted text-foreground">
@@ -143,10 +232,130 @@ export default function PrintScreen() {
             </aside>
 
             {/* Main Preview Area */}
-            <main className="flex-1 p-8 overflow-y-auto flex flex-col items-center gap-8 pb-32">
-                <div className="bg-yellow-500/10 border border-yellow-500 text-yellow-600 px-4 py-2 rounded-md">
-                    拼版物理预览视图开发中...
+            <main className="flex-1 p-8 overflow-y-auto bg-muted/50 flex flex-col items-center gap-12 pb-32">
+                <div className="text-center space-y-1">
+                    <h1 className="text-xl font-bold">物理印前预览 (Physical Pre-Press Preview)</h1>
+                    <p className="text-sm text-muted-foreground">此处模拟 {settings.paper_size} 纸张物理打印排版。蓝色虚线为折叠线或裁剪辅助线。</p>
                 </div>
+
+                {imposedSheets.map((sheet, index) => (
+                    <div key={sheet.id} className="flex flex-col gap-4 items-center w-full">
+                        <h3 className="text-sm font-semibold flex items-center gap-2 text-muted-foreground">
+                            <FileText size={16} />
+                            {sheet.isCover ? '封面排版 (Cover Spread)' : `第 ${index} 张纸 (Sheet ${index})`}
+                        </h3>
+                        
+                        <div className="flex gap-12 flex-wrap justify-center w-full max-w-5xl">
+                            {/* Front Side */}
+                            <div className="flex flex-col items-center gap-2">
+                                <span className="text-xs font-mono text-muted-foreground">正面 (Front Side)</span>
+                                <div className="relative bg-white shadow-xl ring-1 ring-border/50 rounded-sm flex items-stretch"
+                                     style={{ 
+                                         width: settings.paper_size === 'A3' || sheet.isCover ? '700px' : '500px', 
+                                         height: sheet.isCover ? '250px' : '350px',
+                                         padding: settings.crop_marks ? '20px' : '0px'
+                                     }}>
+                                    
+                                    {/* Virtual Paper Area */}
+                                    <div className="flex-1 relative flex bg-gray-50 border border-gray-200">
+                                        {/* Spine / Gutter visualization */}
+                                        <div className="absolute top-0 bottom-0 left-1/2 -translate-x-1/2 w-px bg-blue-300/50 border-r border-dashed border-blue-400 z-10" />
+                                        {sheet.isCover && settings.spine_mm > 0 && (
+                                            <div className="absolute top-0 bottom-0 left-1/2 -translate-x-1/2 bg-yellow-200/40 border-x border-yellow-400/50 z-10 flex items-center justify-center overflow-hidden" style={{ width: `${settings.spine_mm * 2}px` }}>
+                                                <span className="text-[8px] text-yellow-700 -rotate-90 whitespace-nowrap">书脊 {settings.spine_mm}mm</span>
+                                            </div>
+                                        )}
+                                        {settings.binding_method === 'perfect' && !sheet.isCover && (
+                                            <>
+                                                <div className="absolute top-0 bottom-0 left-1/2 -translate-x-full bg-blue-200/20 border-r border-blue-300/50 z-10 flex items-center justify-center overflow-hidden" style={{ width: `${settings.binding_margin_mm * 2}px` }}>
+                                                    <span className="text-[8px] text-blue-700 -rotate-90 whitespace-nowrap">刷胶区</span>
+                                                </div>
+                                                <div className="absolute top-0 bottom-0 right-1/2 translate-x-full bg-blue-200/20 border-l border-blue-300/50 z-10 flex items-center justify-center overflow-hidden" style={{ width: `${settings.binding_margin_mm * 2}px` }}>
+                                                    <span className="text-[8px] text-blue-700 -rotate-90 whitespace-nowrap">刷胶区</span>
+                                                </div>
+                                            </>
+                                        )}
+
+                                        {/* Left Page */}
+                                        <div className="flex-1 relative flex items-center justify-center overflow-hidden bg-white">
+                                            {sheet.front.left !== null ? (
+                                                <div className="w-full h-full p-4 flex flex-col items-center justify-center opacity-80">
+                                                    <img src={`http://127.0.0.1:14320/images/${projectState?.visible_images[sheet.front.left]}`} className="max-w-full max-h-full object-contain drop-shadow-md" />
+                                                    <span className="absolute bottom-1 text-[10px] bg-black/50 text-white px-2 rounded-full">
+                                                        {sheet.front.left === 0 ? 'Cover' : `P${sheet.front.left}`}
+                                                    </span>
+                                                </div>
+                                            ) : (
+                                                <span className="text-gray-300 font-mono text-sm">空白页 (Blank)</span>
+                                            )}
+                                        </div>
+                                        {/* Right Page */}
+                                        <div className="flex-1 relative flex items-center justify-center overflow-hidden bg-white">
+                                            {sheet.front.right !== null ? (
+                                                <div className="w-full h-full p-4 flex flex-col items-center justify-center opacity-80">
+                                                    <img src={`http://127.0.0.1:14320/images/${projectState?.visible_images[sheet.front.right]}`} className="max-w-full max-h-full object-contain drop-shadow-md" />
+                                                    <span className="absolute bottom-1 text-[10px] bg-black/50 text-white px-2 rounded-full">
+                                                        {sheet.front.right === 0 ? 'Cover' : `P${sheet.front.right}`}
+                                                    </span>
+                                                </div>
+                                            ) : (
+                                                <span className="text-gray-300 font-mono text-sm">空白页 (Blank)</span>
+                                            )}
+                                        </div>
+                                    </div>
+                                    
+                                    {/* Crop Marks Overlay */}
+                                    {settings.crop_marks && (
+                                        <div className="absolute inset-2 border border-gray-400/30 pointer-events-none" />
+                                    )}
+                                </div>
+                            </div>
+
+                            {/* Back Side */}
+                            {sheet.back && (
+                                <div className="flex flex-col items-center gap-2 opacity-90">
+                                    <span className="text-xs font-mono text-muted-foreground">反面 (Back Side)</span>
+                                    <div className="relative bg-white shadow-xl ring-1 ring-border/50 rounded-sm flex items-stretch"
+                                         style={{ 
+                                             width: settings.paper_size === 'A3' || sheet.isCover ? '700px' : '500px', 
+                                             height: sheet.isCover ? '250px' : '350px',
+                                             padding: settings.crop_marks ? '20px' : '0px'
+                                         }}>
+                                        <div className="flex-1 relative flex bg-gray-50 border border-gray-200">
+                                            <div className="absolute top-0 bottom-0 left-1/2 -translate-x-1/2 w-px bg-blue-300/50 border-r border-dashed border-blue-400 z-10" />
+                                            {/* Left Page (Back) */}
+                                            <div className="flex-1 relative flex items-center justify-center overflow-hidden bg-white">
+                                                {sheet.back.left !== null ? (
+                                                    <div className="w-full h-full p-4 flex flex-col items-center justify-center opacity-80">
+                                                        <img src={`http://127.0.0.1:14320/images/${projectState?.visible_images[sheet.back.left]}`} className="max-w-full max-h-full object-contain drop-shadow-md" />
+                                                        <span className="absolute bottom-1 text-[10px] bg-black/50 text-white px-2 rounded-full">
+                                                            {sheet.back.left === 0 ? 'Cover' : `P${sheet.back.left}`}
+                                                        </span>
+                                                    </div>
+                                                ) : (
+                                                    <span className="text-gray-300 font-mono text-sm">空白页 (Blank)</span>
+                                                )}
+                                            </div>
+                                            {/* Right Page (Back) */}
+                                            <div className="flex-1 relative flex items-center justify-center overflow-hidden bg-white">
+                                                {sheet.back.right !== null ? (
+                                                    <div className="w-full h-full p-4 flex flex-col items-center justify-center opacity-80">
+                                                        <img src={`http://127.0.0.1:14320/images/${projectState?.visible_images[sheet.back.right]}`} className="max-w-full max-h-full object-contain drop-shadow-md" />
+                                                        <span className="absolute bottom-1 text-[10px] bg-black/50 text-white px-2 rounded-full">
+                                                            {sheet.back.right === 0 ? 'Cover' : `P${sheet.back.right}`}
+                                                        </span>
+                                                    </div>
+                                                ) : (
+                                                    <span className="text-gray-300 font-mono text-sm">空白页 (Blank)</span>
+                                                )}
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                ))}
             </main>
         </div>
     );
