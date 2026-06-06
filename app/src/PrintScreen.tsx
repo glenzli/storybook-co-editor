@@ -204,7 +204,7 @@ export default function PrintScreen() {
                                     <option value="A4">A4</option>
                                 </select>
                             </div>
-                            <div>
+                            <div className={settings.binding_method !== 'perfect' ? 'opacity-40 pointer-events-none' : ''}>
                                 <span className="text-[10px] text-muted-foreground">纸张排版</span>
                                 <select 
                                     className="w-full bg-background border border-border rounded-md p-2 text-sm focus:ring-1 focus:ring-primary outline-none"
@@ -224,20 +224,20 @@ export default function PrintScreen() {
                     <div className="flex flex-col gap-2">
                         <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">边距与留白</label>
                         
-                        {settings.binding_method === 'perfect' && (
-                            <div className="flex flex-col gap-1">
-                                <div className="flex justify-between">
-                                    <span className="text-sm">内侧刷胶区留白</span>
-                                    <span className="text-xs font-mono">{settings.binding_margin_mm} mm</span>
-                                </div>
-                                <input type="range" min="0" max="30" step="1" className="w-full accent-primary" 
-                                    value={settings.binding_margin_mm}
-                                    onChange={e => updateSettings({ binding_margin_mm: parseFloat(e.target.value) })}
-                                />
+                        <div className={`flex flex-col gap-1 transition-opacity duration-200 ${settings.binding_method !== 'perfect' ? 'opacity-40 pointer-events-none' : ''}`}>
+                            <div className="flex justify-between">
+                                <span className="text-sm">内侧刷胶区留白</span>
+                                <span className="text-xs font-mono">{settings.binding_margin_mm} mm</span>
                             </div>
-                        )}
+                            <input type="range" min="0" max="30" step="1" className="w-full accent-primary" 
+                                value={settings.binding_margin_mm}
+                                onChange={e => updateSettings({ binding_margin_mm: parseFloat(e.target.value) })}
+                            />
+                        </div>
 
-                        <div className="flex flex-col gap-1 mt-2">
+                        <div className={`flex flex-col gap-1 mt-2 transition-opacity duration-200 ${
+                            (settings.binding_method === 'saddle' || settings.layout_mode === '1-up') ? 'opacity-40 pointer-events-none' : ''
+                        }`}>
                             <div className="flex justify-between">
                                 <span className="text-sm">连体封面书脊厚度</span>
                                 <span className="text-xs font-mono">{settings.spine_mm} mm</span>
