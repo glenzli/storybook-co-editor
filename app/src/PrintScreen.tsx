@@ -255,15 +255,21 @@ export default function PrintScreen() {
                         </div>
                     </div>
 
-                    {/* Offsets */}
+                    {/* Offset & Snap */}
                     <div className="flex flex-col gap-2">
-                        <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">整体偏移 (X / Y)</label>
+                        <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">内容偏移</label>
                         <div className="grid grid-cols-2 gap-2">
                             <div className="flex flex-col gap-1">
-                                <span className="text-[10px] text-muted-foreground">X 轴 (mm)</span>
-                                <input type="number" step="1" className="w-full bg-background border border-border rounded-md p-1.5 text-sm outline-none"
+                                <span className="text-[10px] text-muted-foreground">X 轴 (mm){settings.binding_method === 'perfect' ? ' — 相对胶区' : ''}</span>
+                                <input type="number" step="1"
+                                    min={(settings.auto_snap_content !== false && settings.binding_method === 'perfect') ? 0 : undefined}
+                                    className="w-full bg-background border border-border rounded-md p-1.5 text-sm outline-none"
                                     value={settings.offset_x}
-                                    onChange={e => updateSettings({ offset_x: parseFloat(e.target.value) || 0 })}
+                                    onChange={e => {
+                                        let val = parseFloat(e.target.value) || 0;
+                                        if (settings.auto_snap_content !== false && settings.binding_method === 'perfect') val = Math.max(0, val);
+                                        updateSettings({ offset_x: val });
+                                    }}
                                 />
                             </div>
                             <div className="flex flex-col gap-1">
@@ -280,9 +286,9 @@ export default function PrintScreen() {
                     <div className="flex flex-col gap-2">
                         <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">选项</label>
                         
-                        <label className="flex items-center gap-2 cursor-pointer">
-                            <input type="checkbox" checked={settings.auto_snap_content ?? true} onChange={e => updateSettings({ auto_snap_content: e.target.checked })} className="accent-primary w-4 h-4" />
-                            <span className="text-sm">内容自动避开刷胶区 (智能吸附到外侧)</span>
+                        <label className={`flex items-center gap-2 cursor-pointer ${settings.binding_method !== 'perfect' ? 'opacity-40 pointer-events-none' : ''}`}>
+                            <input type="checkbox" checked={settings.auto_snap_content !== false} onChange={e => updateSettings({ auto_snap_content: e.target.checked, offset_x: e.target.checked ? Math.max(0, settings.offset_x || 0) : settings.offset_x })} className="accent-primary w-4 h-4" />
+                            <span className="text-sm">内容避开刷胶区 (禁止重叠)</span>
                         </label>
 
                         <label className="flex items-center gap-2 cursor-pointer mt-1">
@@ -364,6 +370,11 @@ export default function PrintScreen() {
                     const backLeft = hwMargin + gapX;
                     const backTop = hwMargin + gapY / 2;
 
+                    // Content offset relative to glue area edge
+                    const autoSnap = settings.auto_snap_content !== false;
+                    const effectiveOffsetX = settings.binding_method === 'perfect'
+                        ? (autoSnap ? Math.max(0, settings.offset_x || 0) : (settings.offset_x || 0))
+                        : 0;
                     return (
                     <div key={sheet.id} className="flex flex-col gap-4 items-center w-full">
                         <h3 className="text-sm font-semibold flex items-center gap-2 text-muted-foreground">
@@ -390,7 +401,7 @@ export default function PrintScreen() {
                                              style={{ 
                                                  width: `${bookBlockWidthPx}px`, 
                                                  height: `${bookBlockHeightPx}px`,
-                                                 left: `${frontLeft + settings.offset_x}px`,
+                                                 left: `${frontLeft}px`,
                                                  top: `${frontTop + settings.offset_y}px`,
                                                  transformOrigin: 'top left',
                                                  transform: `scale(${fitScale})`
@@ -433,8 +444,8 @@ export default function PrintScreen() {
                                             {/* Left Page (or Center Page if 1-up) */}
                                             <div className="flex-1 relative flex items-center justify-center overflow-hidden bg-white"
                                                  style={{ 
-                                                     paddingLeft: (settings.auto_snap_content !== false && settings.binding_method === 'perfect' && is1up && !sheet.isCover) ? `${settings.binding_margin_mm * pxPerMm}px` : '0px',
-                                                     paddingRight: (settings.auto_snap_content !== false && settings.binding_method === 'perfect' && !is1up && !sheet.isCover) ? `${settings.binding_margin_mm * pxPerMm}px` : '0px'
+                                                     paddingLeft: (settings.binding_method === 'perfect' && is1up && !sheet.isCover) ? `${(settings.binding_margin_mm + effectiveOffsetX) * pxPerMm}px` : '0px',
+                                                     paddingRight: (settings.binding_method === 'perfect' && !is1up && !sheet.isCover) ? `${(settings.binding_margin_mm + effectiveOffsetX) * pxPerMm}px` : '0px'
                                                  }}>
                                                 {sheet.front.left !== null ? (
                                                     <div className="w-full h-full flex flex-col items-center justify-center relative">
@@ -442,8 +453,8 @@ export default function PrintScreen() {
                                                             src={`http://127.0.0.1:14320/images/${projectState?.visible_images[sheet.front.left]}`} 
                                                             className="w-full h-full object-contain" 
                                                             style={{ 
-                                                                objectPosition: (settings.auto_snap_content !== false && settings.binding_method === 'perfect' && !sheet.isCover)
-                                                                    ? (is1up ? 'right center' : 'left center') 
+                                                                objectPosition: (settings.binding_method === 'perfect' && !sheet.isCover)
+                                                                    ? (is1up ? 'left center' : 'right center') 
                                                                     : 'center center'
                                                             }}
                                                         />
@@ -460,7 +471,7 @@ export default function PrintScreen() {
                                             {!is1up && (
                                             <div className="flex-1 relative flex items-center justify-center overflow-hidden bg-white"
                                                  style={{ 
-                                                     paddingLeft: (settings.auto_snap_content !== false && settings.binding_method === 'perfect' && !is1up && !sheet.isCover) ? `${settings.binding_margin_mm * pxPerMm}px` : '0px'
+                                                     paddingLeft: (settings.binding_method === 'perfect' && !is1up && !sheet.isCover) ? `${(settings.binding_margin_mm + effectiveOffsetX) * pxPerMm}px` : '0px'
                                                  }}>
                                                 {sheet.front.right !== null ? (
                                                     <div className="w-full h-full flex flex-col items-center justify-center relative">
@@ -468,8 +479,8 @@ export default function PrintScreen() {
                                                             src={`http://127.0.0.1:14320/images/${projectState?.visible_images[sheet.front.right]}`} 
                                                             className="w-full h-full object-contain"
                                                             style={{ 
-                                                                objectPosition: (settings.auto_snap_content !== false && settings.binding_method === 'perfect' && !sheet.isCover)
-                                                                    ? 'right center' 
+                                                                objectPosition: (settings.binding_method === 'perfect' && !sheet.isCover)
+                                                                    ? 'left center' 
                                                                     : 'center center'
                                                             }}
                                                         />
@@ -505,7 +516,7 @@ export default function PrintScreen() {
                                                  style={{ 
                                                      width: `${bookBlockWidthPx}px`, 
                                                      height: `${bookBlockHeightPx}px`,
-                                                     left: `${backLeft - settings.offset_x}px`,
+                                                     left: `${backLeft}px`,
                                                      top: `${backTop + settings.offset_y}px`,
                                                      transformOrigin: 'top left',
                                                      transform: `scale(${fitScale})`
@@ -540,10 +551,10 @@ export default function PrintScreen() {
                                                     </>
                                                 )}
 
-                                                {/* Left Page (Back) */}
                                                 <div className="flex-1 relative flex items-center justify-center overflow-hidden bg-white"
                                                      style={{ 
-                                                         paddingRight: (settings.auto_snap_content !== false && settings.binding_method === 'perfect' && !sheet.isCover) ? `${settings.binding_margin_mm * pxPerMm}px` : '0px'
+                                                         paddingRight: (settings.binding_method === 'perfect' && is1up && !sheet.isCover) ? `${(settings.binding_margin_mm + effectiveOffsetX) * pxPerMm}px` : '0px',
+                                                         paddingLeft: (settings.binding_method === 'perfect' && !is1up && !sheet.isCover) ? `${(settings.binding_margin_mm + effectiveOffsetX) * pxPerMm}px` : '0px'
                                                      }}>
                                                     {sheet.back.left !== null ? (
                                                         <div className="w-full h-full flex flex-col items-center justify-center relative">
@@ -551,8 +562,8 @@ export default function PrintScreen() {
                                                                 src={`http://127.0.0.1:14320/images/${projectState?.visible_images[sheet.back.left]}`} 
                                                                 className="w-full h-full object-contain"
                                                                 style={{ 
-                                                                    objectPosition: (settings.auto_snap_content !== false && settings.binding_method === 'perfect' && !sheet.isCover)
-                                                                        ? 'left center' 
+                                                                    objectPosition: (settings.binding_method === 'perfect' && !sheet.isCover)
+                                                                        ? (is1up ? 'right center' : 'left center') 
                                                                         : 'center center'
                                                                 }}
                                                             />
@@ -569,7 +580,7 @@ export default function PrintScreen() {
                                                 {!is1up && (
                                                 <div className="flex-1 relative flex items-center justify-center overflow-hidden bg-white"
                                                      style={{ 
-                                                         paddingLeft: (settings.auto_snap_content !== false && settings.binding_method === 'perfect' && !is1up && !sheet.isCover) ? `${settings.binding_margin_mm * pxPerMm}px` : '0px'
+                                                         paddingRight: (settings.binding_method === 'perfect' && !is1up && !sheet.isCover) ? `${(settings.binding_margin_mm + effectiveOffsetX) * pxPerMm}px` : '0px'
                                                      }}>
                                                     {sheet.back.right !== null ? (
                                                         <div className="w-full h-full flex flex-col items-center justify-center relative">
@@ -577,7 +588,7 @@ export default function PrintScreen() {
                                                                 src={`http://127.0.0.1:14320/images/${projectState?.visible_images[sheet.back.right]}`} 
                                                                 className="w-full h-full object-contain"
                                                                 style={{ 
-                                                                    objectPosition: (settings.auto_snap_content !== false && settings.binding_method === 'perfect' && !sheet.isCover)
+                                                                    objectPosition: (settings.binding_method === 'perfect' && !sheet.isCover)
                                                                         ? 'right center' 
                                                                         : 'center center'
                                                                 }}
