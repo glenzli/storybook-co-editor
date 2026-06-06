@@ -105,8 +105,7 @@ export default function PrintScreen() {
     // Default settings if undefined
     const settings = projectState?.print_settings || {
         paper_size: 'A4',
-        paper_orientation: 'portrait',
-        book_size: 'A5',
+        paper_orientation: 'landscape',
         layout_mode: '2-up',
         binding_method: 'perfect',
         has_back_cover: false,
@@ -115,8 +114,12 @@ export default function PrintScreen() {
         crop_marks: true,
         offset_x: 0.0,
         offset_y: 0.0,
-        paper_alignment: 'left',
     };
+
+    // Force landscape for saddle/butterfly
+    const effectiveOrientation = (settings.binding_method === 'saddle' || settings.binding_method === 'butterfly')
+        ? 'landscape'
+        : (settings.paper_orientation || 'landscape');
 
     const updateSettings = (updates: any) => {
         updateProjectState({ print_settings: { ...settings, ...updates } });
@@ -167,7 +170,7 @@ export default function PrintScreen() {
                         </div>
                     )}
 
-                    {/* Paper & Book Size */}
+                    {/* Paper & Layout */}
                     <div className="flex flex-col gap-2">
                         <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">尺寸规格</label>
                         <div className="grid grid-cols-2 gap-2">
@@ -178,6 +181,7 @@ export default function PrintScreen() {
                                     value={settings.paper_size}
                                     onChange={(e) => updateSettings({ paper_size: e.target.value })}
                                 >
+                                    <option value="A5">A5</option>
                                     <option value="A4">A4</option>
                                     <option value="A3">A3</option>
                                 </select>
@@ -185,40 +189,29 @@ export default function PrintScreen() {
                             <div>
                                 <span className="text-[10px] text-muted-foreground">纸张方向</span>
                                 <select 
-                                    className="w-full bg-background border border-border rounded-md p-2 text-sm focus:ring-1 focus:ring-primary outline-none"
-                                    value={settings.paper_orientation}
+                                    className={`w-full bg-background border border-border rounded-md p-2 text-sm focus:ring-1 focus:ring-primary outline-none ${(settings.binding_method === 'saddle' || settings.binding_method === 'butterfly') ? 'opacity-40 cursor-not-allowed' : ''}`}
+                                    value={effectiveOrientation}
                                     onChange={(e) => updateSettings({ paper_orientation: e.target.value })}
+                                    disabled={settings.binding_method === 'saddle' || settings.binding_method === 'butterfly'}
                                 >
                                     <option value="portrait">纵向 (Portrait)</option>
                                     <option value="landscape">横向 (Landscape)</option>
                                 </select>
+                                {(settings.binding_method === 'saddle' || settings.binding_method === 'butterfly') && <p className="text-[9px] text-amber-500 mt-0.5">该装订仅支持横向</p>}
                             </div>
                         </div>
-                        <div className="grid grid-cols-2 gap-2 mt-1">
-                            <div>
-                                <span className="text-[10px] text-muted-foreground">成品书籍尺寸</span>
-                                <select 
-                                    className="w-full bg-background border border-border rounded-md p-2 text-sm focus:ring-1 focus:ring-primary outline-none"
-                                    value={settings.book_size}
-                                    onChange={(e) => updateSettings({ book_size: e.target.value })}
-                                >
-                                    <option value="A5">A5</option>
-                                    <option value="A4">A4</option>
-                                </select>
-                            </div>
-                            <div className={settings.binding_method !== 'perfect' ? 'opacity-40 pointer-events-none' : ''}>
-                                <span className="text-[10px] text-muted-foreground">纸张排版</span>
-                                <select 
-                                    className="w-full bg-background border border-border rounded-md p-2 text-sm focus:ring-1 focus:ring-primary outline-none"
-                                    value={settings.binding_method !== 'perfect' ? '2-up' : settings.layout_mode}
-                                    onChange={(e) => updateSettings({ layout_mode: e.target.value })}
-                                    disabled={settings.binding_method !== 'perfect'}
-                                >
-                                    <option value="1-up">1-up (单页居中)</option>
-                                    <option value="2-up">2-up (双页拼版)</option>
-                                </select>
-                                {settings.binding_method !== 'perfect' && <p className="text-[9px] text-amber-500 mt-0.5">该装订仅支持 2-up</p>}
-                            </div>
+                        <div className={settings.binding_method !== 'perfect' ? 'opacity-40 pointer-events-none' : ''}>
+                            <span className="text-[10px] text-muted-foreground">纸张排版</span>
+                            <select 
+                                className="w-full bg-background border border-border rounded-md p-2 text-sm focus:ring-1 focus:ring-primary outline-none"
+                                value={settings.binding_method !== 'perfect' ? '2-up' : settings.layout_mode}
+                                onChange={(e) => updateSettings({ layout_mode: e.target.value })}
+                                disabled={settings.binding_method !== 'perfect'}
+                            >
+                                <option value="1-up">1-up (单页)</option>
+                                <option value="2-up">2-up (双页拼版)</option>
+                            </select>
+                            {settings.binding_method !== 'perfect' && <p className="text-[9px] text-amber-500 mt-0.5">该装订仅支持 2-up</p>}
                         </div>
                     </div>
 
@@ -231,7 +224,7 @@ export default function PrintScreen() {
                                 <span className="text-sm">内侧刷胶区留白</span>
                                 <span className="text-xs font-mono">{settings.binding_margin_mm} mm</span>
                             </div>
-                            <input type="range" min="0" max="30" step="1" className="w-full accent-primary" 
+                            <input type="range" min="10" max="30" step="1" className="w-full accent-primary" 
                                 value={settings.binding_margin_mm}
                                 onChange={e => updateSettings({ binding_margin_mm: parseFloat(e.target.value) })}
                             />
@@ -259,21 +252,6 @@ export default function PrintScreen() {
                                 value={settings.hardware_margin_mm || 0}
                                 onChange={e => updateSettings({ hardware_margin_mm: parseFloat(e.target.value) })}
                             />
-                        </div>
-
-                        <div className="flex flex-col gap-1 mt-2">
-                            <div className="flex justify-between">
-                                <span className="text-sm">打印纸对齐方式</span>
-                            </div>
-                            <select 
-                                className="w-full bg-background border border-border rounded-md p-2 text-sm focus:ring-1 focus:ring-primary outline-none"
-                                value={settings.paper_alignment || 'left'}
-                                onChange={(e) => updateSettings({ paper_alignment: e.target.value })}
-                            >
-                                <option value="center">全居中 (Center)</option>
-                                <option value="left">靠边对齐 (Left/Right Edge)</option>
-                                <option value="top-left">靠角对齐 (Top Corner)</option>
-                            </select>
                         </div>
                     </div>
 
@@ -335,37 +313,24 @@ export default function PrintScreen() {
                 </div>
 
                 {imposedSheets.map((sheet, index) => {
-                    const pxPerMm = settings.paper_size === 'A3' ? 1.5 : 2.0;
-                    
-                    const pW_mm = settings.paper_size === 'A3' ? 297 : 210;
-                    const pH_mm = settings.paper_size === 'A3' ? 420 : 297;
-                    const isLandscape = settings.paper_orientation === 'landscape';
+                    const paperSizes: Record<string, [number, number]> = {
+                        'A5': [148.5, 210],
+                        'A4': [210, 297],
+                        'A3': [297, 420],
+                    };
+                    const [pW_mm, pH_mm] = paperSizes[settings.paper_size] || paperSizes['A4'];
+                    const pxPerMm = settings.paper_size === 'A3' ? 1.5 : (settings.paper_size === 'A5' ? 2.5 : 2.0);
+                    const isLandscape = effectiveOrientation === 'landscape';
                     let w_mm = isLandscape ? pH_mm : pW_mm;
                     let h_mm = isLandscape ? pW_mm : pH_mm;
 
-                    const bW_raw = settings.book_size === 'A4' ? 210 : 148.5;
-                    const bH_raw = settings.book_size === 'A4' ? 297 : 210;
-
                     const hwMarginMm = settings.hardware_margin_mm || 0;
-                    const is1up = settings.binding_method === 'perfect' && settings.layout_mode === '1-up' && !sheet.isCover;
+                    const globalIs1up = settings.binding_method === 'perfect' && settings.layout_mode === '1-up';
+                    const is1up = globalIs1up && !sheet.isCover;
 
-                    // Auto-orient book page to maximize paper utilization
-                    let bW_mm: number, bH_mm: number;
-                    if (!sheet.isCover) {
-                        const printW = w_mm - 2 * hwMarginMm;
-                        const printH = h_mm - 2 * hwMarginMm;
-                        const bbW_a = is1up ? bW_raw : bW_raw * 2;
-                        const fitA = Math.min(printW / bbW_a, printH / bH_raw);
-                        const bbW_b = is1up ? bH_raw : bH_raw * 2;
-                        const fitB = Math.min(printW / bbW_b, printH / bW_raw);
-                        if (fitB > fitA) {
-                            bW_mm = bH_raw; bH_mm = bW_raw;
-                        } else {
-                            bW_mm = bW_raw; bH_mm = bH_raw;
-                        }
-                    } else {
-                        bW_mm = bW_raw; bH_mm = bH_raw;
-                    }
+                    // Auto-derive page dimensions from paper (no separate book_size needed)
+                    const bW_mm = globalIs1up ? w_mm : w_mm / 2;
+                    const bH_mm = h_mm;
 
                     if (sheet.isCover) {
                         w_mm = bW_mm * 2 + settings.spine_mm;
@@ -388,36 +353,16 @@ export default function PrintScreen() {
                     const scaleY = innerH / bookBlockHeightPx;
                     const fitScale = Math.min(1, scaleX, scaleY);
 
-                    // Compute alignment position using absolute coordinates
+                    // Always left-align front side, right-align back side, vertically centered
                     const scaledW = bookBlockWidthPx * fitScale;
                     const scaledH = bookBlockHeightPx * fitScale;
                     const gapX = Math.max(0, innerW - scaledW);
                     const gapY = Math.max(0, innerH - scaledH);
-                    const align = settings.paper_alignment || 'left';
 
-                    let frontLeft: number, frontTop: number;
-                    let backLeft: number, backTop: number;
-                    switch (align) {
-                        case 'left':
-                            frontLeft = hwMargin;
-                            frontTop = hwMargin + gapY / 2;
-                            backLeft = hwMargin + gapX;
-                            backTop = hwMargin + gapY / 2;
-                            break;
-                        case 'top-left':
-                            frontLeft = hwMargin;
-                            frontTop = hwMargin;
-                            backLeft = hwMargin + gapX;
-                            backTop = hwMargin;
-                            break;
-                        case 'center':
-                        default:
-                            frontLeft = hwMargin + gapX / 2;
-                            frontTop = hwMargin + gapY / 2;
-                            backLeft = hwMargin + gapX / 2;
-                            backTop = hwMargin + gapY / 2;
-                            break;
-                    }
+                    const frontLeft = hwMargin;
+                    const frontTop = hwMargin + gapY / 2;
+                    const backLeft = hwMargin + gapX;
+                    const backTop = hwMargin + gapY / 2;
 
                     return (
                     <div key={sheet.id} className="flex flex-col gap-4 items-center w-full">
