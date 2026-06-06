@@ -352,8 +352,20 @@ export default function PrintScreen() {
                     let w_mm = isLandscape ? pH_mm : pW_mm;
                     let h_mm = isLandscape ? pW_mm : pH_mm;
 
-                    const bW_mm = settings.book_size === 'A4' ? 210 : 148.5;
-                    const bH_mm = settings.book_size === 'A4' ? 297 : 210;
+                    let bW_mm = settings.book_size === 'A4' ? 210 : 148.5;
+                    let bH_mm = settings.book_size === 'A4' ? 297 : 210;
+
+                    // Intelligent Book Orientation based on Paper Orientation and Layout Mode
+                    const globalIs1up = settings.binding_method === 'perfect' && settings.layout_mode === '1-up';
+                    if (globalIs1up) {
+                        if (isLandscape) {
+                            const temp = bW_mm; bW_mm = bH_mm; bH_mm = temp;
+                        }
+                    } else {
+                        if (!isLandscape) {
+                            const temp = bW_mm; bW_mm = bH_mm; bH_mm = temp;
+                        }
+                    }
 
                     if (sheet.isCover) {
                         w_mm = bW_mm * 2 + settings.spine_mm;
