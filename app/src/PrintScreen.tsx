@@ -115,6 +115,7 @@ export default function PrintScreen() {
         crop_marks: true,
         offset_x: 0.0,
         offset_y: 0.0,
+        paper_alignment: 'left',
     };
 
     const updateSettings = (updates: any) => {
@@ -130,6 +131,16 @@ export default function PrintScreen() {
         if (!projectState?.visible_images) return [];
         return calculateImposition(projectState.visible_images, settings);
     }, [projectState?.visible_images, settings]);
+
+    const getAlignmentClasses = (side: 'front' | 'back') => {
+        const align = settings.paper_alignment || 'left';
+        switch (align) {
+            case 'left': return side === 'front' ? 'items-center justify-start' : 'items-center justify-end';
+            case 'top-left': return side === 'front' ? 'items-start justify-start' : 'items-start justify-end';
+            case 'center':
+            default: return 'items-center justify-center';
+        }
+    };
 
     return (
         <div className="flex flex-1 overflow-hidden relative bg-muted text-foreground">
@@ -258,6 +269,21 @@ export default function PrintScreen() {
                                 onChange={e => updateSettings({ hardware_margin_mm: parseFloat(e.target.value) })}
                             />
                         </div>
+
+                        <div className="flex flex-col gap-1 mt-2">
+                            <div className="flex justify-between">
+                                <span className="text-sm">打印纸对齐方式</span>
+                            </div>
+                            <select 
+                                className="w-full bg-background border border-border rounded-md p-2 text-sm focus:ring-1 focus:ring-primary outline-none"
+                                value={settings.paper_alignment || 'left'}
+                                onChange={(e) => updateSettings({ paper_alignment: e.target.value })}
+                            >
+                                <option value="center">全居中 (Center)</option>
+                                <option value="left">靠边对齐 (Left/Right Edge)</option>
+                                <option value="top-left">靠角对齐 (Top Corner)</option>
+                            </select>
+                        </div>
                     </div>
 
                     {/* Offsets */}
@@ -363,7 +389,7 @@ export default function PrintScreen() {
                                          backgroundColor: 'white'
                                      }}>
                                     
-                                    <div className="flex-1 relative flex items-center justify-center overflow-hidden" style={{ padding: `${hwMargin}px` }}>
+                                    <div className={`flex-1 relative flex ${getAlignmentClasses('front')} overflow-hidden`} style={{ padding: `${hwMargin}px` }}>
                                         <div className="absolute inset-0 border border-gray-100 pointer-events-none" />
                                         
                                         {/* STRICT BOOK BLOCK CONTAINER */}
@@ -475,7 +501,7 @@ export default function PrintScreen() {
                                              height: `${h}px`,
                                              backgroundColor: 'white'
                                          }}>
-                                        <div className="flex-1 relative flex items-center justify-center overflow-hidden" style={{ padding: `${hwMargin}px` }}>
+                                        <div className={`flex-1 relative flex ${getAlignmentClasses('back')} overflow-hidden`} style={{ padding: `${hwMargin}px` }}>
                                             <div className="absolute inset-0 border border-gray-100 pointer-events-none" />
                                             
                                             {/* STRICT BOOK BLOCK CONTAINER (BACK SIDE INVERTS OFFSET_X) */}
