@@ -343,8 +343,29 @@ export default function PrintScreen() {
                     let w_mm = isLandscape ? pH_mm : pW_mm;
                     let h_mm = isLandscape ? pW_mm : pH_mm;
 
-                    const bW_mm = settings.book_size === 'A4' ? 210 : 148.5;
-                    const bH_mm = settings.book_size === 'A4' ? 297 : 210;
+                    const bW_raw = settings.book_size === 'A4' ? 210 : 148.5;
+                    const bH_raw = settings.book_size === 'A4' ? 297 : 210;
+
+                    const hwMarginMm = settings.hardware_margin_mm || 0;
+                    const is1up = settings.binding_method === 'perfect' && settings.layout_mode === '1-up' && !sheet.isCover;
+
+                    // Auto-orient book page to maximize paper utilization
+                    let bW_mm: number, bH_mm: number;
+                    if (!sheet.isCover) {
+                        const printW = w_mm - 2 * hwMarginMm;
+                        const printH = h_mm - 2 * hwMarginMm;
+                        const bbW_a = is1up ? bW_raw : bW_raw * 2;
+                        const fitA = Math.min(printW / bbW_a, printH / bH_raw);
+                        const bbW_b = is1up ? bH_raw : bH_raw * 2;
+                        const fitB = Math.min(printW / bbW_b, printH / bW_raw);
+                        if (fitB > fitA) {
+                            bW_mm = bH_raw; bH_mm = bW_raw;
+                        } else {
+                            bW_mm = bW_raw; bH_mm = bH_raw;
+                        }
+                    } else {
+                        bW_mm = bW_raw; bH_mm = bH_raw;
+                    }
 
                     if (sheet.isCover) {
                         w_mm = bW_mm * 2 + settings.spine_mm;
@@ -354,8 +375,7 @@ export default function PrintScreen() {
                     const w = w_mm * pxPerMm;
                     const h = h_mm * pxPerMm;
 
-                    const hwMargin = (settings.hardware_margin_mm || 0) * pxPerMm;
-                    const is1up = settings.binding_method === 'perfect' && settings.layout_mode === '1-up' && !sheet.isCover;
+                    const hwMargin = hwMarginMm * pxPerMm;
                     
                     const bookBlockWidthPx = is1up 
                         ? bW_mm * pxPerMm 
