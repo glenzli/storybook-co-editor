@@ -8,12 +8,16 @@ use uuid::Uuid;
 use walkdir::WalkDir;
 use zip::write::FileOptions;
 use zip::{ZipArchive, ZipWriter};
+use font_kit::source::SystemSource;
 
 #[derive(Serialize, Deserialize, Clone)]
 pub struct TextSettings {
     pub font_family: String,
     pub font_size: f32,
     pub text_color: String,
+    pub has_shadow: bool,
+    pub offset_x: f32,
+    pub offset_y: f32,
 }
 
 impl Default for TextSettings {
@@ -22,6 +26,9 @@ impl Default for TextSettings {
             font_family: "serif".to_string(),
             font_size: 20.0,
             text_color: "#ffffff".to_string(),
+            has_shadow: true,
+            offset_x: 0.0,
+            offset_y: 0.0,
         }
     }
 }
@@ -174,6 +181,15 @@ pub fn update_project_state(app: AppHandle, manager: State<ProjectManager>, stat
     } else {
         Err("No active project".to_string())
     }
+}
+
+#[tauri::command]
+pub fn get_system_fonts() -> Result<Vec<String>, String> {
+    let source = SystemSource::new();
+    let mut fonts = source.all_families().unwrap_or_default();
+    fonts.sort();
+    fonts.dedup();
+    Ok(fonts)
 }
 
 pub fn get_workspace_dir(app: &AppHandle, workspace_id: &str) -> Result<PathBuf, String> {

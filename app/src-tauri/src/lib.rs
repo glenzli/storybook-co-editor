@@ -18,6 +18,11 @@ use uuid::Uuid;
 
 use project_manager::{ProjectManager, ProjectState, ProjectInfo};
 
+#[tauri::command]
+fn greet(name: &str) -> String {
+    format!("Hello, {}! You've been greeted from Rust!", name)
+}
+
 #[derive(Deserialize)]
 struct SaveImageRequest {
     url: Option<String>,
@@ -565,6 +570,8 @@ pub fn run() {
             project_manager::save_project,
             project_manager::close_project,
             project_manager::update_project_state,
+            project_manager::get_system_fonts,
+            greet
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

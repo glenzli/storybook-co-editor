@@ -1,6 +1,6 @@
 import { useEffect, useState, useMemo } from 'react';
 import { listen } from '@tauri-apps/api/event';
-import { convertFileSrc } from '@tauri-apps/api/core';
+import { convertFileSrc, invoke } from '@tauri-apps/api/core';
 import { Image as ImageIcon, Send, PenTool, LayoutTemplate, Moon, Sun, Info, XOctagon, RefreshCw, ChevronLeft, ChevronRight, Trash2, ArchiveRestore, Save, FileBox, XCircle, FolderOpen, Type } from 'lucide-react';
 import { useProject } from './ProjectContext';
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
@@ -9,6 +9,19 @@ import { CSS } from '@dnd-kit/utilities';
 import { createLogger } from './utils/logger';
 
 const logger = createLogger('App');
+
+function getShadowStyle(hexColor: string, hasShadow: boolean) {
+    if (!hasShadow) return 'none';
+    let hex = hexColor.replace('#', '');
+    if (hex.length === 3) {
+        hex = hex.split('').map(c => c + c).join('');
+    }
+    const r = parseInt(hex.substring(0, 2), 16) || 0;
+    const g = parseInt(hex.substring(2, 4), 16) || 0;
+    const b = parseInt(hex.substring(4, 6), 16) || 0;
+    const yiq = ((r * 299) + (g * 587) + (b * 114)) / 1000;
+    return yiq >= 128 ? 'drop-shadow(0 2px 4px rgba(0,0,0,0.8))' : 'drop-shadow(0 2px 4px rgba(255,255,255,0.8))';
+}
 
 interface SavedImageEvent {
   filepath: string;
@@ -29,6 +42,7 @@ export default function EditorScreen() {
   const [showTrashModal, setShowTrashModal] = useState(false);
   const [trashedImages, setTrashedImages] = useState<string[]>([]);
   const [isLoaded, setIsLoaded] = useState(false);
+  const [systemFonts, setSystemFonts] = useState<string[]>([]);
   
   // Theme
   const [isDark, setIsDark] = useState(() => window.matchMedia('(prefers-color-scheme: dark)').matches);
@@ -71,6 +85,12 @@ export default function EditorScreen() {
       root.classList.remove('dark');
     }
   }, [isDark]);
+
+  useEffect(() => {
+    invoke<string[]>('get_system_fonts').then(fonts => {
+      setSystemFonts(fonts);
+    }).catch(e => logger.error("Failed to fetch system fonts", e));
+  }, []);
 
   useEffect(() => {
     if (projectState) {
@@ -338,7 +358,7 @@ export default function EditorScreen() {
                 {currentText && (
                   <div className="absolute bottom-10 left-0 w-full px-12">
                     <div 
-                      className="text-center tracking-wide whitespace-pre-wrap transition-all drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)]"
+                      className="text-center tracking-wide whitespace-pre-wrap transition-all"
                       style={{
                         fontFamily: (() => {
                           const settings = selectedIdx === 0 ? projectState?.cover_text_settings : projectState?.inner_text_settings;
@@ -349,6 +369,11 @@ export default function EditorScreen() {
                         })(),
                         fontSize: `${(selectedIdx === 0 ? projectState?.cover_text_settings?.font_size : projectState?.inner_text_settings?.font_size) || (selectedIdx === 0 ? 40 : 20)}px`,
                         color: (selectedIdx === 0 ? projectState?.cover_text_settings?.text_color : projectState?.inner_text_settings?.text_color) || '#ffffff',
+                        filter: getShadowStyle(
+                            (selectedIdx === 0 ? projectState?.cover_text_settings?.text_color : projectState?.inner_text_settings?.text_color) || '#ffffff',
+                            (selectedIdx === 0 ? projectState?.cover_text_settings?.has_shadow : projectState?.inner_text_settings?.has_shadow) ?? true
+                        ),
+                        transform: `translate(${(selectedIdx === 0 ? projectState?.cover_text_settings?.offset_x : projectState?.inner_text_settings?.offset_x) || 0}px, ${(selectedIdx === 0 ? projectState?.cover_text_settings?.offset_y : projectState?.inner_text_settings?.offset_y) || 0}px)`
                       }}
                     >
                       {currentText}
@@ -388,18 +413,6 @@ export default function EditorScreen() {
                 onChange={(e) => setGlobalScript(e.target.value)}
               />
               
-              <div className="bg-muted border border-border rounded-md p-4 text-xs text-muted-foreground space-y-2">
-                <p>ℹ️ 智能排版状态：</p>
-                <div className="flex justify-between items-center">
-                  <span>自动找留白</span>
-                  <span className="text-emerald-500 bg-emerald-500/10 px-2 py-0.5 rounded">待执行</span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span>动态反色字体</span>
-                  <span className="text-emerald-500 bg-emerald-500/10 px-2 py-0.5 rounded">待执行</span>
-                </div>
-              </div>
-
               {/* Text Styling Panel */}
               <div className="border-t border-border pt-4 flex flex-col gap-3">
                 <div className="flex items-center gap-2 mb-1">
@@ -412,7 +425,14 @@ export default function EditorScreen() {
                 {(() => {
                   const isCover = selectedIdx === 0;
                   const currentSettings = isCover ? projectState?.cover_text_settings : projectState?.inner_text_settings;
-                  const defaultSettings = isCover ? { font_size: 40, text_color: '#ffffff', font_family: 'serif' } : { font_size: 20, text_color: '#ffffff', font_family: 'serif' };
+                  const defaultSettings = { 
+                      font_size: isCover ? 40 : 20, 
+                      text_color: '#ffffff', 
+                      font_family: 'serif',
+                      has_shadow: true,
+                      offset_x: 0,
+                      offset_y: 0
+                  };
                   const settings = currentSettings || defaultSettings;
 
                   const updateSettings = (updates: any) => {
@@ -432,12 +452,19 @@ export default function EditorScreen() {
                           value={settings.font_family}
                           onChange={(e) => updateSettings({ font_family: e.target.value })}
                         >
-                          <option value="serif">系统衬线体 (Serif)</option>
-                          <option value="sans">系统无衬线体 (Sans)</option>
-                          <option value="LXGW WenKai">霞鹜文楷 (手写/绘本)</option>
-                          <option value="ZCOOL KuaiLe">站酷快乐体 (卡通)</option>
-                          <option value="Noto Serif SC">思源宋体 (端庄)</option>
-                          <option value="Noto Sans SC">思源黑体 (现代)</option>
+                          <optgroup label="内置在线字体">
+                              <option value="serif">系统衬线体 (Serif)</option>
+                              <option value="sans">系统无衬线体 (Sans)</option>
+                              <option value="LXGW WenKai">霞鹜文楷 (手写/绘本)</option>
+                              <option value="ZCOOL KuaiLe">站酷快乐体 (卡通)</option>
+                              <option value="Noto Serif SC">思源宋体 (端庄)</option>
+                              <option value="Noto Sans SC">思源黑体 (现代)</option>
+                          </optgroup>
+                          {systemFonts.length > 0 && (
+                              <optgroup label="本地系统字体">
+                                  {systemFonts.map(f => <option key={f} value={f}>{f}</option>)}
+                              </optgroup>
+                          )}
                         </select>
                       </div>
 
@@ -455,21 +482,53 @@ export default function EditorScreen() {
                         />
                       </div>
 
-                      <div className="flex flex-col gap-1.5 mb-2">
-                        <label className="text-xs text-muted-foreground">颜色 (Color)</label>
-                        <div className="flex gap-2">
-                          <button 
-                              onClick={() => updateSettings({ text_color: '#ffffff' })}
-                              className={`flex-1 py-1 rounded border ${settings.text_color === '#ffffff' ? 'border-primary ring-1 ring-primary' : 'border-border'} bg-black text-white text-xs`}
-                          >白</button>
-                          <button 
-                              onClick={() => updateSettings({ text_color: '#000000' })}
-                              className={`flex-1 py-1 rounded border ${settings.text_color === '#000000' ? 'border-primary ring-1 ring-primary' : 'border-border'} bg-white text-black text-xs`}
-                          >黑</button>
-                          <button 
-                              onClick={() => updateSettings({ text_color: '#facc15' })}
-                              className={`flex-1 py-1 rounded border ${settings.text_color === '#facc15' ? 'border-primary ring-1 ring-primary' : 'border-border'} bg-yellow-400 text-black text-xs`}
-                          >黄</button>
+                      <div className="flex items-center justify-between mt-1 border-t border-border pt-2">
+                          <div className="flex flex-col gap-1.5 flex-1 pr-4 border-r border-border">
+                              <label className="text-xs text-muted-foreground">颜色</label>
+                              <div className="flex gap-2 items-center">
+                                  <input 
+                                    type="color" 
+                                    value={settings.text_color}
+                                    onChange={(e) => updateSettings({ text_color: e.target.value })}
+                                    className="w-6 h-6 rounded cursor-pointer border-0 p-0"
+                                  />
+                                  <button onClick={() => updateSettings({ text_color: '#ffffff' })} className="w-5 h-5 rounded border border-border bg-white" title="白色" />
+                                  <button onClick={() => updateSettings({ text_color: '#000000' })} className="w-5 h-5 rounded border border-border bg-black" title="黑色" />
+                              </div>
+                          </div>
+                          <div className="flex flex-col gap-1.5 pl-4 items-center justify-center">
+                              <label className="text-xs text-muted-foreground">智能阴影</label>
+                              <input 
+                                type="checkbox" 
+                                checked={settings.has_shadow ?? true}
+                                onChange={(e) => updateSettings({ has_shadow: e.target.checked })}
+                                className="w-4 h-4 accent-primary cursor-pointer"
+                              />
+                          </div>
+                      </div>
+
+                      <div className="flex flex-col gap-3 mt-2 border-t border-border pt-2">
+                        <div className="flex flex-col gap-1.5">
+                          <div className="flex justify-between">
+                            <label className="text-xs text-muted-foreground">水平偏移 (X)</label>
+                            <span className="text-xs font-mono">{settings.offset_x || 0}px</span>
+                          </div>
+                          <input 
+                            type="range" min="-500" max="500" step="10" className="w-full accent-primary"
+                            value={settings.offset_x || 0}
+                            onChange={(e) => updateSettings({ offset_x: parseInt(e.target.value) })}
+                          />
+                        </div>
+                        <div className="flex flex-col gap-1.5">
+                          <div className="flex justify-between">
+                            <label className="text-xs text-muted-foreground">垂直偏移 (Y)</label>
+                            <span className="text-xs font-mono">{settings.offset_y || 0}px</span>
+                          </div>
+                          <input 
+                            type="range" min="-500" max="500" step="10" className="w-full accent-primary"
+                            value={settings.offset_y || 0}
+                            onChange={(e) => updateSettings({ offset_y: parseInt(e.target.value) })}
+                          />
                         </div>
                       </div>
                     </>
