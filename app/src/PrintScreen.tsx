@@ -334,6 +334,11 @@ export default function PrintScreen() {
 
                     const hwMargin = (settings.hardware_margin_mm || 0) * pxPerMm;
                     const is1up = settings.binding_method === 'perfect' && settings.layout_mode === '1-up' && !sheet.isCover;
+                    
+                    const bookBlockWidthPx = is1up 
+                        ? bW_mm * pxPerMm 
+                        : (bW_mm * 2 + (sheet.isCover ? settings.spine_mm : 0)) * pxPerMm;
+                    const bookBlockHeightPx = bH_mm * pxPerMm;
 
                     return (
                     <div key={sheet.id} className="flex flex-col gap-4 items-center w-full">
@@ -353,37 +358,44 @@ export default function PrintScreen() {
                                          backgroundColor: 'white'
                                      }}>
                                     
-                                    <div className="flex-1 relative flex" style={{ padding: `${hwMargin}px` }}>
+                                    <div className="flex-1 relative flex items-center justify-center overflow-hidden" style={{ padding: `${hwMargin}px` }}>
                                         <div className="absolute inset-0 border border-gray-100 pointer-events-none" />
                                         
-                                        {/* UNIFIED PAPER OFFSET WRAPPER */}
-                                        <div className="relative w-full h-full flex" style={{ transform: `translate(${settings.offset_x}px, ${settings.offset_y}px)` }}>
-                                            
-                                            {/* Crop Marks (Book size bounds) */}
-                                            {settings.crop_marks && is1up && (
-                                                <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 border border-blue-400/30 border-dashed pointer-events-none"
-                                                     style={{ width: `${bW_mm * pxPerMm}px`, height: `${bH_mm * pxPerMm}px` }} />
+                                        {/* STRICT BOOK BLOCK CONTAINER */}
+                                        <div className="relative flex bg-white ring-1 ring-black/5" 
+                                             style={{ 
+                                                 width: `${bookBlockWidthPx}px`, 
+                                                 height: `${bookBlockHeightPx}px`,
+                                                 transform: `translate(${settings.offset_x}px, ${settings.offset_y}px)`
+                                             }}>
+                                             
+                                            {/* Crop Marks (bounds exactly the Book Block) */}
+                                            {settings.crop_marks && (
+                                                <div className="absolute inset-0 border border-blue-400/40 border-dashed pointer-events-none z-20" />
                                             )}
 
-                                            {!is1up && <div className="absolute top-0 bottom-0 left-1/2 -translate-x-1/2 w-px bg-blue-300/50 border-r border-dashed border-blue-400 z-10" />}
-                                            {sheet.isCover && settings.spine_mm > 0 && (
-                                                <div className="absolute top-0 bottom-0 left-1/2 -translate-x-1/2 bg-yellow-200/40 border-x border-yellow-400/50 z-10 flex items-center justify-center overflow-hidden" style={{ width: `${settings.spine_mm * pxPerMm}px` }}>
+                                            {/* Spine / Center Line (only 2-up) */}
+                                            {!is1up && <div className="absolute top-0 bottom-0 left-1/2 -translate-x-1/2 w-px bg-blue-300/50 border-r border-dashed border-blue-400 z-20" />}
+                                            {sheet.isCover && settings.spine_mm > 0 && !is1up && (
+                                                <div className="absolute top-0 bottom-0 left-1/2 -translate-x-1/2 bg-yellow-200/40 border-x border-yellow-400/50 z-20 flex items-center justify-center overflow-hidden" style={{ width: `${settings.spine_mm * pxPerMm}px` }}>
                                                     <span className="text-[8px] text-yellow-700 -rotate-90 whitespace-nowrap">书脊 {settings.spine_mm}mm</span>
                                                 </div>
                                             )}
+                                            
+                                            {/* Glue Area (Front Side) */}
                                             {settings.binding_method === 'perfect' && !sheet.isCover && (
                                                 <>
                                                     {is1up ? (
-                                                        <div className="absolute top-0 bottom-0 left-1/2 -translate-x-1/2 bg-blue-200/20 border-r border-blue-300/50 z-10 flex items-center justify-center overflow-hidden" 
-                                                             style={{ width: `${settings.binding_margin_mm * pxPerMm}px`, marginLeft: `-${(bW_mm * pxPerMm)/2 - (settings.binding_margin_mm * pxPerMm)/2}px` }}>
+                                                        <div className="absolute top-0 bottom-0 left-0 bg-blue-200/20 border-r border-blue-300/50 z-20 flex items-center justify-center overflow-hidden" 
+                                                             style={{ width: `${settings.binding_margin_mm * pxPerMm}px` }}>
                                                             <span className="text-[8px] text-blue-700 -rotate-90 whitespace-nowrap">刷胶 (仅预览)</span>
                                                         </div>
                                                     ) : (
                                                         <>
-                                                            <div className="absolute top-0 bottom-0 left-1/2 -translate-x-full bg-blue-200/20 border-r border-blue-300/50 z-10 flex items-center justify-center overflow-hidden" style={{ width: `${settings.binding_margin_mm * pxPerMm}px` }}>
+                                                            <div className="absolute top-0 bottom-0 left-1/2 -translate-x-full bg-blue-200/20 border-r border-blue-300/50 z-20 flex items-center justify-center overflow-hidden" style={{ width: `${settings.binding_margin_mm * pxPerMm}px` }}>
                                                                 <span className="text-[8px] text-blue-700 -rotate-90 whitespace-nowrap">刷胶 (仅预览)</span>
                                                             </div>
-                                                            <div className="absolute top-0 bottom-0 right-1/2 translate-x-full bg-blue-200/20 border-l border-blue-300/50 z-10 flex items-center justify-center overflow-hidden" style={{ width: `${settings.binding_margin_mm * pxPerMm}px` }}>
+                                                            <div className="absolute top-0 bottom-0 right-1/2 translate-x-full bg-blue-200/20 border-l border-blue-300/50 z-20 flex items-center justify-center overflow-hidden" style={{ width: `${settings.binding_margin_mm * pxPerMm}px` }}>
                                                                 <span className="text-[8px] text-blue-700 -rotate-90 whitespace-nowrap">刷胶 (仅预览)</span>
                                                             </div>
                                                         </>
@@ -392,15 +404,11 @@ export default function PrintScreen() {
                                             )}
 
                                             {/* Left Page (or Center Page if 1-up) */}
-                                            <div className="flex-1 relative flex items-center justify-center overflow-hidden"
-                                                 style={{ 
-                                                     paddingLeft: (settings.binding_method === 'perfect' && is1up && !sheet.isCover) ? `${settings.binding_margin_mm * pxPerMm}px` : '0px',
-                                                     paddingRight: (settings.binding_method === 'perfect' && !is1up && !sheet.isCover) ? `${settings.binding_margin_mm * pxPerMm}px` : '0px'
-                                                 }}>
+                                            <div className="flex-1 relative flex items-center justify-center overflow-hidden bg-white">
                                                 {sheet.front.left !== null ? (
                                                     <div className="w-full h-full flex flex-col items-center justify-center relative">
                                                         <img src={`http://127.0.0.1:14320/images/${projectState?.visible_images[sheet.front.left]}`} className="w-full h-full object-contain" />
-                                                        <span className="absolute bottom-1 text-[10px] bg-black/50 text-white px-2 rounded-full opacity-0 hover:opacity-100 transition-opacity">
+                                                        <span className="absolute bottom-1 text-[10px] bg-black/50 text-white px-2 rounded-full opacity-0 hover:opacity-100 transition-opacity z-30">
                                                             {sheet.front.left === 0 ? 'Cover' : `P${sheet.front.left}`}
                                                         </span>
                                                     </div>
@@ -411,14 +419,11 @@ export default function PrintScreen() {
                                             
                                             {/* Right Page (Only if not 1-up) */}
                                             {!is1up && (
-                                            <div className="flex-1 relative flex items-center justify-center overflow-hidden"
-                                                 style={{ 
-                                                     paddingLeft: (settings.binding_method === 'perfect' && !is1up && !sheet.isCover) ? `${settings.binding_margin_mm * pxPerMm}px` : '0px'
-                                                 }}>
+                                            <div className="flex-1 relative flex items-center justify-center overflow-hidden bg-white">
                                                 {sheet.front.right !== null ? (
                                                     <div className="w-full h-full flex flex-col items-center justify-center relative">
                                                         <img src={`http://127.0.0.1:14320/images/${projectState?.visible_images[sheet.front.right]}`} className="w-full h-full object-contain" />
-                                                        <span className="absolute bottom-1 text-[10px] bg-black/50 text-white px-2 rounded-full opacity-0 hover:opacity-100 transition-opacity">
+                                                        <span className="absolute bottom-1 text-[10px] bg-black/50 text-white px-2 rounded-full opacity-0 hover:opacity-100 transition-opacity z-30">
                                                             {sheet.front.right === 0 ? 'Cover' : `P${sheet.front.right}`}
                                                         </span>
                                                     </div>
@@ -426,10 +431,6 @@ export default function PrintScreen() {
                                                     <span className="text-gray-300 font-mono text-sm">空白页 (Blank)</span>
                                                 )}
                                             </div>
-                                            )}
-
-                                            {settings.crop_marks && !is1up && (
-                                                <div className="absolute inset-4 border border-blue-400/30 border-dashed pointer-events-none" />
                                             )}
                                         </div>
                                     </div>
@@ -446,31 +447,39 @@ export default function PrintScreen() {
                                              height: `${h}px`,
                                              backgroundColor: 'white'
                                          }}>
-                                        <div className="flex-1 relative flex" style={{ padding: `${hwMargin}px` }}>
+                                        <div className="flex-1 relative flex items-center justify-center overflow-hidden" style={{ padding: `${hwMargin}px` }}>
                                             <div className="absolute inset-0 border border-gray-100 pointer-events-none" />
                                             
-                                            {/* UNIFIED PAPER OFFSET WRAPPER (BACK SIDE INVERTS OFFSET_X) */}
-                                            <div className="relative w-full h-full flex" style={{ transform: `translate(${-settings.offset_x}px, ${settings.offset_y}px)` }}>
-                                                {settings.crop_marks && is1up && (
-                                                    <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 border border-blue-400/30 border-dashed pointer-events-none"
-                                                         style={{ width: `${bW_mm * pxPerMm}px`, height: `${bH_mm * pxPerMm}px` }} />
+                                            {/* STRICT BOOK BLOCK CONTAINER (BACK SIDE INVERTS OFFSET_X) */}
+                                            <div className="relative flex bg-white ring-1 ring-black/5" 
+                                                 style={{ 
+                                                     width: `${bookBlockWidthPx}px`, 
+                                                     height: `${bookBlockHeightPx}px`,
+                                                     transform: `translate(${-settings.offset_x}px, ${settings.offset_y}px)`
+                                                 }}>
+                                                 
+                                                {/* Crop Marks (bounds exactly the Book Block) */}
+                                                {settings.crop_marks && (
+                                                    <div className="absolute inset-0 border border-blue-400/40 border-dashed pointer-events-none z-20" />
                                                 )}
 
-                                                {!is1up && <div className="absolute top-0 bottom-0 left-1/2 -translate-x-1/2 w-px bg-blue-300/50 border-r border-dashed border-blue-400 z-10" />}
+                                                {/* Spine / Center Line (only 2-up) */}
+                                                {!is1up && <div className="absolute top-0 bottom-0 left-1/2 -translate-x-1/2 w-px bg-blue-300/50 border-r border-dashed border-blue-400 z-20" />}
                                                 
+                                                {/* Glue Area (Back Side) */}
                                                 {settings.binding_method === 'perfect' && !sheet.isCover && (
                                                     <>
                                                         {is1up ? (
-                                                            <div className="absolute top-0 bottom-0 left-1/2 translate-x-1/2 bg-blue-200/20 border-l border-blue-300/50 z-10 flex items-center justify-center overflow-hidden" 
-                                                                 style={{ width: `${settings.binding_margin_mm * pxPerMm}px`, marginLeft: `${(bW_mm * pxPerMm)/2 - (settings.binding_margin_mm * pxPerMm)}px` }}>
+                                                            <div className="absolute top-0 bottom-0 right-0 bg-blue-200/20 border-l border-blue-300/50 z-20 flex items-center justify-center overflow-hidden" 
+                                                                 style={{ width: `${settings.binding_margin_mm * pxPerMm}px` }}>
                                                                 <span className="text-[8px] text-blue-700 -rotate-90 whitespace-nowrap">刷胶 (仅预览)</span>
                                                             </div>
                                                         ) : (
                                                             <>
-                                                                <div className="absolute top-0 bottom-0 left-1/2 -translate-x-full bg-blue-200/20 border-r border-blue-300/50 z-10 flex items-center justify-center overflow-hidden" style={{ width: `${settings.binding_margin_mm * pxPerMm}px` }}>
+                                                                <div className="absolute top-0 bottom-0 left-1/2 -translate-x-full bg-blue-200/20 border-r border-blue-300/50 z-20 flex items-center justify-center overflow-hidden" style={{ width: `${settings.binding_margin_mm * pxPerMm}px` }}>
                                                                     <span className="text-[8px] text-blue-700 -rotate-90 whitespace-nowrap">刷胶 (仅预览)</span>
                                                                 </div>
-                                                                <div className="absolute top-0 bottom-0 right-1/2 translate-x-full bg-blue-200/20 border-l border-blue-300/50 z-10 flex items-center justify-center overflow-hidden" style={{ width: `${settings.binding_margin_mm * pxPerMm}px` }}>
+                                                                <div className="absolute top-0 bottom-0 right-1/2 translate-x-full bg-blue-200/20 border-l border-blue-300/50 z-20 flex items-center justify-center overflow-hidden" style={{ width: `${settings.binding_margin_mm * pxPerMm}px` }}>
                                                                     <span className="text-[8px] text-blue-700 -rotate-90 whitespace-nowrap">刷胶 (仅预览)</span>
                                                                 </div>
                                                             </>
@@ -479,15 +488,11 @@ export default function PrintScreen() {
                                                 )}
 
                                                 {/* Left Page (Back) */}
-                                                <div className="flex-1 relative flex items-center justify-center overflow-hidden"
-                                                     style={{ 
-                                                         paddingRight: (settings.binding_method === 'perfect' && is1up && !sheet.isCover) ? `${settings.binding_margin_mm * pxPerMm}px` : '0px',
-                                                         paddingRight: (settings.binding_method === 'perfect' && !is1up && !sheet.isCover) ? `${settings.binding_margin_mm * pxPerMm}px` : '0px'
-                                                     }}>
+                                                <div className="flex-1 relative flex items-center justify-center overflow-hidden bg-white">
                                                     {sheet.back.left !== null ? (
                                                         <div className="w-full h-full flex flex-col items-center justify-center relative">
                                                             <img src={`http://127.0.0.1:14320/images/${projectState?.visible_images[sheet.back.left]}`} className="w-full h-full object-contain" />
-                                                            <span className="absolute bottom-1 text-[10px] bg-black/50 text-white px-2 rounded-full opacity-0 hover:opacity-100 transition-opacity">
+                                                            <span className="absolute bottom-1 text-[10px] bg-black/50 text-white px-2 rounded-full opacity-0 hover:opacity-100 transition-opacity z-30">
                                                                 {sheet.back.left === 0 ? 'Cover' : `P${sheet.back.left}`}
                                                             </span>
                                                         </div>
@@ -498,14 +503,11 @@ export default function PrintScreen() {
                                                 
                                                 {/* Right Page (Back) */}
                                                 {!is1up && (
-                                                <div className="flex-1 relative flex items-center justify-center overflow-hidden"
-                                                     style={{ 
-                                                         paddingLeft: (settings.binding_method === 'perfect' && !is1up && !sheet.isCover) ? `${settings.binding_margin_mm * pxPerMm}px` : '0px'
-                                                     }}>
+                                                <div className="flex-1 relative flex items-center justify-center overflow-hidden bg-white">
                                                     {sheet.back.right !== null ? (
                                                         <div className="w-full h-full flex flex-col items-center justify-center relative">
                                                             <img src={`http://127.0.0.1:14320/images/${projectState?.visible_images[sheet.back.right]}`} className="w-full h-full object-contain" />
-                                                            <span className="absolute bottom-1 text-[10px] bg-black/50 text-white px-2 rounded-full opacity-0 hover:opacity-100 transition-opacity">
+                                                            <span className="absolute bottom-1 text-[10px] bg-black/50 text-white px-2 rounded-full opacity-0 hover:opacity-100 transition-opacity z-30">
                                                                 {sheet.back.right === 0 ? 'Cover' : `P${sheet.back.right}`}
                                                             </span>
                                                         </div>
@@ -513,10 +515,6 @@ export default function PrintScreen() {
                                                         <span className="text-gray-300 font-mono text-sm">空白页 (Blank)</span>
                                                     )}
                                                 </div>
-                                                )}
-
-                                                {settings.crop_marks && !is1up && (
-                                                    <div className="absolute inset-4 border border-blue-400/30 border-dashed pointer-events-none" />
                                                 )}
                                             </div>
                                         </div>
