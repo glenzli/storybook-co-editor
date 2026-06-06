@@ -135,6 +135,16 @@ export default function PrintScreen() {
         return calculateImposition(projectState.visible_images, settings);
     }, [projectState?.visible_images, settings]);
 
+    // Track loaded image natural dimensions for content-level crop lines
+    const [imageDims, setImageDims] = useState<Record<number, { w: number; h: number }>({});
+    const handleImageLoad = (pageIndex: number, e: React.SyntheticEvent<HTMLImageElement>) => {
+        const img = e.currentTarget;
+        setImageDims(prev => {
+            if (prev[pageIndex]?.w === img.naturalWidth && prev[pageIndex]?.h === img.naturalHeight) return prev;
+            return { ...prev, [pageIndex]: { w: img.naturalWidth, h: img.naturalHeight } };
+        });
+    };
+
 
     return (
         <div className="flex flex-1 overflow-hidden relative bg-muted text-foreground">
@@ -295,6 +305,11 @@ export default function PrintScreen() {
                             <input type="checkbox" checked={settings.crop_marks} onChange={e => updateSettings({ crop_marks: e.target.checked })} className="accent-primary w-4 h-4" />
                             <span className="text-sm">生成印刷裁剪线 (Crop Marks)</span>
                         </label>
+
+                        <label className="flex items-center gap-2 cursor-pointer mt-1">
+                            <input type="checkbox" checked={settings.duplex_printing ?? false} onChange={e => updateSettings({ duplex_printing: e.target.checked })} className="accent-primary w-4 h-4" />
+                            <span className="text-sm">双面打印 (跳过反面生成)</span>
+                        </label>
                         
                         <label className="flex items-center gap-2 cursor-pointer">
                             <input type="checkbox" checked={settings.has_back_cover} onChange={e => updateSettings({ has_back_cover: e.target.checked })} className="accent-primary w-4 h-4" />
@@ -445,6 +460,7 @@ export default function PrintScreen() {
                                                 {sheet.front.left !== null ? (
                                                     <div className="w-full h-full flex flex-col items-center justify-center relative">
                                                         <img 
+                                                            onLoad={e => sheet.front.left !== null && handleImageLoad(sheet.front.left, e)}
                                                             src={`http://127.0.0.1:14320/images/${projectState?.visible_images[sheet.front.left]}`} 
                                                             className="w-full h-full object-contain" 
                                                             style={{ 
@@ -471,6 +487,7 @@ export default function PrintScreen() {
                                                 {sheet.front.right !== null ? (
                                                     <div className="w-full h-full flex flex-col items-center justify-center relative">
                                                         <img 
+                                                            onLoad={e => sheet.front.right !== null && handleImageLoad(sheet.front.right, e)}
                                                             src={`http://127.0.0.1:14320/images/${projectState?.visible_images[sheet.front.right]}`} 
                                                             className="w-full h-full object-contain"
                                                             style={{ 
@@ -494,22 +511,47 @@ export default function PrintScreen() {
                                     {/* Crop/Trim Lines (paper level, high z-index) */}
                                     {settings.crop_marks && (() => {
                                         const bbRight = frontLeft + scaledW;
-                                        const bbTop = frontTop + settings.offset_y;
-                                        const bbBottom = bbTop + scaledH;
-                                        return (
-                                            <>
-                                                {bbRight + 2 < w && <div className="absolute top-0 bottom-0 w-px pointer-events-none z-50" style={{ left: `${bbRight}px`, background: 'rgba(220,38,38,0.5)' }} />}
-                                                {bbTop > 2 && <div className="absolute left-0 right-0 h-px pointer-events-none z-50" style={{ top: `${bbTop}px`, background: 'rgba(220,38,38,0.5)' }} />}
-                                                {bbBottom + 2 < h && <div className="absolute left-0 right-0 h-px pointer-events-none z-50" style={{ top: `${bbBottom}px`, background: 'rgba(220,38,38,0.5)' }} />}
-                                                {frontLeft > 2 && <div className="absolute top-0 bottom-0 w-px pointer-events-none z-50" style={{ left: `${frontLeft}px`, background: 'rgba(220,38,38,0.5)' }} />}
-                                            </>
-                                        );
+                                        const bbTopY = frontTop + settings.offset_y;
+                                        const bbBottom = bbTopY + scaledH;
+                                        const lines: React.ReactNode[] = [];
+                                        // Book block edge lines
+                                        if (bbRight + 2 < w) lines.push(<div key="r" className="absolute top-0 bottom-0 w-px pointer-events-none z-50" style={{ left: `${bbRight}px`, background: 'rgba(220,38,38,0.5)' }} />);
+                                        if (bbTopY > 2) lines.push(<div key="t" className="absolute left-0 right-0 h-px pointer-events-none z-50" style={{ top: `${bbTopY}px`, background: 'rgba(220,38,38,0.5)' }} />);
+                                        if (bbBottom + 2 < h) lines.push(<div key="b" className="absolute left-0 right-0 h-px pointer-events-none z-50" style={{ top: `${bbBottom}px`, background: 'rgba(220,38,38,0.5)' }} />);
+                                        if (frontLeft > 2) lines.push(<div key="l" className="absolute top-0 bottom-0 w-px pointer-events-none z-50" style={{ left: `${frontLeft}px`, background: 'rgba(220,38,38,0.5)' }} />);
+
+                                        // Content-level crop lines based on actual image dimensions
+                                        const leftPageIdx = sheet.front.left;
+                                        if (leftPageIdx !== null && imageDims[leftPageIdx] && !sheet.isCover) {
+                                            const dims = imageDims[leftPageIdx];
+                                            const imgAspect = dims.w / dims.h;
+                                            const padL = (settings.binding_method === 'perfect' && is1up) ? (settings.binding_margin_mm + effectiveOffsetX) * pxPerMm : 0;
+                                            const padR = (settings.binding_method === 'perfect' && !is1up) ? (settings.binding_margin_mm + effectiveOffsetX) * pxPerMm : 0;
+                                            const cW = bookBlockWidthPx * (is1up ? 1 : 0.5) - padL - padR;
+                                            const cH = bookBlockHeightPx;
+                                            const containerAspect = cW / cH;
+                                            if (containerAspect > imgAspect) {
+                                                // Image limited by height → white space on right
+                                                const imgW = cH * imgAspect;
+                                                const cropX = frontLeft + (padL + imgW) * fitScale;
+                                                if (cropX + 2 < w) lines.push(<div key="cr" className="absolute top-0 bottom-0 w-px pointer-events-none z-50" style={{ left: `${cropX}px`, background: 'rgba(220,38,38,0.7)' }} />);
+                                            } else if (containerAspect < imgAspect) {
+                                                // Image limited by width → white space on bottom
+                                                const imgH = cW / imgAspect;
+                                                const topOffset = (frontTop + settings.offset_y);
+                                                const cropYTop = topOffset + ((cH - imgH) / 2) * fitScale;
+                                                const cropYBot = topOffset + ((cH + imgH) / 2) * fitScale;
+                                                if (cropYTop > 2) lines.push(<div key="crt" className="absolute left-0 right-0 h-px pointer-events-none z-50" style={{ top: `${cropYTop}px`, background: 'rgba(220,38,38,0.7)' }} />);
+                                                if (cropYBot + 2 < h) lines.push(<div key="crb" className="absolute left-0 right-0 h-px pointer-events-none z-50" style={{ top: `${cropYBot}px`, background: 'rgba(220,38,38,0.7)' }} />);
+                                            }
+                                        }
+                                        return <>{lines}</>;
                                     })()}
                                 </div>
                             </div>
 
                             {/* Back Side */}
-                            {sheet.back && (
+                            {sheet.back && !settings.duplex_printing && (
                                 <div className="flex flex-col items-center gap-2 opacity-90">
                                     <span className="text-xs font-mono text-muted-foreground">反面 (Back Side)</span>
                                     <div className="relative shadow-xl ring-1 ring-border/50 rounded-sm flex items-stretch overflow-hidden"
@@ -564,6 +606,7 @@ export default function PrintScreen() {
                                                     {sheet.back.left !== null ? (
                                                         <div className="w-full h-full flex flex-col items-center justify-center relative">
                                                             <img 
+                                                                onLoad={e => sheet.back!.left !== null && handleImageLoad(sheet.back!.left, e)}
                                                                 src={`http://127.0.0.1:14320/images/${projectState?.visible_images[sheet.back.left]}`} 
                                                                 className="w-full h-full object-contain"
                                                                 style={{ 
@@ -590,6 +633,7 @@ export default function PrintScreen() {
                                                     {sheet.back.right !== null ? (
                                                         <div className="w-full h-full flex flex-col items-center justify-center relative">
                                                             <img 
+                                                                onLoad={e => sheet.back!.right !== null && handleImageLoad(sheet.back!.right, e)}
                                                                 src={`http://127.0.0.1:14320/images/${projectState?.visible_images[sheet.back.right]}`} 
                                                                 className="w-full h-full object-contain"
                                                                 style={{ 
