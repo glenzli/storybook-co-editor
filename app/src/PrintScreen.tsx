@@ -15,6 +15,18 @@ function calculateImposition(images: string[], settings: any): ImposedSheet[] {
   const sheets: ImposedSheet[] = [];
 
   const total = images.length;
+  if (settings.layout_mode === '1-up' && settings.binding_method === 'perfect') {
+      for (let i = 0; i < total; i+=2) {
+          sheets.push({
+              id: `sheet-1up-${i/2 + 1}`,
+              isCover: false,
+              front: { left: i, right: null },
+              back: { left: (i+1 < total) ? i+1 : null, right: null }
+          });
+      }
+      return sheets;
+  }
+
   const hasBack = settings.has_back_cover;
   
   const coverIdx = 0;
@@ -53,33 +65,22 @@ function calculateImposition(images: string[], settings: any): ImposedSheet[] {
       });
     }
   } else if (method === 'perfect') {
-    if (settings.layout_mode === '1-up') {
-        const totalInner = innerPages.length;
-        for (let i = 0; i < totalInner; i+=2) {
-            sheets.push({
-                id: `sheet-perfect-1up-${i/2 + 1}`,
-                front: { left: innerPages[i] === -1 ? null : innerPages[i], right: null },
-                back: { left: innerPages[i+1] !== undefined ? (innerPages[i+1] === -1 ? null : innerPages[i+1]) : null, right: null }
-            });
-        }
-    } else {
-        while (innerPages.length % 4 !== 0) {
-          innerPages.push(-1);
-        }
-        const totalInner = innerPages.length;
-        const half = totalInner / 2;
-        for (let i = 0; i < totalInner / 4; i++) {
-            const idx1 = i * 2;
-            const idx2 = half + i * 2;
-            const idx3 = idx1 + 1;
-            const idx4 = idx2 + 1;
-            
-            sheets.push({
-                id: `sheet-perfect-2up-${i+1}`,
-                front: { left: innerPages[idx1] === -1 ? null : innerPages[idx1], right: innerPages[idx2] === -1 ? null : innerPages[idx2] },
-                back: { left: innerPages[idx3] === -1 ? null : innerPages[idx3], right: innerPages[idx4] === -1 ? null : innerPages[idx4] }
-            });
-        }
+    while (innerPages.length % 4 !== 0) {
+      innerPages.push(-1);
+    }
+    const totalInner = innerPages.length;
+    const half = totalInner / 2;
+    for (let i = 0; i < totalInner / 4; i++) {
+        const idx1 = i * 2;
+        const idx2 = half + i * 2;
+        const idx3 = idx1 + 1;
+        const idx4 = idx2 + 1;
+        
+        sheets.push({
+            id: `sheet-perfect-2up-${i+1}`,
+            front: { left: innerPages[idx1] === -1 ? null : innerPages[idx1], right: innerPages[idx2] === -1 ? null : innerPages[idx2] },
+            back: { left: innerPages[idx3] === -1 ? null : innerPages[idx3], right: innerPages[idx4] === -1 ? null : innerPages[idx4] }
+        });
     }
   } else if (method === 'butterfly') {
     while (innerPages.length % 2 !== 0) {
@@ -246,6 +247,17 @@ export default function PrintScreen() {
                                 onChange={e => updateSettings({ spine_mm: parseFloat(e.target.value) })}
                             />
                         </div>
+
+                        <div className="flex flex-col gap-1 mt-2">
+                            <div className="flex justify-between">
+                                <span className="text-sm">硬件打印留白 (四周)</span>
+                                <span className="text-xs font-mono">{settings.hardware_margin_mm || 0} mm</span>
+                            </div>
+                            <input type="range" min="0" max="20" step="1" className="w-full accent-primary" 
+                                value={settings.hardware_margin_mm || 0}
+                                onChange={e => updateSettings({ hardware_margin_mm: parseFloat(e.target.value) })}
+                            />
+                        </div>
                     </div>
 
                     {/* Offsets */}
@@ -301,11 +313,26 @@ export default function PrintScreen() {
                 </div>
 
                 {imposedSheets.map((sheet, index) => {
+                    const pxPerMm = settings.paper_size === 'A3' ? 1.5 : 2.0;
+                    
+                    const pW_mm = settings.paper_size === 'A3' ? 297 : 210;
+                    const pH_mm = settings.paper_size === 'A3' ? 420 : 297;
                     const isLandscape = settings.paper_orientation === 'landscape';
-                    const baseW = settings.paper_size === 'A3' ? 500 : 350;
-                    // Cover spread is always horizontal (landscape-like)
-                    const w = sheet.isCover ? baseW * 1.414 : (isLandscape ? baseW * 1.414 : baseW);
-                    const h = sheet.isCover ? baseW : (isLandscape ? baseW : baseW * 1.414);
+                    let w_mm = isLandscape ? pH_mm : pW_mm;
+                    let h_mm = isLandscape ? pW_mm : pH_mm;
+
+                    const bW_mm = settings.book_size === 'A4' ? 210 : 148.5;
+                    const bH_mm = settings.book_size === 'A4' ? 297 : 210;
+
+                    if (sheet.isCover) {
+                        w_mm = bW_mm * 2 + settings.spine_mm;
+                        h_mm = bH_mm;
+                    }
+
+                    const w = w_mm * pxPerMm;
+                    const h = h_mm * pxPerMm;
+
+                    const hwMargin = (settings.hardware_margin_mm || 0) * pxPerMm;
                     const is1up = settings.binding_method === 'perfect' && settings.layout_mode === '1-up' && !sheet.isCover;
 
                     return (
@@ -319,14 +346,22 @@ export default function PrintScreen() {
                             {/* Front Side */}
                             <div className="flex flex-col items-center gap-2">
                                 <span className="text-xs font-mono text-muted-foreground">正面 (Front Side)</span>
-                                <div className="relative bg-white shadow-xl ring-1 ring-border/50 rounded-sm flex items-stretch overflow-hidden"
+                                <div className="relative shadow-xl ring-1 ring-border/50 rounded-sm flex items-stretch overflow-hidden"
                                      style={{ 
                                          width: `${w}px`, 
                                          height: `${h}px`,
-                                         padding: settings.crop_marks ? '20px' : '0px'
+                                         backgroundColor: 'white'
                                      }}>
                                     
-                                    <div className="flex-1 relative flex bg-gray-50 border border-gray-200">
+                                    <div className="flex-1 relative flex" style={{ padding: `${hwMargin}px` }}>
+                                        <div className="absolute inset-0 border border-gray-100 pointer-events-none" />
+                                        
+                                        {/* Crop Marks (Book size bounds) */}
+                                        {settings.crop_marks && is1up && (
+                                            <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 border border-blue-400/30 border-dashed pointer-events-none"
+                                                 style={{ width: `${bW_mm * pxPerMm}px`, height: `${bH_mm * pxPerMm}px` }} />
+                                        )}
+
                                         {!is1up && <div className="absolute top-0 bottom-0 left-1/2 -translate-x-1/2 w-px bg-blue-300/50 border-r border-dashed border-blue-400 z-10" />}
                                         {sheet.isCover && settings.spine_mm > 0 && (
                                             <div className="absolute top-0 bottom-0 left-1/2 -translate-x-1/2 bg-yellow-200/40 border-x border-yellow-400/50 z-10 flex items-center justify-center overflow-hidden" style={{ width: `${settings.spine_mm * 2}px` }}>
@@ -353,12 +388,12 @@ export default function PrintScreen() {
                                         )}
 
                                         {/* Left Page (or Center Page if 1-up) */}
-                                        <div className="flex-1 relative flex items-center justify-center overflow-hidden bg-white">
+                                        <div className="flex-1 relative flex items-center justify-center overflow-hidden">
                                             {sheet.front.left !== null ? (
-                                                <div className="w-full h-full p-4 flex flex-col items-center justify-center opacity-80"
+                                                <div className="w-full h-full flex flex-col items-center justify-center relative"
                                                      style={{ transform: `translate(${settings.offset_x}px, ${settings.offset_y}px)` }}>
-                                                    <img src={`http://127.0.0.1:14320/images/${projectState?.visible_images[sheet.front.left]}`} className="max-w-full max-h-full object-contain drop-shadow-md" />
-                                                    <span className="absolute bottom-1 text-[10px] bg-black/50 text-white px-2 rounded-full">
+                                                    <img src={`http://127.0.0.1:14320/images/${projectState?.visible_images[sheet.front.left]}`} className="w-full h-full object-contain" />
+                                                    <span className="absolute bottom-1 text-[10px] bg-black/50 text-white px-2 rounded-full opacity-0 hover:opacity-100 transition-opacity">
                                                         {sheet.front.left === 0 ? 'Cover' : `P${sheet.front.left}`}
                                                     </span>
                                                 </div>
@@ -369,12 +404,12 @@ export default function PrintScreen() {
                                         
                                         {/* Right Page (Only if not 1-up) */}
                                         {!is1up && (
-                                        <div className="flex-1 relative flex items-center justify-center overflow-hidden bg-white">
+                                        <div className="flex-1 relative flex items-center justify-center overflow-hidden">
                                             {sheet.front.right !== null ? (
-                                                <div className="w-full h-full p-4 flex flex-col items-center justify-center opacity-80"
+                                                <div className="w-full h-full flex flex-col items-center justify-center relative"
                                                      style={{ transform: `translate(${settings.offset_x}px, ${settings.offset_y}px)` }}>
-                                                    <img src={`http://127.0.0.1:14320/images/${projectState?.visible_images[sheet.front.right]}`} className="max-w-full max-h-full object-contain drop-shadow-md" />
-                                                    <span className="absolute bottom-1 text-[10px] bg-black/50 text-white px-2 rounded-full">
+                                                    <img src={`http://127.0.0.1:14320/images/${projectState?.visible_images[sheet.front.right]}`} className="w-full h-full object-contain" />
+                                                    <span className="absolute bottom-1 text-[10px] bg-black/50 text-white px-2 rounded-full opacity-0 hover:opacity-100 transition-opacity">
                                                         {sheet.front.right === 0 ? 'Cover' : `P${sheet.front.right}`}
                                                     </span>
                                                 </div>
@@ -385,8 +420,8 @@ export default function PrintScreen() {
                                         )}
                                     </div>
                                     
-                                    {settings.crop_marks && (
-                                        <div className="absolute inset-2 border border-gray-400/30 pointer-events-none" />
+                                    {settings.crop_marks && !is1up && (
+                                        <div className="absolute inset-4 border border-blue-400/30 border-dashed pointer-events-none" />
                                     )}
                                 </div>
                             </div>
@@ -395,13 +430,19 @@ export default function PrintScreen() {
                             {sheet.back && (
                                 <div className="flex flex-col items-center gap-2 opacity-90">
                                     <span className="text-xs font-mono text-muted-foreground">反面 (Back Side)</span>
-                                    <div className="relative bg-white shadow-xl ring-1 ring-border/50 rounded-sm flex items-stretch overflow-hidden"
+                                    <div className="relative shadow-xl ring-1 ring-border/50 rounded-sm flex items-stretch overflow-hidden"
                                          style={{ 
                                              width: `${w}px`, 
                                              height: `${h}px`,
-                                             padding: settings.crop_marks ? '20px' : '0px'
+                                             backgroundColor: 'white'
                                          }}>
-                                        <div className="flex-1 relative flex bg-gray-50 border border-gray-200">
+                                        <div className="flex-1 relative flex" style={{ padding: `${hwMargin}px` }}>
+                                            <div className="absolute inset-0 border border-gray-100 pointer-events-none" />
+                                            {settings.crop_marks && is1up && (
+                                                <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 border border-blue-400/30 border-dashed pointer-events-none"
+                                                     style={{ width: `${bW_mm * pxPerMm}px`, height: `${bH_mm * pxPerMm}px` }} />
+                                            )}
+
                                             {!is1up && <div className="absolute top-0 bottom-0 left-1/2 -translate-x-1/2 w-px bg-blue-300/50 border-r border-dashed border-blue-400 z-10" />}
                                             
                                             {settings.binding_method === 'perfect' && is1up && !sheet.isCover && (
@@ -411,12 +452,12 @@ export default function PrintScreen() {
                                             )}
 
                                             {/* Left Page (Back) */}
-                                            <div className="flex-1 relative flex items-center justify-center overflow-hidden bg-white">
+                                            <div className="flex-1 relative flex items-center justify-center overflow-hidden">
                                                 {sheet.back.left !== null ? (
-                                                    <div className="w-full h-full p-4 flex flex-col items-center justify-center opacity-80"
+                                                    <div className="w-full h-full flex flex-col items-center justify-center relative"
                                                          style={{ transform: `translate(${-settings.offset_x}px, ${settings.offset_y}px)` }}>
-                                                        <img src={`http://127.0.0.1:14320/images/${projectState?.visible_images[sheet.back.left]}`} className="max-w-full max-h-full object-contain drop-shadow-md" />
-                                                        <span className="absolute bottom-1 text-[10px] bg-black/50 text-white px-2 rounded-full">
+                                                        <img src={`http://127.0.0.1:14320/images/${projectState?.visible_images[sheet.back.left]}`} className="w-full h-full object-contain" />
+                                                        <span className="absolute bottom-1 text-[10px] bg-black/50 text-white px-2 rounded-full opacity-0 hover:opacity-100 transition-opacity">
                                                             {sheet.back.left === 0 ? 'Cover' : `P${sheet.back.left}`}
                                                         </span>
                                                     </div>
@@ -427,12 +468,12 @@ export default function PrintScreen() {
                                             
                                             {/* Right Page (Back) */}
                                             {!is1up && (
-                                            <div className="flex-1 relative flex items-center justify-center overflow-hidden bg-white">
+                                            <div className="flex-1 relative flex items-center justify-center overflow-hidden">
                                                 {sheet.back.right !== null ? (
-                                                    <div className="w-full h-full p-4 flex flex-col items-center justify-center opacity-80"
+                                                    <div className="w-full h-full flex flex-col items-center justify-center relative"
                                                          style={{ transform: `translate(${-settings.offset_x}px, ${settings.offset_y}px)` }}>
-                                                        <img src={`http://127.0.0.1:14320/images/${projectState?.visible_images[sheet.back.right]}`} className="max-w-full max-h-full object-contain drop-shadow-md" />
-                                                        <span className="absolute bottom-1 text-[10px] bg-black/50 text-white px-2 rounded-full">
+                                                        <img src={`http://127.0.0.1:14320/images/${projectState?.visible_images[sheet.back.right]}`} className="w-full h-full object-contain" />
+                                                        <span className="absolute bottom-1 text-[10px] bg-black/50 text-white px-2 rounded-full opacity-0 hover:opacity-100 transition-opacity">
                                                             {sheet.back.right === 0 ? 'Cover' : `P${sheet.back.right}`}
                                                         </span>
                                                     </div>
@@ -442,6 +483,9 @@ export default function PrintScreen() {
                                             </div>
                                             )}
                                         </div>
+                                        {settings.crop_marks && !is1up && (
+                                            <div className="absolute inset-4 border border-blue-400/30 border-dashed pointer-events-none" />
+                                        )}
                                     </div>
                                 </div>
                             )}

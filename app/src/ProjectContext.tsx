@@ -20,6 +20,7 @@ export interface PrintSettings {
     has_back_cover: boolean;
     spine_mm: number;
     binding_margin_mm: number;
+    hardware_margin_mm: number;
     crop_marks: boolean;
     offset_x: number;
     offset_y: number;
