@@ -176,9 +176,9 @@ export default function PrintScreen() {
 
     // Helper: render text overlay for a page
     // Editor text is positioned in a container of height ~85vh with absolute px values.
-    // In print preview, the container is bookBlockHeightPx (before fitScale).
+    // In print preview, the container is containerH px (before fitScale).
     // We scale all px values by the ratio to maintain proportional positioning.
-    const renderTextOverlay = (pageIdx: number) => {
+    const renderTextOverlay = (pageIdx: number, containerH: number) => {
         const text = parsedScript.get(pageIdx);
         if (!text) return null;
         const isCover = pageIdx === 0;
@@ -188,7 +188,7 @@ export default function PrintScreen() {
         
         // Scale factor: print container height / editor container height
         const editorRefHeight = typeof window !== 'undefined' ? window.innerHeight * 0.85 : 800;
-        const textScale = bookBlockHeightPx / editorRefHeight;
+        const textScale = containerH / editorRefHeight;
         
         const fontSize = (ts?.font_size || (isCover ? 40 : 20)) * textScale;
         const bottomPx = 40 * textScale;   // editor's bottom-10 = 2.5rem ≈ 40px
@@ -536,7 +536,7 @@ export default function PrintScreen() {
                                                                     : 'center center'
                                                             }}
                                                         />
-                                                        {sheet.front.left !== null && renderTextOverlay(sheet.front.left)}
+                                                        {sheet.front.left !== null && renderTextOverlay(sheet.front.left, bookBlockHeightPx)}
                                                         <span className="absolute bottom-1 text-[10px] bg-black/50 text-white px-2 rounded-full opacity-0 hover:opacity-100 transition-opacity z-30">
                                                             {sheet.front.left === 0 ? 'Cover' : `P${sheet.front.left}`}
                                                         </span>
@@ -564,7 +564,7 @@ export default function PrintScreen() {
                                                                     : 'center center'
                                                             }}
                                                         />
-                                                        {sheet.front.right !== null && renderTextOverlay(sheet.front.right)}
+                                                        {sheet.front.right !== null && renderTextOverlay(sheet.front.right, bookBlockHeightPx)}
                                                         <span className="absolute bottom-1 text-[10px] bg-black/50 text-white px-2 rounded-full opacity-0 hover:opacity-100 transition-opacity z-30">
                                                             {sheet.front.right === 0 ? 'Cover' : `P${sheet.front.right}`}
                                                         </span>
@@ -682,7 +682,7 @@ export default function PrintScreen() {
                                                                         : 'center center'
                                                                 }}
                                                             />
-                                                            {sheet.back.left !== null && renderTextOverlay(sheet.back.left)}
+                                                            {sheet.back.left !== null && renderTextOverlay(sheet.back.left, bookBlockHeightPx)}
                                                             <span className="absolute bottom-1 text-[10px] bg-black/50 text-white px-2 rounded-full opacity-0 hover:opacity-100 transition-opacity z-30">
                                                                 {sheet.back.left === 0 ? 'Cover' : `P${sheet.back.left}`}
                                                             </span>
@@ -710,7 +710,7 @@ export default function PrintScreen() {
                                                                         : 'center center'
                                                                 }}
                                                             />
-                                                            {sheet.back.right !== null && renderTextOverlay(sheet.back.right)}
+                                                            {sheet.back.right !== null && renderTextOverlay(sheet.back.right, bookBlockHeightPx)}
                                                             <span className="absolute bottom-1 text-[10px] bg-black/50 text-white px-2 rounded-full opacity-0 hover:opacity-100 transition-opacity z-30">
                                                                 {sheet.back.right === 0 ? 'Cover' : `P${sheet.back.right}`}
                                                             </span>
