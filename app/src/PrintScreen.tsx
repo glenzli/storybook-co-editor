@@ -371,6 +371,16 @@ export default function PrintScreen() {
                         : (bW_mm * 2 + (sheet.isCover ? settings.spine_mm : 0)) * pxPerMm;
                     const bookBlockHeightPx = bH_mm * pxPerMm;
 
+                    const innerW = w - 2 * hwMargin;
+                    const innerH = h - 2 * hwMargin;
+                    const scaleX = innerW / bookBlockWidthPx;
+                    const scaleY = innerH / bookBlockHeightPx;
+                    const fitScale = Math.min(1, scaleX, scaleY);
+
+                    const align = settings.paper_alignment || 'left';
+                    const transformOriginFront = align === 'left' ? 'left center' : (align === 'top-left' ? 'left top' : 'center center');
+                    const transformOriginBack = align === 'left' ? 'right center' : (align === 'top-left' ? 'right top' : 'center center');
+
                     return (
                     <div key={sheet.id} className="flex flex-col gap-4 items-center w-full">
                         <h3 className="text-sm font-semibold flex items-center gap-2 text-muted-foreground">
@@ -393,11 +403,12 @@ export default function PrintScreen() {
                                         <div className="absolute inset-0 border border-gray-100 pointer-events-none" />
                                         
                                         {/* STRICT BOOK BLOCK CONTAINER */}
-                                        <div className="relative flex bg-white ring-1 ring-black/5" 
+                                        <div className="relative flex bg-white ring-1 ring-black/5 shrink-0" 
                                              style={{ 
                                                  width: `${bookBlockWidthPx}px`, 
                                                  height: `${bookBlockHeightPx}px`,
-                                                 transform: `translate(${settings.offset_x}px, ${settings.offset_y}px)`
+                                                 transformOrigin: transformOriginFront,
+                                                 transform: `scale(${fitScale}) translate(${settings.offset_x}px, ${settings.offset_y}px)`
                                              }}>
                                              
                                             {/* Crop Marks (bounds exactly the Book Block) */}
@@ -505,11 +516,12 @@ export default function PrintScreen() {
                                             <div className="absolute inset-0 border border-gray-100 pointer-events-none" />
                                             
                                             {/* STRICT BOOK BLOCK CONTAINER (BACK SIDE INVERTS OFFSET_X) */}
-                                            <div className="relative flex bg-white ring-1 ring-black/5" 
+                                            <div className="relative flex bg-white ring-1 ring-black/5 shrink-0" 
                                                  style={{ 
                                                      width: `${bookBlockWidthPx}px`, 
                                                      height: `${bookBlockHeightPx}px`,
-                                                     transform: `translate(${-settings.offset_x}px, ${settings.offset_y}px)`
+                                                     transformOrigin: transformOriginBack,
+                                                     transform: `scale(${fitScale}) translate(${-settings.offset_x}px, ${settings.offset_y}px)`
                                                  }}>
                                                  
                                                 {/* Crop Marks (bounds exactly the Book Block) */}
