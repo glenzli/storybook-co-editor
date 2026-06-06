@@ -83,6 +83,7 @@ impl Default for ProjectState {
             global_script: "".to_string(),
             cover_text_settings: TextSettings { font_size: 40.0, ..TextSettings::default() },
             inner_text_settings: TextSettings::default(),
+            print_settings: PrintSettings::default(),
         }
     }
 }
