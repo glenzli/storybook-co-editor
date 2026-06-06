@@ -53,22 +53,33 @@ function calculateImposition(images: string[], settings: any): ImposedSheet[] {
       });
     }
   } else if (method === 'perfect') {
-    while (innerPages.length % 4 !== 0) {
-      innerPages.push(-1);
-    }
-    const totalInner = innerPages.length;
-    const half = totalInner / 2;
-    for (let i = 0; i < totalInner / 4; i++) {
-        const idx1 = i * 2;
-        const idx2 = half + i * 2;
-        const idx3 = idx1 + 1;
-        const idx4 = idx2 + 1;
-        
-        sheets.push({
-            id: `sheet-perfect-${i+1}`,
-            front: { left: innerPages[idx1] === -1 ? null : innerPages[idx1], right: innerPages[idx2] === -1 ? null : innerPages[idx2] },
-            back: { left: innerPages[idx3] === -1 ? null : innerPages[idx3], right: innerPages[idx4] === -1 ? null : innerPages[idx4] }
-        });
+    if (settings.layout_mode === '1-up') {
+        const totalInner = innerPages.length;
+        for (let i = 0; i < totalInner; i+=2) {
+            sheets.push({
+                id: `sheet-perfect-1up-${i/2 + 1}`,
+                front: { left: innerPages[i] === -1 ? null : innerPages[i], right: null },
+                back: { left: innerPages[i+1] !== undefined ? (innerPages[i+1] === -1 ? null : innerPages[i+1]) : null, right: null }
+            });
+        }
+    } else {
+        while (innerPages.length % 4 !== 0) {
+          innerPages.push(-1);
+        }
+        const totalInner = innerPages.length;
+        const half = totalInner / 2;
+        for (let i = 0; i < totalInner / 4; i++) {
+            const idx1 = i * 2;
+            const idx2 = half + i * 2;
+            const idx3 = idx1 + 1;
+            const idx4 = idx2 + 1;
+            
+            sheets.push({
+                id: `sheet-perfect-2up-${i+1}`,
+                front: { left: innerPages[idx1] === -1 ? null : innerPages[idx1], right: innerPages[idx2] === -1 ? null : innerPages[idx2] },
+                back: { left: innerPages[idx3] === -1 ? null : innerPages[idx3], right: innerPages[idx4] === -1 ? null : innerPages[idx4] }
+            });
+        }
     }
   } else if (method === 'butterfly') {
     while (innerPages.length % 2 !== 0) {
@@ -93,12 +104,16 @@ export default function PrintScreen() {
     // Default settings if undefined
     const settings = projectState?.print_settings || {
         paper_size: 'A4',
+        paper_orientation: 'portrait',
         book_size: 'A5',
-        binding_method: 'saddle',
+        layout_mode: '2-up',
+        binding_method: 'perfect',
         has_back_cover: false,
         spine_mm: 5.0,
         binding_margin_mm: 10.0,
-        crop_marks: true
+        crop_marks: true,
+        offset_x: 0.0,
+        offset_y: 0.0,
     };
 
     const updateSettings = (updates: any) => {
@@ -165,7 +180,20 @@ export default function PrintScreen() {
                                 </select>
                             </div>
                             <div>
-                                <span className="text-[10px] text-muted-foreground">成品裁切尺寸</span>
+                                <span className="text-[10px] text-muted-foreground">纸张方向</span>
+                                <select 
+                                    className="w-full bg-background border border-border rounded-md p-2 text-sm focus:ring-1 focus:ring-primary outline-none"
+                                    value={settings.paper_orientation}
+                                    onChange={(e) => updateSettings({ paper_orientation: e.target.value })}
+                                >
+                                    <option value="portrait">纵向 (Portrait)</option>
+                                    <option value="landscape">横向 (Landscape)</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div className="grid grid-cols-2 gap-2 mt-1">
+                            <div>
+                                <span className="text-[10px] text-muted-foreground">成品书籍尺寸</span>
                                 <select 
                                     className="w-full bg-background border border-border rounded-md p-2 text-sm focus:ring-1 focus:ring-primary outline-none"
                                     value={settings.book_size}
@@ -174,6 +202,19 @@ export default function PrintScreen() {
                                     <option value="A5">A5</option>
                                     <option value="A4">A4</option>
                                 </select>
+                            </div>
+                            <div>
+                                <span className="text-[10px] text-muted-foreground">纸张排版</span>
+                                <select 
+                                    className="w-full bg-background border border-border rounded-md p-2 text-sm focus:ring-1 focus:ring-primary outline-none"
+                                    value={settings.binding_method !== 'perfect' ? '2-up' : settings.layout_mode}
+                                    onChange={(e) => updateSettings({ layout_mode: e.target.value })}
+                                    disabled={settings.binding_method !== 'perfect'}
+                                >
+                                    <option value="1-up">1-up (单页居中)</option>
+                                    <option value="2-up">2-up (双页拼版)</option>
+                                </select>
+                                {settings.binding_method !== 'perfect' && <p className="text-[9px] text-amber-500 mt-0.5">该装订仅支持 2-up</p>}
                             </div>
                         </div>
                     </div>
@@ -204,6 +245,27 @@ export default function PrintScreen() {
                                 value={settings.spine_mm}
                                 onChange={e => updateSettings({ spine_mm: parseFloat(e.target.value) })}
                             />
+                        </div>
+                    </div>
+
+                    {/* Offsets */}
+                    <div className="flex flex-col gap-2">
+                        <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">整体偏移 (X / Y)</label>
+                        <div className="grid grid-cols-2 gap-2">
+                            <div className="flex flex-col gap-1">
+                                <span className="text-[10px] text-muted-foreground">X 轴 (mm)</span>
+                                <input type="number" step="1" className="w-full bg-background border border-border rounded-md p-1.5 text-sm outline-none"
+                                    value={settings.offset_x}
+                                    onChange={e => updateSettings({ offset_x: parseFloat(e.target.value) || 0 })}
+                                />
+                            </div>
+                            <div className="flex flex-col gap-1">
+                                <span className="text-[10px] text-muted-foreground">Y 轴 (mm)</span>
+                                <input type="number" step="1" className="w-full bg-background border border-border rounded-md p-1.5 text-sm outline-none"
+                                    value={settings.offset_y}
+                                    onChange={e => updateSettings({ offset_y: parseFloat(e.target.value) || 0 })}
+                                />
+                            </div>
                         </div>
                     </div>
 
@@ -238,7 +300,15 @@ export default function PrintScreen() {
                     <p className="text-sm text-muted-foreground">此处模拟 {settings.paper_size} 纸张物理打印排版。蓝色虚线为折叠线或裁剪辅助线。</p>
                 </div>
 
-                {imposedSheets.map((sheet, index) => (
+                {imposedSheets.map((sheet, index) => {
+                    const isLandscape = settings.paper_orientation === 'landscape';
+                    const baseW = settings.paper_size === 'A3' ? 500 : 350;
+                    // Cover spread is always horizontal (landscape-like)
+                    const w = sheet.isCover ? baseW * 1.414 : (isLandscape ? baseW * 1.414 : baseW);
+                    const h = sheet.isCover ? baseW : (isLandscape ? baseW : baseW * 1.414);
+                    const is1up = settings.binding_method === 'perfect' && settings.layout_mode === '1-up' && !sheet.isCover;
+
+                    return (
                     <div key={sheet.id} className="flex flex-col gap-4 items-center w-full">
                         <h3 className="text-sm font-semibold flex items-center gap-2 text-muted-foreground">
                             <FileText size={16} />
@@ -249,17 +319,15 @@ export default function PrintScreen() {
                             {/* Front Side */}
                             <div className="flex flex-col items-center gap-2">
                                 <span className="text-xs font-mono text-muted-foreground">正面 (Front Side)</span>
-                                <div className="relative bg-white shadow-xl ring-1 ring-border/50 rounded-sm flex items-stretch"
+                                <div className="relative bg-white shadow-xl ring-1 ring-border/50 rounded-sm flex items-stretch overflow-hidden"
                                      style={{ 
-                                         width: settings.paper_size === 'A3' || sheet.isCover ? '700px' : '500px', 
-                                         height: sheet.isCover ? '250px' : '350px',
+                                         width: `${w}px`, 
+                                         height: `${h}px`,
                                          padding: settings.crop_marks ? '20px' : '0px'
                                      }}>
                                     
-                                    {/* Virtual Paper Area */}
                                     <div className="flex-1 relative flex bg-gray-50 border border-gray-200">
-                                        {/* Spine / Gutter visualization */}
-                                        <div className="absolute top-0 bottom-0 left-1/2 -translate-x-1/2 w-px bg-blue-300/50 border-r border-dashed border-blue-400 z-10" />
+                                        {!is1up && <div className="absolute top-0 bottom-0 left-1/2 -translate-x-1/2 w-px bg-blue-300/50 border-r border-dashed border-blue-400 z-10" />}
                                         {sheet.isCover && settings.spine_mm > 0 && (
                                             <div className="absolute top-0 bottom-0 left-1/2 -translate-x-1/2 bg-yellow-200/40 border-x border-yellow-400/50 z-10 flex items-center justify-center overflow-hidden" style={{ width: `${settings.spine_mm * 2}px` }}>
                                                 <span className="text-[8px] text-yellow-700 -rotate-90 whitespace-nowrap">书脊 {settings.spine_mm}mm</span>
@@ -267,19 +335,28 @@ export default function PrintScreen() {
                                         )}
                                         {settings.binding_method === 'perfect' && !sheet.isCover && (
                                             <>
-                                                <div className="absolute top-0 bottom-0 left-1/2 -translate-x-full bg-blue-200/20 border-r border-blue-300/50 z-10 flex items-center justify-center overflow-hidden" style={{ width: `${settings.binding_margin_mm * 2}px` }}>
-                                                    <span className="text-[8px] text-blue-700 -rotate-90 whitespace-nowrap">刷胶区</span>
-                                                </div>
-                                                <div className="absolute top-0 bottom-0 right-1/2 translate-x-full bg-blue-200/20 border-l border-blue-300/50 z-10 flex items-center justify-center overflow-hidden" style={{ width: `${settings.binding_margin_mm * 2}px` }}>
-                                                    <span className="text-[8px] text-blue-700 -rotate-90 whitespace-nowrap">刷胶区</span>
-                                                </div>
+                                                {is1up ? (
+                                                    <div className="absolute top-0 bottom-0 left-0 bg-blue-200/20 border-r border-blue-300/50 z-10 flex items-center justify-center overflow-hidden" style={{ width: `${settings.binding_margin_mm}px` }}>
+                                                        <span className="text-[8px] text-blue-700 -rotate-90 whitespace-nowrap">刷胶</span>
+                                                    </div>
+                                                ) : (
+                                                    <>
+                                                        <div className="absolute top-0 bottom-0 left-1/2 -translate-x-full bg-blue-200/20 border-r border-blue-300/50 z-10 flex items-center justify-center overflow-hidden" style={{ width: `${settings.binding_margin_mm * 2}px` }}>
+                                                            <span className="text-[8px] text-blue-700 -rotate-90 whitespace-nowrap">刷胶</span>
+                                                        </div>
+                                                        <div className="absolute top-0 bottom-0 right-1/2 translate-x-full bg-blue-200/20 border-l border-blue-300/50 z-10 flex items-center justify-center overflow-hidden" style={{ width: `${settings.binding_margin_mm * 2}px` }}>
+                                                            <span className="text-[8px] text-blue-700 -rotate-90 whitespace-nowrap">刷胶</span>
+                                                        </div>
+                                                    </>
+                                                )}
                                             </>
                                         )}
 
-                                        {/* Left Page */}
+                                        {/* Left Page (or Center Page if 1-up) */}
                                         <div className="flex-1 relative flex items-center justify-center overflow-hidden bg-white">
                                             {sheet.front.left !== null ? (
-                                                <div className="w-full h-full p-4 flex flex-col items-center justify-center opacity-80">
+                                                <div className="w-full h-full p-4 flex flex-col items-center justify-center opacity-80"
+                                                     style={{ transform: `translate(${settings.offset_x}px, ${settings.offset_y}px)` }}>
                                                     <img src={`http://127.0.0.1:14320/images/${projectState?.visible_images[sheet.front.left]}`} className="max-w-full max-h-full object-contain drop-shadow-md" />
                                                     <span className="absolute bottom-1 text-[10px] bg-black/50 text-white px-2 rounded-full">
                                                         {sheet.front.left === 0 ? 'Cover' : `P${sheet.front.left}`}
@@ -289,10 +366,13 @@ export default function PrintScreen() {
                                                 <span className="text-gray-300 font-mono text-sm">空白页 (Blank)</span>
                                             )}
                                         </div>
-                                        {/* Right Page */}
+                                        
+                                        {/* Right Page (Only if not 1-up) */}
+                                        {!is1up && (
                                         <div className="flex-1 relative flex items-center justify-center overflow-hidden bg-white">
                                             {sheet.front.right !== null ? (
-                                                <div className="w-full h-full p-4 flex flex-col items-center justify-center opacity-80">
+                                                <div className="w-full h-full p-4 flex flex-col items-center justify-center opacity-80"
+                                                     style={{ transform: `translate(${settings.offset_x}px, ${settings.offset_y}px)` }}>
                                                     <img src={`http://127.0.0.1:14320/images/${projectState?.visible_images[sheet.front.right]}`} className="max-w-full max-h-full object-contain drop-shadow-md" />
                                                     <span className="absolute bottom-1 text-[10px] bg-black/50 text-white px-2 rounded-full">
                                                         {sheet.front.right === 0 ? 'Cover' : `P${sheet.front.right}`}
@@ -302,9 +382,9 @@ export default function PrintScreen() {
                                                 <span className="text-gray-300 font-mono text-sm">空白页 (Blank)</span>
                                             )}
                                         </div>
+                                        )}
                                     </div>
                                     
-                                    {/* Crop Marks Overlay */}
                                     {settings.crop_marks && (
                                         <div className="absolute inset-2 border border-gray-400/30 pointer-events-none" />
                                     )}
@@ -315,18 +395,26 @@ export default function PrintScreen() {
                             {sheet.back && (
                                 <div className="flex flex-col items-center gap-2 opacity-90">
                                     <span className="text-xs font-mono text-muted-foreground">反面 (Back Side)</span>
-                                    <div className="relative bg-white shadow-xl ring-1 ring-border/50 rounded-sm flex items-stretch"
+                                    <div className="relative bg-white shadow-xl ring-1 ring-border/50 rounded-sm flex items-stretch overflow-hidden"
                                          style={{ 
-                                             width: settings.paper_size === 'A3' || sheet.isCover ? '700px' : '500px', 
-                                             height: sheet.isCover ? '250px' : '350px',
+                                             width: `${w}px`, 
+                                             height: `${h}px`,
                                              padding: settings.crop_marks ? '20px' : '0px'
                                          }}>
                                         <div className="flex-1 relative flex bg-gray-50 border border-gray-200">
-                                            <div className="absolute top-0 bottom-0 left-1/2 -translate-x-1/2 w-px bg-blue-300/50 border-r border-dashed border-blue-400 z-10" />
+                                            {!is1up && <div className="absolute top-0 bottom-0 left-1/2 -translate-x-1/2 w-px bg-blue-300/50 border-r border-dashed border-blue-400 z-10" />}
+                                            
+                                            {settings.binding_method === 'perfect' && is1up && !sheet.isCover && (
+                                                <div className="absolute top-0 bottom-0 right-0 bg-blue-200/20 border-l border-blue-300/50 z-10 flex items-center justify-center overflow-hidden" style={{ width: `${settings.binding_margin_mm}px` }}>
+                                                    <span className="text-[8px] text-blue-700 -rotate-90 whitespace-nowrap">刷胶</span>
+                                                </div>
+                                            )}
+
                                             {/* Left Page (Back) */}
                                             <div className="flex-1 relative flex items-center justify-center overflow-hidden bg-white">
                                                 {sheet.back.left !== null ? (
-                                                    <div className="w-full h-full p-4 flex flex-col items-center justify-center opacity-80">
+                                                    <div className="w-full h-full p-4 flex flex-col items-center justify-center opacity-80"
+                                                         style={{ transform: `translate(${-settings.offset_x}px, ${settings.offset_y}px)` }}>
                                                         <img src={`http://127.0.0.1:14320/images/${projectState?.visible_images[sheet.back.left]}`} className="max-w-full max-h-full object-contain drop-shadow-md" />
                                                         <span className="absolute bottom-1 text-[10px] bg-black/50 text-white px-2 rounded-full">
                                                             {sheet.back.left === 0 ? 'Cover' : `P${sheet.back.left}`}
@@ -336,10 +424,13 @@ export default function PrintScreen() {
                                                     <span className="text-gray-300 font-mono text-sm">空白页 (Blank)</span>
                                                 )}
                                             </div>
+                                            
                                             {/* Right Page (Back) */}
+                                            {!is1up && (
                                             <div className="flex-1 relative flex items-center justify-center overflow-hidden bg-white">
                                                 {sheet.back.right !== null ? (
-                                                    <div className="w-full h-full p-4 flex flex-col items-center justify-center opacity-80">
+                                                    <div className="w-full h-full p-4 flex flex-col items-center justify-center opacity-80"
+                                                         style={{ transform: `translate(${-settings.offset_x}px, ${settings.offset_y}px)` }}>
                                                         <img src={`http://127.0.0.1:14320/images/${projectState?.visible_images[sheet.back.right]}`} className="max-w-full max-h-full object-contain drop-shadow-md" />
                                                         <span className="absolute bottom-1 text-[10px] bg-black/50 text-white px-2 rounded-full">
                                                             {sheet.back.right === 0 ? 'Cover' : `P${sheet.back.right}`}
@@ -349,13 +440,15 @@ export default function PrintScreen() {
                                                     <span className="text-gray-300 font-mono text-sm">空白页 (Blank)</span>
                                                 )}
                                             </div>
+                                            )}
                                         </div>
                                     </div>
                                 </div>
                             )}
                         </div>
                     </div>
-                ))}
+                    );
+                })}
             </main>
         </div>
     );

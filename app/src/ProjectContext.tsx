@@ -13,12 +13,16 @@ export interface TextSettings {
 
 export interface PrintSettings {
     paper_size: 'A4' | 'A3';
+    paper_orientation: 'portrait' | 'landscape';
     book_size: 'A5' | 'A4';
+    layout_mode: '1-up' | '2-up';
     binding_method: 'perfect' | 'saddle' | 'butterfly';
     has_back_cover: boolean;
     spine_mm: number;
     binding_margin_mm: number;
     crop_marks: boolean;
+    offset_x: number;
+    offset_y: number;
 }
 
 export interface ProjectState {

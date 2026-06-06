@@ -36,24 +36,32 @@ impl Default for TextSettings {
 #[derive(Serialize, Deserialize, Clone)]
 pub struct PrintSettings {
     pub paper_size: String,
+    pub paper_orientation: String,
     pub book_size: String,
+    pub layout_mode: String,
     pub binding_method: String,
     pub has_back_cover: bool,
     pub spine_mm: f32,
     pub binding_margin_mm: f32,
     pub crop_marks: bool,
+    pub offset_x: f32,
+    pub offset_y: f32,
 }
 
 impl Default for PrintSettings {
     fn default() -> Self {
         Self {
             paper_size: "A4".to_string(),
+            paper_orientation: "portrait".to_string(),
             book_size: "A5".to_string(),
+            layout_mode: "2-up".to_string(),
             binding_method: "perfect".to_string(),
             has_back_cover: false,
             spine_mm: 5.0,
             binding_margin_mm: 10.0,
             crop_marks: true,
+            offset_x: 0.0,
+            offset_y: 0.0,
         }
     }
 }

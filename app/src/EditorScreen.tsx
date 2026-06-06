@@ -66,62 +66,6 @@ export default function EditorScreen() {
   const textRef = useRef<HTMLDivElement>(null);
   const [xyBounds, setXyBounds] = useState({ minX: -500, maxX: 500, minY: -500, maxY: 500 });
 
-  useEffect(() => {
-    if (!containerRef.current || !textRef.current || selectedIdx === null) return;
-    
-    const measureBounds = () => {
-        if (!containerRef.current || !textRef.current) return;
-        const Cw = containerRef.current.clientWidth;
-        const Ch = containerRef.current.clientHeight;
-        const Tw = textRef.current.scrollWidth;
-        const Th = textRef.current.scrollHeight;
-        
-        // Max offset based on container and text dimensions
-        const maxOffset = Math.max(0, (Cw - Tw) / 2);
-        const minY = -(Ch - 40 - Th);
-        const maxY = 40;
-        
-        setXyBounds({
-            minX: -Math.floor(maxOffset),
-            maxX: Math.floor(maxOffset),
-            minY: Math.floor(minY),
-            maxY: Math.floor(maxY)
-        });
-    };
-
-    measureBounds();
-    const ro = new ResizeObserver(measureBounds);
-    ro.observe(containerRef.current);
-    ro.observe(textRef.current);
-    
-    return () => ro.disconnect();
-  }, [selectedIdx, currentText, projectState?.cover_text_settings?.font_size, projectState?.inner_text_settings?.font_size]);
-
-  // Auto-snap logic
-  useEffect(() => {
-    if (selectedIdx === null) return;
-    const isCover = selectedIdx === 0;
-    const settings = isCover ? projectState?.cover_text_settings : projectState?.inner_text_settings;
-    if (!settings) return;
-
-    let changed = false;
-    let newX = settings.offset_x || 0;
-    let newY = settings.offset_y || 0;
-
-    if (newX < xyBounds.minX) { newX = xyBounds.minX; changed = true; }
-    if (newX > xyBounds.maxX) { newX = xyBounds.maxX; changed = true; }
-    if (newY < xyBounds.minY) { newY = xyBounds.minY; changed = true; }
-    if (newY > xyBounds.maxY) { newY = xyBounds.maxY; changed = true; }
-
-    if (changed) {
-        if (isCover) {
-            updateProjectState({ cover_text_settings: { ...settings, offset_x: newX, offset_y: newY } });
-        } else {
-            updateProjectState({ inner_text_settings: { ...settings, offset_x: newX, offset_y: newY } });
-        }
-    }
-  }, [xyBounds, selectedIdx]);
-
   // DnD Sensors
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -270,6 +214,63 @@ export default function EditorScreen() {
   }, [globalScript]);
 
   const currentText = selectedIdx !== null ? parsedScript.get(selectedIdx) : "";
+
+  // Dynamic bounds logic needs to be after currentText is defined
+  useEffect(() => {
+    if (!containerRef.current || !textRef.current || selectedIdx === null) return;
+    
+    const measureBounds = () => {
+        if (!containerRef.current || !textRef.current) return;
+        const Cw = containerRef.current.clientWidth;
+        const Ch = containerRef.current.clientHeight;
+        const Tw = textRef.current.scrollWidth;
+        const Th = textRef.current.scrollHeight;
+        
+        // Max offset based on container and text dimensions
+        const maxOffset = Math.max(0, (Cw - Tw) / 2);
+        const minY = -(Ch - 40 - Th);
+        const maxY = 40;
+        
+        setXyBounds({
+            minX: -Math.floor(maxOffset),
+            maxX: Math.floor(maxOffset),
+            minY: Math.floor(minY),
+            maxY: Math.floor(maxY)
+        });
+    };
+
+    measureBounds();
+    const ro = new ResizeObserver(measureBounds);
+    ro.observe(containerRef.current);
+    ro.observe(textRef.current);
+    
+    return () => ro.disconnect();
+  }, [selectedIdx, currentText, projectState?.cover_text_settings?.font_size, projectState?.inner_text_settings?.font_size]);
+
+  // Auto-snap logic
+  useEffect(() => {
+    if (selectedIdx === null) return;
+    const isCover = selectedIdx === 0;
+    const settings = isCover ? projectState?.cover_text_settings : projectState?.inner_text_settings;
+    if (!settings) return;
+
+    let changed = false;
+    let newX = settings.offset_x || 0;
+    let newY = settings.offset_y || 0;
+
+    if (newX < xyBounds.minX) { newX = xyBounds.minX; changed = true; }
+    if (newX > xyBounds.maxX) { newX = xyBounds.maxX; changed = true; }
+    if (newY < xyBounds.minY) { newY = xyBounds.minY; changed = true; }
+    if (newY > xyBounds.maxY) { newY = xyBounds.maxY; changed = true; }
+
+    if (changed) {
+        if (isCover) {
+            updateProjectState({ cover_text_settings: { ...settings, offset_x: newX, offset_y: newY } });
+        } else {
+            updateProjectState({ inner_text_settings: { ...settings, offset_x: newX, offset_y: newY } });
+        }
+    }
+  }, [xyBounds, selectedIdx]);
 
   const cancelReceive = async () => {
       try {
