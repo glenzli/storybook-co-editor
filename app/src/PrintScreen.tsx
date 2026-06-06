@@ -3,6 +3,17 @@ import { useProject } from './ProjectContext';
 import { Settings, Printer, Download, AlertTriangle, FileText } from 'lucide-react';
 import { invoke } from '@tauri-apps/api/core';
 
+function getShadowStyle(hexColor: string, hasShadow: boolean) {
+    if (!hasShadow) return 'none';
+    let hex = hexColor.replace('#', '');
+    if (hex.length === 3) hex = hex.split('').map(c => c + c).join('');
+    const r = parseInt(hex.substring(0, 2), 16) || 0;
+    const g = parseInt(hex.substring(2, 4), 16) || 0;
+    const b = parseInt(hex.substring(4, 6), 16) || 0;
+    const yiq = ((r * 299) + (g * 587) + (b * 114)) / 1000;
+    return yiq >= 128 ? 'drop-shadow(0 2px 4px rgba(0,0,0,0.8))' : 'drop-shadow(0 2px 4px rgba(255,255,255,0.8))';
+}
+
 export interface ImposedSheet {
   id: string;
   isCover?: boolean;
@@ -144,6 +155,46 @@ export default function PrintScreen() {
             if (prev[pageIndex]?.w === img.naturalWidth && prev[pageIndex]?.h === img.naturalHeight) return prev;
             return { ...prev, [pageIndex]: { w: img.naturalWidth, h: img.naturalHeight } };
         });
+    };
+
+    // Parse global script for text overlays
+    const parsedScript = useMemo(() => {
+        const map = new Map<number, string>();
+        const script = projectState?.global_script || '';
+        const blocks = script.split(/(?=\[(?:Cover|封面|\d+)\])/i);
+        blocks.forEach(block => {
+            const match = block.match(/\[(Cover|封面|\d+)\]\s*([\s\S]*)/i);
+            if (match) {
+                const key = match[1].toLowerCase();
+                const text = match[2].trim();
+                const idx = (key === 'cover' || key === '封面') ? 0 : parseInt(key, 10);
+                map.set(idx, text);
+            }
+        });
+        return map;
+    }, [projectState?.global_script]);
+
+    // Helper: render text overlay for a page
+    const renderTextOverlay = (pageIdx: number) => {
+        const text = parsedScript.get(pageIdx);
+        if (!text) return null;
+        const isCover = pageIdx === 0;
+        const ts = isCover ? projectState?.cover_text_settings : projectState?.inner_text_settings;
+        const ff = ts?.font_family || 'serif';
+        const fontFamily = ff === 'sans' ? 'ui-sans-serif, system-ui, sans-serif' : ff === 'serif' ? 'ui-serif, Georgia, serif' : `'${ff}', sans-serif`;
+        return (
+            <div className="absolute bottom-[8%] left-0 w-full px-[8%] pointer-events-none flex justify-center z-10">
+                <div className="text-center tracking-wide whitespace-pre-wrap" style={{
+                    fontFamily,
+                    fontSize: `${(ts?.font_size || (isCover ? 40 : 20)) * 0.5}px`,
+                    color: ts?.text_color || '#ffffff',
+                    filter: getShadowStyle(ts?.text_color || '#ffffff', ts?.has_shadow ?? true),
+                    transform: `translate(${(ts?.offset_x || 0) * 0.5}px, ${(ts?.offset_y || 0) * 0.5}px)`,
+                }}>
+                    {text}
+                </div>
+            </div>
+        );
     };
 
 
@@ -470,6 +521,7 @@ export default function PrintScreen() {
                                                                     : 'center center'
                                                             }}
                                                         />
+                                                        {sheet.front.left !== null && renderTextOverlay(sheet.front.left)}
                                                         <span className="absolute bottom-1 text-[10px] bg-black/50 text-white px-2 rounded-full opacity-0 hover:opacity-100 transition-opacity z-30">
                                                             {sheet.front.left === 0 ? 'Cover' : `P${sheet.front.left}`}
                                                         </span>
@@ -497,6 +549,7 @@ export default function PrintScreen() {
                                                                     : 'center center'
                                                             }}
                                                         />
+                                                        {sheet.front.right !== null && renderTextOverlay(sheet.front.right)}
                                                         <span className="absolute bottom-1 text-[10px] bg-black/50 text-white px-2 rounded-full opacity-0 hover:opacity-100 transition-opacity z-30">
                                                             {sheet.front.right === 0 ? 'Cover' : `P${sheet.front.right}`}
                                                         </span>
@@ -516,10 +569,10 @@ export default function PrintScreen() {
                                         const bbBottom = bbTopY + scaledH;
                                         const lines: React.ReactNode[] = [];
                                         // Book block edge lines
-                                        if (bbRight + 2 < w) lines.push(<div key="r" className="absolute top-0 bottom-0 w-px pointer-events-none z-50" style={{ left: `${bbRight}px`, background: 'rgba(220,38,38,0.5)' }} />);
-                                        if (bbTopY > 2) lines.push(<div key="t" className="absolute left-0 right-0 h-px pointer-events-none z-50" style={{ top: `${bbTopY}px`, background: 'rgba(220,38,38,0.5)' }} />);
-                                        if (bbBottom + 2 < h) lines.push(<div key="b" className="absolute left-0 right-0 h-px pointer-events-none z-50" style={{ top: `${bbBottom}px`, background: 'rgba(220,38,38,0.5)' }} />);
-                                        if (frontLeft > 2) lines.push(<div key="l" className="absolute top-0 bottom-0 w-px pointer-events-none z-50" style={{ left: `${frontLeft}px`, background: 'rgba(220,38,38,0.5)' }} />);
+                                        if (bbRight + 2 < w) lines.push(<div key="r" className="absolute top-0 bottom-0 pointer-events-none z-50" style={{ left: `${bbRight}px`, width: 0, borderLeft: '1px dashed rgba(0,0,0,0.4)' }} />);
+                                        if (bbTopY > 2) lines.push(<div key="t" className="absolute left-0 right-0 pointer-events-none z-50" style={{ top: `${bbTopY}px`, height: 0, borderTop: '1px dashed rgba(0,0,0,0.4)' }} />);
+                                        if (bbBottom + 2 < h) lines.push(<div key="b" className="absolute left-0 right-0 pointer-events-none z-50" style={{ top: `${bbBottom}px`, height: 0, borderTop: '1px dashed rgba(0,0,0,0.4)' }} />);
+                                        if (frontLeft > 2) lines.push(<div key="l" className="absolute top-0 bottom-0 pointer-events-none z-50" style={{ left: `${frontLeft}px`, width: 0, borderLeft: '1px dashed rgba(0,0,0,0.4)' }} />);
 
                                         // Content-level crop lines based on actual image dimensions
                                         const leftPageIdx = sheet.front.left;
@@ -532,18 +585,16 @@ export default function PrintScreen() {
                                             const cH = bookBlockHeightPx;
                                             const containerAspect = cW / cH;
                                             if (containerAspect > imgAspect) {
-                                                // Image limited by height → white space on right
                                                 const imgW = cH * imgAspect;
                                                 const cropX = frontLeft + (padL + imgW) * fitScale;
-                                                if (cropX + 2 < w) lines.push(<div key="cr" className="absolute top-0 bottom-0 w-px pointer-events-none z-50" style={{ left: `${cropX}px`, background: 'rgba(220,38,38,0.7)' }} />);
+                                                if (cropX + 2 < w) lines.push(<div key="cr" className="absolute top-0 bottom-0 pointer-events-none z-50" style={{ left: `${cropX}px`, width: 0, borderLeft: '1px dashed rgba(0,0,0,0.5)' }} />);
                                             } else if (containerAspect < imgAspect) {
-                                                // Image limited by width → white space on bottom
                                                 const imgH = cW / imgAspect;
                                                 const topOffset = (frontTop + settings.offset_y);
                                                 const cropYTop = topOffset + ((cH - imgH) / 2) * fitScale;
                                                 const cropYBot = topOffset + ((cH + imgH) / 2) * fitScale;
-                                                if (cropYTop > 2) lines.push(<div key="crt" className="absolute left-0 right-0 h-px pointer-events-none z-50" style={{ top: `${cropYTop}px`, background: 'rgba(220,38,38,0.7)' }} />);
-                                                if (cropYBot + 2 < h) lines.push(<div key="crb" className="absolute left-0 right-0 h-px pointer-events-none z-50" style={{ top: `${cropYBot}px`, background: 'rgba(220,38,38,0.7)' }} />);
+                                                if (cropYTop > 2) lines.push(<div key="crt" className="absolute left-0 right-0 pointer-events-none z-50" style={{ top: `${cropYTop}px`, height: 0, borderTop: '1px dashed rgba(0,0,0,0.5)' }} />);
+                                                if (cropYBot + 2 < h) lines.push(<div key="crb" className="absolute left-0 right-0 pointer-events-none z-50" style={{ top: `${cropYBot}px`, height: 0, borderTop: '1px dashed rgba(0,0,0,0.5)' }} />);
                                             }
                                         }
                                         return <>{lines}</>;
@@ -552,7 +603,7 @@ export default function PrintScreen() {
                             </div>
 
                             {/* Back Side */}
-                            {sheet.back && !settings.duplex_printing && (
+                            {sheet.back && (
                                 <div className="flex flex-col items-center gap-2 opacity-90">
                                     <span className="text-xs font-mono text-muted-foreground">反面 (Back Side)</span>
                                     <div className="relative shadow-xl ring-1 ring-border/50 rounded-sm flex items-stretch overflow-hidden"
@@ -616,6 +667,7 @@ export default function PrintScreen() {
                                                                         : 'center center'
                                                                 }}
                                                             />
+                                                            {sheet.back.left !== null && renderTextOverlay(sheet.back.left)}
                                                             <span className="absolute bottom-1 text-[10px] bg-black/50 text-white px-2 rounded-full opacity-0 hover:opacity-100 transition-opacity z-30">
                                                                 {sheet.back.left === 0 ? 'Cover' : `P${sheet.back.left}`}
                                                             </span>
@@ -643,6 +695,7 @@ export default function PrintScreen() {
                                                                         : 'center center'
                                                                 }}
                                                             />
+                                                            {sheet.back.right !== null && renderTextOverlay(sheet.back.right)}
                                                             <span className="absolute bottom-1 text-[10px] bg-black/50 text-white px-2 rounded-full opacity-0 hover:opacity-100 transition-opacity z-30">
                                                                 {sheet.back.right === 0 ? 'Cover' : `P${sheet.back.right}`}
                                                             </span>
@@ -663,10 +716,10 @@ export default function PrintScreen() {
                                         const bbBottom = bbTopPos + scaledH;
                                         return (
                                             <>
-                                                {bbRight + 2 < w && <div className="absolute top-0 bottom-0 w-px pointer-events-none z-50" style={{ left: `${bbRight}px`, background: 'rgba(220,38,38,0.5)' }} />}
-                                                {bbTopPos > 2 && <div className="absolute left-0 right-0 h-px pointer-events-none z-50" style={{ top: `${bbTopPos}px`, background: 'rgba(220,38,38,0.5)' }} />}
-                                                {bbBottom + 2 < h && <div className="absolute left-0 right-0 h-px pointer-events-none z-50" style={{ top: `${bbBottom}px`, background: 'rgba(220,38,38,0.5)' }} />}
-                                                {bbLeft > 2 && <div className="absolute top-0 bottom-0 w-px pointer-events-none z-50" style={{ left: `${bbLeft}px`, background: 'rgba(220,38,38,0.5)' }} />}
+                                                {bbRight + 2 < w && <div className="absolute top-0 bottom-0 pointer-events-none z-50" style={{ left: `${bbRight}px`, width: 0, borderLeft: '1px dashed rgba(0,0,0,0.4)' }} />}
+                                                {bbTopPos > 2 && <div className="absolute left-0 right-0 pointer-events-none z-50" style={{ top: `${bbTopPos}px`, height: 0, borderTop: '1px dashed rgba(0,0,0,0.4)' }} />}
+                                                {bbBottom + 2 < h && <div className="absolute left-0 right-0 pointer-events-none z-50" style={{ top: `${bbBottom}px`, height: 0, borderTop: '1px dashed rgba(0,0,0,0.4)' }} />}
+                                                {bbLeft > 2 && <div className="absolute top-0 bottom-0 pointer-events-none z-50" style={{ left: `${bbLeft}px`, width: 0, borderLeft: '1px dashed rgba(0,0,0,0.4)' }} />}
                                             </>
                                         );
                                     })()}
