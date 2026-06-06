@@ -356,73 +356,83 @@ export default function PrintScreen() {
                                     <div className="flex-1 relative flex" style={{ padding: `${hwMargin}px` }}>
                                         <div className="absolute inset-0 border border-gray-100 pointer-events-none" />
                                         
-                                        {/* Crop Marks (Book size bounds) */}
-                                        {settings.crop_marks && is1up && (
-                                            <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 border border-blue-400/30 border-dashed pointer-events-none"
-                                                 style={{ width: `${bW_mm * pxPerMm}px`, height: `${bH_mm * pxPerMm}px` }} />
-                                        )}
+                                        {/* UNIFIED PAPER OFFSET WRAPPER */}
+                                        <div className="relative w-full h-full flex" style={{ transform: `translate(${settings.offset_x}px, ${settings.offset_y}px)` }}>
+                                            
+                                            {/* Crop Marks (Book size bounds) */}
+                                            {settings.crop_marks && is1up && (
+                                                <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 border border-blue-400/30 border-dashed pointer-events-none"
+                                                     style={{ width: `${bW_mm * pxPerMm}px`, height: `${bH_mm * pxPerMm}px` }} />
+                                            )}
 
-                                        {!is1up && <div className="absolute top-0 bottom-0 left-1/2 -translate-x-1/2 w-px bg-blue-300/50 border-r border-dashed border-blue-400 z-10" />}
-                                        {sheet.isCover && settings.spine_mm > 0 && (
-                                            <div className="absolute top-0 bottom-0 left-1/2 -translate-x-1/2 bg-yellow-200/40 border-x border-yellow-400/50 z-10 flex items-center justify-center overflow-hidden" style={{ width: `${settings.spine_mm * 2}px` }}>
-                                                <span className="text-[8px] text-yellow-700 -rotate-90 whitespace-nowrap">书脊 {settings.spine_mm}mm</span>
-                                            </div>
-                                        )}
-                                        {settings.binding_method === 'perfect' && !sheet.isCover && (
-                                            <>
-                                                {is1up ? (
-                                                    <div className="absolute top-0 bottom-0 left-0 bg-blue-200/20 border-r border-blue-300/50 z-10 flex items-center justify-center overflow-hidden" style={{ width: `${settings.binding_margin_mm}px` }}>
-                                                        <span className="text-[8px] text-blue-700 -rotate-90 whitespace-nowrap">刷胶</span>
+                                            {!is1up && <div className="absolute top-0 bottom-0 left-1/2 -translate-x-1/2 w-px bg-blue-300/50 border-r border-dashed border-blue-400 z-10" />}
+                                            {sheet.isCover && settings.spine_mm > 0 && (
+                                                <div className="absolute top-0 bottom-0 left-1/2 -translate-x-1/2 bg-yellow-200/40 border-x border-yellow-400/50 z-10 flex items-center justify-center overflow-hidden" style={{ width: `${settings.spine_mm * pxPerMm}px` }}>
+                                                    <span className="text-[8px] text-yellow-700 -rotate-90 whitespace-nowrap">书脊 {settings.spine_mm}mm</span>
+                                                </div>
+                                            )}
+                                            {settings.binding_method === 'perfect' && !sheet.isCover && (
+                                                <>
+                                                    {is1up ? (
+                                                        <div className="absolute top-0 bottom-0 left-1/2 -translate-x-1/2 bg-blue-200/20 border-r border-blue-300/50 z-10 flex items-center justify-center overflow-hidden" 
+                                                             style={{ width: `${settings.binding_margin_mm * pxPerMm}px`, marginLeft: `-${(bW_mm * pxPerMm)/2 - (settings.binding_margin_mm * pxPerMm)/2}px` }}>
+                                                            <span className="text-[8px] text-blue-700 -rotate-90 whitespace-nowrap">刷胶 (仅预览)</span>
+                                                        </div>
+                                                    ) : (
+                                                        <>
+                                                            <div className="absolute top-0 bottom-0 left-1/2 -translate-x-full bg-blue-200/20 border-r border-blue-300/50 z-10 flex items-center justify-center overflow-hidden" style={{ width: `${settings.binding_margin_mm * pxPerMm}px` }}>
+                                                                <span className="text-[8px] text-blue-700 -rotate-90 whitespace-nowrap">刷胶 (仅预览)</span>
+                                                            </div>
+                                                            <div className="absolute top-0 bottom-0 right-1/2 translate-x-full bg-blue-200/20 border-l border-blue-300/50 z-10 flex items-center justify-center overflow-hidden" style={{ width: `${settings.binding_margin_mm * pxPerMm}px` }}>
+                                                                <span className="text-[8px] text-blue-700 -rotate-90 whitespace-nowrap">刷胶 (仅预览)</span>
+                                                            </div>
+                                                        </>
+                                                    )}
+                                                </>
+                                            )}
+
+                                            {/* Left Page (or Center Page if 1-up) */}
+                                            <div className="flex-1 relative flex items-center justify-center overflow-hidden"
+                                                 style={{ 
+                                                     paddingLeft: (settings.binding_method === 'perfect' && is1up && !sheet.isCover) ? `${settings.binding_margin_mm * pxPerMm}px` : '0px',
+                                                     paddingRight: (settings.binding_method === 'perfect' && !is1up && !sheet.isCover) ? `${settings.binding_margin_mm * pxPerMm}px` : '0px'
+                                                 }}>
+                                                {sheet.front.left !== null ? (
+                                                    <div className="w-full h-full flex flex-col items-center justify-center relative">
+                                                        <img src={`http://127.0.0.1:14320/images/${projectState?.visible_images[sheet.front.left]}`} className="w-full h-full object-contain" />
+                                                        <span className="absolute bottom-1 text-[10px] bg-black/50 text-white px-2 rounded-full opacity-0 hover:opacity-100 transition-opacity">
+                                                            {sheet.front.left === 0 ? 'Cover' : `P${sheet.front.left}`}
+                                                        </span>
                                                     </div>
                                                 ) : (
-                                                    <>
-                                                        <div className="absolute top-0 bottom-0 left-1/2 -translate-x-full bg-blue-200/20 border-r border-blue-300/50 z-10 flex items-center justify-center overflow-hidden" style={{ width: `${settings.binding_margin_mm * 2}px` }}>
-                                                            <span className="text-[8px] text-blue-700 -rotate-90 whitespace-nowrap">刷胶</span>
-                                                        </div>
-                                                        <div className="absolute top-0 bottom-0 right-1/2 translate-x-full bg-blue-200/20 border-l border-blue-300/50 z-10 flex items-center justify-center overflow-hidden" style={{ width: `${settings.binding_margin_mm * 2}px` }}>
-                                                            <span className="text-[8px] text-blue-700 -rotate-90 whitespace-nowrap">刷胶</span>
-                                                        </div>
-                                                    </>
+                                                    <span className="text-gray-300 font-mono text-sm">空白页 (Blank)</span>
                                                 )}
-                                            </>
-                                        )}
+                                            </div>
+                                            
+                                            {/* Right Page (Only if not 1-up) */}
+                                            {!is1up && (
+                                            <div className="flex-1 relative flex items-center justify-center overflow-hidden"
+                                                 style={{ 
+                                                     paddingLeft: (settings.binding_method === 'perfect' && !is1up && !sheet.isCover) ? `${settings.binding_margin_mm * pxPerMm}px` : '0px'
+                                                 }}>
+                                                {sheet.front.right !== null ? (
+                                                    <div className="w-full h-full flex flex-col items-center justify-center relative">
+                                                        <img src={`http://127.0.0.1:14320/images/${projectState?.visible_images[sheet.front.right]}`} className="w-full h-full object-contain" />
+                                                        <span className="absolute bottom-1 text-[10px] bg-black/50 text-white px-2 rounded-full opacity-0 hover:opacity-100 transition-opacity">
+                                                            {sheet.front.right === 0 ? 'Cover' : `P${sheet.front.right}`}
+                                                        </span>
+                                                    </div>
+                                                ) : (
+                                                    <span className="text-gray-300 font-mono text-sm">空白页 (Blank)</span>
+                                                )}
+                                            </div>
+                                            )}
 
-                                        {/* Left Page (or Center Page if 1-up) */}
-                                        <div className="flex-1 relative flex items-center justify-center overflow-hidden">
-                                            {sheet.front.left !== null ? (
-                                                <div className="w-full h-full flex flex-col items-center justify-center relative"
-                                                     style={{ transform: `translate(${settings.offset_x}px, ${settings.offset_y}px)` }}>
-                                                    <img src={`http://127.0.0.1:14320/images/${projectState?.visible_images[sheet.front.left]}`} className="w-full h-full object-contain" />
-                                                    <span className="absolute bottom-1 text-[10px] bg-black/50 text-white px-2 rounded-full opacity-0 hover:opacity-100 transition-opacity">
-                                                        {sheet.front.left === 0 ? 'Cover' : `P${sheet.front.left}`}
-                                                    </span>
-                                                </div>
-                                            ) : (
-                                                <span className="text-gray-300 font-mono text-sm">空白页 (Blank)</span>
+                                            {settings.crop_marks && !is1up && (
+                                                <div className="absolute inset-4 border border-blue-400/30 border-dashed pointer-events-none" />
                                             )}
                                         </div>
-                                        
-                                        {/* Right Page (Only if not 1-up) */}
-                                        {!is1up && (
-                                        <div className="flex-1 relative flex items-center justify-center overflow-hidden">
-                                            {sheet.front.right !== null ? (
-                                                <div className="w-full h-full flex flex-col items-center justify-center relative"
-                                                     style={{ transform: `translate(${settings.offset_x}px, ${settings.offset_y}px)` }}>
-                                                    <img src={`http://127.0.0.1:14320/images/${projectState?.visible_images[sheet.front.right]}`} className="w-full h-full object-contain" />
-                                                    <span className="absolute bottom-1 text-[10px] bg-black/50 text-white px-2 rounded-full opacity-0 hover:opacity-100 transition-opacity">
-                                                        {sheet.front.right === 0 ? 'Cover' : `P${sheet.front.right}`}
-                                                    </span>
-                                                </div>
-                                            ) : (
-                                                <span className="text-gray-300 font-mono text-sm">空白页 (Blank)</span>
-                                            )}
-                                        </div>
-                                        )}
                                     </div>
-                                    
-                                    {settings.crop_marks && !is1up && (
-                                        <div className="absolute inset-4 border border-blue-400/30 border-dashed pointer-events-none" />
-                                    )}
                                 </div>
                             </div>
 
@@ -438,54 +448,78 @@ export default function PrintScreen() {
                                          }}>
                                         <div className="flex-1 relative flex" style={{ padding: `${hwMargin}px` }}>
                                             <div className="absolute inset-0 border border-gray-100 pointer-events-none" />
-                                            {settings.crop_marks && is1up && (
-                                                <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 border border-blue-400/30 border-dashed pointer-events-none"
-                                                     style={{ width: `${bW_mm * pxPerMm}px`, height: `${bH_mm * pxPerMm}px` }} />
-                                            )}
-
-                                            {!is1up && <div className="absolute top-0 bottom-0 left-1/2 -translate-x-1/2 w-px bg-blue-300/50 border-r border-dashed border-blue-400 z-10" />}
                                             
-                                            {settings.binding_method === 'perfect' && is1up && !sheet.isCover && (
-                                                <div className="absolute top-0 bottom-0 right-0 bg-blue-200/20 border-l border-blue-300/50 z-10 flex items-center justify-center overflow-hidden" style={{ width: `${settings.binding_margin_mm}px` }}>
-                                                    <span className="text-[8px] text-blue-700 -rotate-90 whitespace-nowrap">刷胶</span>
+                                            {/* UNIFIED PAPER OFFSET WRAPPER (BACK SIDE INVERTS OFFSET_X) */}
+                                            <div className="relative w-full h-full flex" style={{ transform: `translate(${-settings.offset_x}px, ${settings.offset_y}px)` }}>
+                                                {settings.crop_marks && is1up && (
+                                                    <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 border border-blue-400/30 border-dashed pointer-events-none"
+                                                         style={{ width: `${bW_mm * pxPerMm}px`, height: `${bH_mm * pxPerMm}px` }} />
+                                                )}
+
+                                                {!is1up && <div className="absolute top-0 bottom-0 left-1/2 -translate-x-1/2 w-px bg-blue-300/50 border-r border-dashed border-blue-400 z-10" />}
+                                                
+                                                {settings.binding_method === 'perfect' && !sheet.isCover && (
+                                                    <>
+                                                        {is1up ? (
+                                                            <div className="absolute top-0 bottom-0 left-1/2 translate-x-1/2 bg-blue-200/20 border-l border-blue-300/50 z-10 flex items-center justify-center overflow-hidden" 
+                                                                 style={{ width: `${settings.binding_margin_mm * pxPerMm}px`, marginLeft: `${(bW_mm * pxPerMm)/2 - (settings.binding_margin_mm * pxPerMm)}px` }}>
+                                                                <span className="text-[8px] text-blue-700 -rotate-90 whitespace-nowrap">刷胶 (仅预览)</span>
+                                                            </div>
+                                                        ) : (
+                                                            <>
+                                                                <div className="absolute top-0 bottom-0 left-1/2 -translate-x-full bg-blue-200/20 border-r border-blue-300/50 z-10 flex items-center justify-center overflow-hidden" style={{ width: `${settings.binding_margin_mm * pxPerMm}px` }}>
+                                                                    <span className="text-[8px] text-blue-700 -rotate-90 whitespace-nowrap">刷胶 (仅预览)</span>
+                                                                </div>
+                                                                <div className="absolute top-0 bottom-0 right-1/2 translate-x-full bg-blue-200/20 border-l border-blue-300/50 z-10 flex items-center justify-center overflow-hidden" style={{ width: `${settings.binding_margin_mm * pxPerMm}px` }}>
+                                                                    <span className="text-[8px] text-blue-700 -rotate-90 whitespace-nowrap">刷胶 (仅预览)</span>
+                                                                </div>
+                                                            </>
+                                                        )}
+                                                    </>
+                                                )}
+
+                                                {/* Left Page (Back) */}
+                                                <div className="flex-1 relative flex items-center justify-center overflow-hidden"
+                                                     style={{ 
+                                                         paddingRight: (settings.binding_method === 'perfect' && is1up && !sheet.isCover) ? `${settings.binding_margin_mm * pxPerMm}px` : '0px',
+                                                         paddingRight: (settings.binding_method === 'perfect' && !is1up && !sheet.isCover) ? `${settings.binding_margin_mm * pxPerMm}px` : '0px'
+                                                     }}>
+                                                    {sheet.back.left !== null ? (
+                                                        <div className="w-full h-full flex flex-col items-center justify-center relative">
+                                                            <img src={`http://127.0.0.1:14320/images/${projectState?.visible_images[sheet.back.left]}`} className="w-full h-full object-contain" />
+                                                            <span className="absolute bottom-1 text-[10px] bg-black/50 text-white px-2 rounded-full opacity-0 hover:opacity-100 transition-opacity">
+                                                                {sheet.back.left === 0 ? 'Cover' : `P${sheet.back.left}`}
+                                                            </span>
+                                                        </div>
+                                                    ) : (
+                                                        <span className="text-gray-300 font-mono text-sm">空白页 (Blank)</span>
+                                                    )}
                                                 </div>
-                                            )}
+                                                
+                                                {/* Right Page (Back) */}
+                                                {!is1up && (
+                                                <div className="flex-1 relative flex items-center justify-center overflow-hidden"
+                                                     style={{ 
+                                                         paddingLeft: (settings.binding_method === 'perfect' && !is1up && !sheet.isCover) ? `${settings.binding_margin_mm * pxPerMm}px` : '0px'
+                                                     }}>
+                                                    {sheet.back.right !== null ? (
+                                                        <div className="w-full h-full flex flex-col items-center justify-center relative">
+                                                            <img src={`http://127.0.0.1:14320/images/${projectState?.visible_images[sheet.back.right]}`} className="w-full h-full object-contain" />
+                                                            <span className="absolute bottom-1 text-[10px] bg-black/50 text-white px-2 rounded-full opacity-0 hover:opacity-100 transition-opacity">
+                                                                {sheet.back.right === 0 ? 'Cover' : `P${sheet.back.right}`}
+                                                            </span>
+                                                        </div>
+                                                    ) : (
+                                                        <span className="text-gray-300 font-mono text-sm">空白页 (Blank)</span>
+                                                    )}
+                                                </div>
+                                                )}
 
-                                            {/* Left Page (Back) */}
-                                            <div className="flex-1 relative flex items-center justify-center overflow-hidden">
-                                                {sheet.back.left !== null ? (
-                                                    <div className="w-full h-full flex flex-col items-center justify-center relative"
-                                                         style={{ transform: `translate(${-settings.offset_x}px, ${settings.offset_y}px)` }}>
-                                                        <img src={`http://127.0.0.1:14320/images/${projectState?.visible_images[sheet.back.left]}`} className="w-full h-full object-contain" />
-                                                        <span className="absolute bottom-1 text-[10px] bg-black/50 text-white px-2 rounded-full opacity-0 hover:opacity-100 transition-opacity">
-                                                            {sheet.back.left === 0 ? 'Cover' : `P${sheet.back.left}`}
-                                                        </span>
-                                                    </div>
-                                                ) : (
-                                                    <span className="text-gray-300 font-mono text-sm">空白页 (Blank)</span>
+                                                {settings.crop_marks && !is1up && (
+                                                    <div className="absolute inset-4 border border-blue-400/30 border-dashed pointer-events-none" />
                                                 )}
                                             </div>
-                                            
-                                            {/* Right Page (Back) */}
-                                            {!is1up && (
-                                            <div className="flex-1 relative flex items-center justify-center overflow-hidden">
-                                                {sheet.back.right !== null ? (
-                                                    <div className="w-full h-full flex flex-col items-center justify-center relative"
-                                                         style={{ transform: `translate(${-settings.offset_x}px, ${settings.offset_y}px)` }}>
-                                                        <img src={`http://127.0.0.1:14320/images/${projectState?.visible_images[sheet.back.right]}`} className="w-full h-full object-contain" />
-                                                        <span className="absolute bottom-1 text-[10px] bg-black/50 text-white px-2 rounded-full opacity-0 hover:opacity-100 transition-opacity">
-                                                            {sheet.back.right === 0 ? 'Cover' : `P${sheet.back.right}`}
-                                                        </span>
-                                                    </div>
-                                                ) : (
-                                                    <span className="text-gray-300 font-mono text-sm">空白页 (Blank)</span>
-                                                )}
-                                            </div>
-                                            )}
                                         </div>
-                                        {settings.crop_marks && !is1up && (
-                                            <div className="absolute inset-4 border border-blue-400/30 border-dashed pointer-events-none" />
-                                        )}
                                     </div>
                                 </div>
                             )}
