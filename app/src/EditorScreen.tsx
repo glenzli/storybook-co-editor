@@ -1,7 +1,7 @@
 import { useEffect, useState, useMemo } from 'react';
 import { listen } from '@tauri-apps/api/event';
 import { convertFileSrc } from '@tauri-apps/api/core';
-import { Image as ImageIcon, Send, PenTool, LayoutTemplate, Moon, Sun, Info, XOctagon, RefreshCw, ChevronLeft, ChevronRight, Trash2, ArchiveRestore, Save, FileBox, XCircle, FolderOpen } from 'lucide-react';
+import { Image as ImageIcon, Send, PenTool, LayoutTemplate, Moon, Sun, Info, XOctagon, RefreshCw, ChevronLeft, ChevronRight, Trash2, ArchiveRestore, Save, FileBox, XCircle, FolderOpen, Type } from 'lucide-react';
 import { useProject } from './ProjectContext';
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
@@ -337,7 +337,20 @@ export default function EditorScreen() {
                 />
                 {currentText && (
                   <div className="absolute bottom-10 left-0 w-full px-12">
-                    <div className="text-center bg-black/40 backdrop-blur-md p-4 rounded-xl border border-white/10 text-white/90 font-serif text-xl tracking-wide shadow-2xl whitespace-pre-wrap">
+                    <div 
+                      className="text-center tracking-wide whitespace-pre-wrap transition-all drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)]"
+                      style={{
+                        fontFamily: (() => {
+                          const settings = selectedIdx === 0 ? projectState?.cover_text_settings : projectState?.inner_text_settings;
+                          const ff = settings?.font_family || 'serif';
+                          if (ff === 'sans') return 'ui-sans-serif, system-ui, sans-serif';
+                          if (ff === 'serif') return 'ui-serif, Georgia, serif';
+                          return `'${ff}', sans-serif`;
+                        })(),
+                        fontSize: `${(selectedIdx === 0 ? projectState?.cover_text_settings?.font_size : projectState?.inner_text_settings?.font_size) || (selectedIdx === 0 ? 40 : 20)}px`,
+                        color: (selectedIdx === 0 ? projectState?.cover_text_settings?.text_color : projectState?.inner_text_settings?.text_color) || '#ffffff',
+                      }}
+                    >
                       {currentText}
                     </div>
                   </div>
@@ -387,7 +400,84 @@ export default function EditorScreen() {
                 </div>
               </div>
 
-              <button className="w-full py-3 bg-primary hover:bg-primary/90 text-primary-foreground rounded-md font-medium transition-colors flex items-center justify-center gap-2 shadow-md whitespace-nowrap">
+              {/* Text Styling Panel */}
+              <div className="border-t border-border pt-4 flex flex-col gap-3">
+                <div className="flex items-center gap-2 mb-1">
+                  <Type size={16} className="text-primary" />
+                  <h3 className="font-bold text-sm">
+                    {selectedIdx === 0 ? "封面文字样式 (Cover)" : "正文文字样式 (Inner)"}
+                  </h3>
+                </div>
+                
+                {(() => {
+                  const isCover = selectedIdx === 0;
+                  const currentSettings = isCover ? projectState?.cover_text_settings : projectState?.inner_text_settings;
+                  const defaultSettings = isCover ? { font_size: 40, text_color: '#ffffff', font_family: 'serif' } : { font_size: 20, text_color: '#ffffff', font_family: 'serif' };
+                  const settings = currentSettings || defaultSettings;
+
+                  const updateSettings = (updates: any) => {
+                    if (isCover) {
+                      updateProjectState({ cover_text_settings: { ...settings, ...updates } });
+                    } else {
+                      updateProjectState({ inner_text_settings: { ...settings, ...updates } });
+                    }
+                  };
+
+                  return (
+                    <>
+                      <div className="flex flex-col gap-1.5">
+                        <label className="text-xs text-muted-foreground">字体 (Font Family)</label>
+                        <select 
+                          className="w-full bg-background border border-border rounded-md p-2 text-sm focus:ring-1 focus:ring-primary outline-none"
+                          value={settings.font_family}
+                          onChange={(e) => updateSettings({ font_family: e.target.value })}
+                        >
+                          <option value="serif">系统衬线体 (Serif)</option>
+                          <option value="sans">系统无衬线体 (Sans)</option>
+                          <option value="LXGW WenKai">霞鹜文楷 (手写/绘本)</option>
+                          <option value="ZCOOL KuaiLe">站酷快乐体 (卡通)</option>
+                          <option value="Noto Serif SC">思源宋体 (端庄)</option>
+                          <option value="Noto Sans SC">思源黑体 (现代)</option>
+                        </select>
+                      </div>
+
+                      <div className="flex flex-col gap-1.5">
+                        <div className="flex justify-between">
+                          <label className="text-xs text-muted-foreground">字号 (Size)</label>
+                          <span className="text-xs font-mono">{settings.font_size}px</span>
+                        </div>
+                        <input 
+                          type="range" 
+                          min="12" max="100" step="2"
+                          className="w-full accent-primary"
+                          value={settings.font_size}
+                          onChange={(e) => updateSettings({ font_size: parseInt(e.target.value) })}
+                        />
+                      </div>
+
+                      <div className="flex flex-col gap-1.5 mb-2">
+                        <label className="text-xs text-muted-foreground">颜色 (Color)</label>
+                        <div className="flex gap-2">
+                          <button 
+                              onClick={() => updateSettings({ text_color: '#ffffff' })}
+                              className={`flex-1 py-1 rounded border ${settings.text_color === '#ffffff' ? 'border-primary ring-1 ring-primary' : 'border-border'} bg-black text-white text-xs`}
+                          >白</button>
+                          <button 
+                              onClick={() => updateSettings({ text_color: '#000000' })}
+                              className={`flex-1 py-1 rounded border ${settings.text_color === '#000000' ? 'border-primary ring-1 ring-primary' : 'border-border'} bg-white text-black text-xs`}
+                          >黑</button>
+                          <button 
+                              onClick={() => updateSettings({ text_color: '#facc15' })}
+                              className={`flex-1 py-1 rounded border ${settings.text_color === '#facc15' ? 'border-primary ring-1 ring-primary' : 'border-border'} bg-yellow-400 text-black text-xs`}
+                          >黄</button>
+                        </div>
+                      </div>
+                    </>
+                  );
+                })()}
+              </div>
+
+              <button className="w-full py-3 bg-primary hover:bg-primary/90 text-primary-foreground rounded-md font-medium transition-colors flex items-center justify-center gap-2 shadow-md whitespace-nowrap mt-auto">
                 <Send size={16} />
                 执行智能排版
               </button>

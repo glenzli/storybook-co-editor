@@ -10,12 +10,33 @@ use zip::write::FileOptions;
 use zip::{ZipArchive, ZipWriter};
 
 #[derive(Serialize, Deserialize, Clone)]
+pub struct TextSettings {
+    pub font_family: String,
+    pub font_size: f32,
+    pub text_color: String,
+}
+
+impl Default for TextSettings {
+    fn default() -> Self {
+        Self {
+            font_family: "serif".to_string(),
+            font_size: 20.0,
+            text_color: "#ffffff".to_string(),
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize, Clone)]
 pub struct ProjectState {
     pub project_name: String,
     pub last_modified: String,
     pub visible_images: Vec<String>,
     pub trashed_images: Vec<String>,
     pub global_script: String,
+    #[serde(default)]
+    pub cover_text_settings: TextSettings,
+    #[serde(default)]
+    pub inner_text_settings: TextSettings,
 }
 
 impl Default for ProjectState {
@@ -26,6 +47,8 @@ impl Default for ProjectState {
             visible_images: vec![],
             trashed_images: vec![],
             global_script: "".to_string(),
+            cover_text_settings: TextSettings { font_size: 40.0, ..TextSettings::default() },
+            inner_text_settings: TextSettings::default(),
         }
     }
 }

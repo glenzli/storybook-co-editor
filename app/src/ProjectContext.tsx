@@ -5,12 +5,20 @@ import { load } from '@tauri-apps/plugin-store';
 import { open, save } from '@tauri-apps/plugin-dialog';
 import { useNavigate } from 'react-router-dom';
 
+export interface TextSettings {
+    font_family: string;
+    font_size: number;
+    text_color: string;
+}
+
 export interface ProjectState {
     project_name: string;
     last_modified: string;
     visible_images: string[];
     trashed_images: string[];
     global_script: string;
+    cover_text_settings?: TextSettings;
+    inner_text_settings?: TextSettings;
 }
 
 export interface ProjectInfo {
