@@ -407,11 +407,6 @@ export default function PrintScreen() {
                                                  transform: `scale(${fitScale})`
                                              }}>
                                              
-                                            {/* Crop Marks (bounds exactly the Book Block) */}
-                                            {settings.crop_marks && (
-                                                <div className="absolute inset-0 border border-blue-400/40 border-dashed pointer-events-none z-20" />
-                                            )}
-
                                             {/* Spine / Center Line (only 2-up) */}
                                             {!is1up && <div className="absolute top-0 bottom-0 left-1/2 -translate-x-1/2 w-px bg-blue-300/50 border-r border-dashed border-blue-400 z-20" />}
                                             {sheet.isCover && settings.spine_mm > 0 && !is1up && (
@@ -495,6 +490,21 @@ export default function PrintScreen() {
                                             )}
                                         </div>
                                     </div>
+
+                                    {/* Crop/Trim Lines (paper level, high z-index) */}
+                                    {settings.crop_marks && (() => {
+                                        const bbRight = frontLeft + scaledW;
+                                        const bbTop = frontTop + settings.offset_y;
+                                        const bbBottom = bbTop + scaledH;
+                                        return (
+                                            <>
+                                                {bbRight + 2 < w && <div className="absolute top-0 bottom-0 w-px pointer-events-none z-50" style={{ left: `${bbRight}px`, background: 'rgba(220,38,38,0.5)' }} />}
+                                                {bbTop > 2 && <div className="absolute left-0 right-0 h-px pointer-events-none z-50" style={{ top: `${bbTop}px`, background: 'rgba(220,38,38,0.5)' }} />}
+                                                {bbBottom + 2 < h && <div className="absolute left-0 right-0 h-px pointer-events-none z-50" style={{ top: `${bbBottom}px`, background: 'rgba(220,38,38,0.5)' }} />}
+                                                {frontLeft > 2 && <div className="absolute top-0 bottom-0 w-px pointer-events-none z-50" style={{ left: `${frontLeft}px`, background: 'rgba(220,38,38,0.5)' }} />}
+                                            </>
+                                        );
+                                    })()}
                                 </div>
                             </div>
 
@@ -522,11 +532,6 @@ export default function PrintScreen() {
                                                      transform: `scale(${fitScale})`
                                                  }}>
                                                  
-                                                {/* Crop Marks (bounds exactly the Book Block) */}
-                                                {settings.crop_marks && (
-                                                    <div className="absolute inset-0 border border-blue-400/40 border-dashed pointer-events-none z-20" />
-                                                )}
-
                                                 {/* Spine / Center Line (only 2-up) */}
                                                 {!is1up && <div className="absolute top-0 bottom-0 left-1/2 -translate-x-1/2 w-px bg-blue-300/50 border-r border-dashed border-blue-400 z-20" />}
                                                 
@@ -604,6 +609,22 @@ export default function PrintScreen() {
                                                 )}
                                             </div>
                                         </div>
+
+                                    {/* Crop/Trim Lines (paper level, high z-index) */}
+                                    {settings.crop_marks && (() => {
+                                        const bbLeft = backLeft;
+                                        const bbTopPos = backTop + settings.offset_y;
+                                        const bbRight = bbLeft + scaledW;
+                                        const bbBottom = bbTopPos + scaledH;
+                                        return (
+                                            <>
+                                                {bbRight + 2 < w && <div className="absolute top-0 bottom-0 w-px pointer-events-none z-50" style={{ left: `${bbRight}px`, background: 'rgba(220,38,38,0.5)' }} />}
+                                                {bbTopPos > 2 && <div className="absolute left-0 right-0 h-px pointer-events-none z-50" style={{ top: `${bbTopPos}px`, background: 'rgba(220,38,38,0.5)' }} />}
+                                                {bbBottom + 2 < h && <div className="absolute left-0 right-0 h-px pointer-events-none z-50" style={{ top: `${bbBottom}px`, background: 'rgba(220,38,38,0.5)' }} />}
+                                                {bbLeft > 2 && <div className="absolute top-0 bottom-0 w-px pointer-events-none z-50" style={{ left: `${bbLeft}px`, background: 'rgba(220,38,38,0.5)' }} />}
+                                            </>
+                                        );
+                                    })()}
                                     </div>
                                 </div>
                             )}
