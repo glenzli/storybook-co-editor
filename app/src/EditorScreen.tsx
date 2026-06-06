@@ -358,7 +358,7 @@ export default function EditorScreen() {
                 {currentText && (
                   <div className="absolute bottom-10 left-0 w-full px-12">
                     <div 
-                      className="text-center tracking-wide whitespace-pre-wrap transition-all"
+                      className="text-center tracking-wide whitespace-pre-wrap"
                       style={{
                         fontFamily: (() => {
                           const settings = selectedIdx === 0 ? projectState?.cover_text_settings : projectState?.inner_text_settings;
@@ -640,7 +640,7 @@ function SortableImageItem({ id, idx, selectedIdx, setSelectedIdx, onDelete }: {
       {...attributes} 
       {...listeners}
       onClick={() => setSelectedIdx(idx)}
-      className={`relative cursor-grab active:cursor-grabbing rounded-lg overflow-hidden border-2 transition-all ${
+      className={`relative cursor-grab active:cursor-grabbing rounded-lg overflow-hidden border-2 transition-colors duration-200 ${
         selectedIdx === idx ? 'border-primary shadow-[0_0_15px_hsl(var(--primary)/0.3)]' : 'border-transparent hover:border-border'
       }`}
     >

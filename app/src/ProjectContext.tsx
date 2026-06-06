@@ -195,19 +195,26 @@ export const ProjectProvider = ({ children }: { children: ReactNode }) => {
         navigate('/');
     };
 
+    useEffect(() => {
+        if (!projectState || !activeWorkspaceId) return;
+        
+        if (syncTimeoutRef.current) {
+            clearTimeout(syncTimeoutRef.current);
+        }
+        
+        syncTimeoutRef.current = setTimeout(() => {
+            invoke('update_project_state', { state: projectState }).catch(console.error);
+        }, 300);
+        
+        return () => {
+            if (syncTimeoutRef.current) clearTimeout(syncTimeoutRef.current);
+        };
+    }, [projectState, activeWorkspaceId]);
+
     const updateProjectState = (newState: Partial<ProjectState>) => {
         setProjectState(prev => {
             if (!prev) return null;
-            const updated = { ...prev, ...newState, last_modified: new Date().toISOString() };
-            
-            if (syncTimeoutRef.current) {
-                clearTimeout(syncTimeoutRef.current);
-            }
-            syncTimeoutRef.current = setTimeout(() => {
-                invoke('update_project_state', { state: updated }).catch(console.error);
-            }, 300);
-            
-            return updated;
+            return { ...prev, ...newState, last_modified: new Date().toISOString() };
         });
     };
 
