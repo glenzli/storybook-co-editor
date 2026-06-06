@@ -57,6 +57,67 @@ export default function EditorScreen() {
   // Selected Image Metadata
   const [imgMeta, setImgMeta] = useState<{ width: number, height: number, sizeMB: string } | null>(null);
 
+  // XY Bounds Measurement
+  const containerRef = useRef<HTMLDivElement>(null);
+  const textRef = useRef<HTMLDivElement>(null);
+  const [xyBounds, setXyBounds] = useState({ minX: -500, maxX: 500, minY: -500, maxY: 500 });
+
+  useEffect(() => {
+    if (!containerRef.current || !textRef.current || selectedIdx === null) return;
+    
+    const measureBounds = () => {
+        if (!containerRef.current || !textRef.current) return;
+        const Cw = containerRef.current.clientWidth;
+        const Ch = containerRef.current.clientHeight;
+        const Tw = textRef.current.scrollWidth;
+        const Th = textRef.current.scrollHeight;
+        
+        // Max offset based on container and text dimensions
+        const maxOffset = Math.max(0, (Cw - Tw) / 2);
+        const minY = -(Ch - 40 - Th);
+        const maxY = 40;
+        
+        setXyBounds({
+            minX: -Math.floor(maxOffset),
+            maxX: Math.floor(maxOffset),
+            minY: Math.floor(minY),
+            maxY: Math.floor(maxY)
+        });
+    };
+
+    measureBounds();
+    const ro = new ResizeObserver(measureBounds);
+    ro.observe(containerRef.current);
+    ro.observe(textRef.current);
+    
+    return () => ro.disconnect();
+  }, [selectedIdx, currentText, projectState?.cover_text_settings?.font_size, projectState?.inner_text_settings?.font_size]);
+
+  // Auto-snap logic
+  useEffect(() => {
+    if (selectedIdx === null) return;
+    const isCover = selectedIdx === 0;
+    const settings = isCover ? projectState?.cover_text_settings : projectState?.inner_text_settings;
+    if (!settings) return;
+
+    let changed = false;
+    let newX = settings.offset_x || 0;
+    let newY = settings.offset_y || 0;
+
+    if (newX < xyBounds.minX) { newX = xyBounds.minX; changed = true; }
+    if (newX > xyBounds.maxX) { newX = xyBounds.maxX; changed = true; }
+    if (newY < xyBounds.minY) { newY = xyBounds.minY; changed = true; }
+    if (newY > xyBounds.maxY) { newY = xyBounds.maxY; changed = true; }
+
+    if (changed) {
+        if (isCover) {
+            updateProjectState({ cover_text_settings: { ...settings, offset_x: newX, offset_y: newY } });
+        } else {
+            updateProjectState({ inner_text_settings: { ...settings, offset_x: newX, offset_y: newY } });
+        }
+    }
+  }, [xyBounds, selectedIdx]);
+
   // DnD Sensors
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -349,16 +410,17 @@ export default function EditorScreen() {
           {/* Center: Main Canvas */}
           <main className="flex-1 bg-muted relative flex items-center justify-center p-8 overflow-hidden">
             {selectedIdx !== null && images[selectedIdx] ? (
-              <div className="relative max-w-full max-h-full shadow-2xl ring-1 ring-border/50 bg-background/50 backdrop-blur-3xl rounded-sm transition-all duration-300">
+              <div ref={containerRef} className="relative max-w-full max-h-full shadow-2xl ring-1 ring-border/50 bg-background/50 backdrop-blur-3xl rounded-sm transition-all duration-300">
                 <img 
                   src={images[selectedIdx]} 
                   className="max-w-full max-h-[85vh] object-contain rounded-sm"
                   alt="Selected page" 
                 />
                 {currentText && (
-                  <div className="absolute bottom-10 left-0 w-full px-12">
+                  <div className="absolute bottom-10 left-0 w-full px-12 pointer-events-none flex justify-center">
                     <div 
-                      className="text-center tracking-wide whitespace-pre-wrap"
+                      ref={textRef}
+                      className="text-center tracking-wide whitespace-pre-wrap pointer-events-auto"
                       style={{
                         fontFamily: (() => {
                           const settings = selectedIdx === 0 ? projectState?.cover_text_settings : projectState?.inner_text_settings;
@@ -514,7 +576,7 @@ export default function EditorScreen() {
                             <span className="text-xs font-mono">{settings.offset_x || 0}px</span>
                           </div>
                           <input 
-                            type="range" min="-500" max="500" step="10" className="w-full accent-primary"
+                            type="range" min={xyBounds.minX} max={xyBounds.maxX} step="1" className="w-full accent-primary"
                             value={settings.offset_x || 0}
                             onChange={(e) => updateSettings({ offset_x: parseInt(e.target.value) })}
                           />
@@ -525,7 +587,7 @@ export default function EditorScreen() {
                             <span className="text-xs font-mono">{settings.offset_y || 0}px</span>
                           </div>
                           <input 
-                            type="range" min="-500" max="500" step="10" className="w-full accent-primary"
+                            type="range" min={xyBounds.minY} max={xyBounds.maxY} step="1" className="w-full accent-primary"
                             value={settings.offset_y || 0}
                             onChange={(e) => updateSettings({ offset_y: parseInt(e.target.value) })}
                           />
