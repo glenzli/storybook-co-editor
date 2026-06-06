@@ -286,6 +286,11 @@ export default function PrintScreen() {
                         <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">选项</label>
                         
                         <label className="flex items-center gap-2 cursor-pointer">
+                            <input type="checkbox" checked={settings.auto_snap_content ?? true} onChange={e => updateSettings({ auto_snap_content: e.target.checked })} className="accent-primary w-4 h-4" />
+                            <span className="text-sm">内容自动避开刷胶区 (智能吸附到外侧)</span>
+                        </label>
+
+                        <label className="flex items-center gap-2 cursor-pointer mt-1">
                             <input type="checkbox" checked={settings.crop_marks} onChange={e => updateSettings({ crop_marks: e.target.checked })} className="accent-primary w-4 h-4" />
                             <span className="text-sm">生成印刷裁剪线 (Crop Marks)</span>
                         </label>
@@ -407,7 +412,15 @@ export default function PrintScreen() {
                                             <div className="flex-1 relative flex items-center justify-center overflow-hidden bg-white">
                                                 {sheet.front.left !== null ? (
                                                     <div className="w-full h-full flex flex-col items-center justify-center relative">
-                                                        <img src={`http://127.0.0.1:14320/images/${projectState?.visible_images[sheet.front.left]}`} className="w-full h-full object-contain" />
+                                                        <img 
+                                                            src={`http://127.0.0.1:14320/images/${projectState?.visible_images[sheet.front.left]}`} 
+                                                            className="w-full h-full object-contain" 
+                                                            style={{ 
+                                                                objectPosition: (settings.auto_snap_content !== false && settings.binding_method === 'perfect' && !sheet.isCover)
+                                                                    ? (is1up ? 'right center' : 'left center') 
+                                                                    : 'center center'
+                                                            }}
+                                                        />
                                                         <span className="absolute bottom-1 text-[10px] bg-black/50 text-white px-2 rounded-full opacity-0 hover:opacity-100 transition-opacity z-30">
                                                             {sheet.front.left === 0 ? 'Cover' : `P${sheet.front.left}`}
                                                         </span>
@@ -422,7 +435,15 @@ export default function PrintScreen() {
                                             <div className="flex-1 relative flex items-center justify-center overflow-hidden bg-white">
                                                 {sheet.front.right !== null ? (
                                                     <div className="w-full h-full flex flex-col items-center justify-center relative">
-                                                        <img src={`http://127.0.0.1:14320/images/${projectState?.visible_images[sheet.front.right]}`} className="w-full h-full object-contain" />
+                                                        <img 
+                                                            src={`http://127.0.0.1:14320/images/${projectState?.visible_images[sheet.front.right]}`} 
+                                                            className="w-full h-full object-contain"
+                                                            style={{ 
+                                                                objectPosition: (settings.auto_snap_content !== false && settings.binding_method === 'perfect' && !sheet.isCover)
+                                                                    ? 'right center' 
+                                                                    : 'center center'
+                                                            }}
+                                                        />
                                                         <span className="absolute bottom-1 text-[10px] bg-black/50 text-white px-2 rounded-full opacity-0 hover:opacity-100 transition-opacity z-30">
                                                             {sheet.front.right === 0 ? 'Cover' : `P${sheet.front.right}`}
                                                         </span>
@@ -491,7 +512,15 @@ export default function PrintScreen() {
                                                 <div className="flex-1 relative flex items-center justify-center overflow-hidden bg-white">
                                                     {sheet.back.left !== null ? (
                                                         <div className="w-full h-full flex flex-col items-center justify-center relative">
-                                                            <img src={`http://127.0.0.1:14320/images/${projectState?.visible_images[sheet.back.left]}`} className="w-full h-full object-contain" />
+                                                            <img 
+                                                                src={`http://127.0.0.1:14320/images/${projectState?.visible_images[sheet.back.left]}`} 
+                                                                className="w-full h-full object-contain"
+                                                                style={{ 
+                                                                    objectPosition: (settings.auto_snap_content !== false && settings.binding_method === 'perfect' && !sheet.isCover)
+                                                                        ? 'left center' 
+                                                                        : 'center center'
+                                                                }}
+                                                            />
                                                             <span className="absolute bottom-1 text-[10px] bg-black/50 text-white px-2 rounded-full opacity-0 hover:opacity-100 transition-opacity z-30">
                                                                 {sheet.back.left === 0 ? 'Cover' : `P${sheet.back.left}`}
                                                             </span>
@@ -506,7 +535,15 @@ export default function PrintScreen() {
                                                 <div className="flex-1 relative flex items-center justify-center overflow-hidden bg-white">
                                                     {sheet.back.right !== null ? (
                                                         <div className="w-full h-full flex flex-col items-center justify-center relative">
-                                                            <img src={`http://127.0.0.1:14320/images/${projectState?.visible_images[sheet.back.right]}`} className="w-full h-full object-contain" />
+                                                            <img 
+                                                                src={`http://127.0.0.1:14320/images/${projectState?.visible_images[sheet.back.right]}`} 
+                                                                className="w-full h-full object-contain"
+                                                                style={{ 
+                                                                    objectPosition: (settings.auto_snap_content !== false && settings.binding_method === 'perfect' && !sheet.isCover)
+                                                                        ? 'right center' 
+                                                                        : 'center center'
+                                                                }}
+                                                            />
                                                             <span className="absolute bottom-1 text-[10px] bg-black/50 text-white px-2 rounded-full opacity-0 hover:opacity-100 transition-opacity z-30">
                                                                 {sheet.back.right === 0 ? 'Cover' : `P${sheet.back.right}`}
                                                             </span>

@@ -18,6 +18,7 @@ pub struct TextSettings {
     pub has_shadow: bool,
     pub offset_x: f32,
     pub offset_y: f32,
+    pub auto_snap_content: bool,
 }
 
 impl Default for TextSettings {
@@ -29,6 +30,7 @@ impl Default for TextSettings {
             has_shadow: true,
             offset_x: 0.0,
             offset_y: 0.0,
+            auto_snap_content: true,
         }
     }
 }
@@ -47,6 +49,7 @@ pub struct PrintSettings {
     pub crop_marks: bool,
     pub offset_x: f32,
     pub offset_y: f32,
+    pub auto_snap_content: bool,
 }
 
 impl Default for PrintSettings {
@@ -64,6 +67,7 @@ impl Default for PrintSettings {
             crop_marks: true,
             offset_x: 0.0,
             offset_y: 0.0,
+            auto_snap_content: true,
         }
     }
 }

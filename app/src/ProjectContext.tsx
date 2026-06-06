@@ -24,6 +24,7 @@ export interface PrintSettings {
     crop_marks: boolean;
     offset_x: number;
     offset_y: number;
+    auto_snap_content: boolean;
 }
 
 export interface ProjectState {
