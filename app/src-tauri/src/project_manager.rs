@@ -34,6 +34,31 @@ impl Default for TextSettings {
 }
 
 #[derive(Serialize, Deserialize, Clone)]
+pub struct PrintSettings {
+    pub paper_size: String,
+    pub book_size: String,
+    pub binding_method: String,
+    pub has_back_cover: bool,
+    pub spine_mm: f32,
+    pub binding_margin_mm: f32,
+    pub crop_marks: bool,
+}
+
+impl Default for PrintSettings {
+    fn default() -> Self {
+        Self {
+            paper_size: "A4".to_string(),
+            book_size: "A5".to_string(),
+            binding_method: "perfect".to_string(),
+            has_back_cover: false,
+            spine_mm: 5.0,
+            binding_margin_mm: 10.0,
+            crop_marks: true,
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize, Clone)]
 pub struct ProjectState {
     pub project_name: String,
     pub last_modified: String,
@@ -44,6 +69,8 @@ pub struct ProjectState {
     pub cover_text_settings: TextSettings,
     #[serde(default)]
     pub inner_text_settings: TextSettings,
+    #[serde(default)]
+    pub print_settings: PrintSettings,
 }
 
 impl Default for ProjectState {

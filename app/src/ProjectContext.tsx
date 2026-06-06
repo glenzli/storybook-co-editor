@@ -11,6 +11,16 @@ export interface TextSettings {
     text_color: string;
 }
 
+export interface PrintSettings {
+    paper_size: 'A4' | 'A3';
+    book_size: 'A5' | 'A4';
+    binding_method: 'perfect' | 'saddle' | 'butterfly';
+    has_back_cover: boolean;
+    spine_mm: number;
+    binding_margin_mm: number;
+    crop_marks: boolean;
+}
+
 export interface ProjectState {
     project_name: string;
     last_modified: string;
@@ -19,6 +29,7 @@ export interface ProjectState {
     global_script: string;
     cover_text_settings?: TextSettings;
     inner_text_settings?: TextSettings;
+    print_settings?: PrintSettings;
 }
 
 export interface ProjectInfo {

@@ -7,6 +7,7 @@ import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, us
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { createLogger } from './utils/logger';
+import PrintScreen from './PrintScreen';
 
 const logger = createLogger('App');
 
@@ -53,6 +54,9 @@ export default function EditorScreen() {
   // Sidebar States
   const [isLeftOpen, setIsLeftOpen] = useState(true);
   const [isRightOpen, setIsRightOpen] = useState(true);
+
+  // Tabs
+  const [activeTab, setActiveTab] = useState<'edit' | 'print'>('edit');
 
   // Selected Image Metadata
   const [imgMeta, setImgMeta] = useState<{ width: number, height: number, sizeMB: string } | null>(null);
@@ -330,7 +334,7 @@ export default function EditorScreen() {
       
       {/* Top Menu Bar */}
       <header className="h-12 bg-card border-b border-border flex items-center justify-between px-4 text-sm flex-shrink-0 relative z-30 shadow-sm">
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-4 w-1/3">
               <span className="font-semibold text-primary flex items-center gap-2">
                   <FileBox size={16} />
                   {projectState?.project_name || "Untitled"}
@@ -339,7 +343,23 @@ export default function EditorScreen() {
                   {currentProjectPath ? currentProjectPath.split('/').pop() : "(Unsaved)"}
               </span>
           </div>
-          <div className="flex items-center gap-2">
+
+          <div className="flex items-center justify-center gap-1 bg-muted p-1 rounded-md border border-border w-1/3 max-w-[200px]">
+              <button 
+                  onClick={() => setActiveTab('edit')}
+                  className={`flex-1 py-1 px-3 rounded text-xs font-medium transition-colors ${activeTab === 'edit' ? 'bg-background shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
+              >
+                  内容编辑
+              </button>
+              <button 
+                  onClick={() => setActiveTab('print')}
+                  className={`flex-1 py-1 px-3 rounded text-xs font-medium transition-colors ${activeTab === 'print' ? 'bg-background shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
+              >
+                  印前拼版
+              </button>
+          </div>
+
+          <div className="flex items-center justify-end gap-2 w-1/3">
               <button onClick={() => saveProject()} className="flex items-center gap-2 px-3 py-1.5 rounded-md hover:bg-muted text-foreground transition-colors border border-transparent hover:border-border">
                   <Save size={14} /> 保存
               </button>
@@ -354,7 +374,8 @@ export default function EditorScreen() {
       </header>
 
       {/* Main Area */}
-      <div className="flex flex-1 overflow-hidden relative">
+      {activeTab === 'edit' ? (
+        <div className="flex flex-1 overflow-hidden relative">
           {/* Left Sidebar: Pages/Thumbnails */}
           <aside className={`overflow-hidden border-r border-border bg-card flex flex-col z-20 shadow-xl transition-all duration-300 ease-in-out ${isLeftOpen ? 'w-64 min-w-[256px]' : 'w-0'}`}>
             <div className="p-4 border-b border-border flex items-center justify-between w-64">
@@ -675,6 +696,8 @@ export default function EditorScreen() {
             </div>
           </div>
         </div>
+      ) : (
+        <PrintScreen />
       )}
 
     </div>
