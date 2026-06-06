@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef, ReactNode } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import { load } from '@tauri-apps/plugin-store';
@@ -53,6 +53,7 @@ export const ProjectProvider = ({ children }: { children: ReactNode }) => {
     const [projectState, setProjectState] = useState<ProjectState | null>(null);
     const [recentProjects, setRecentProjects] = useState<RecentProject[]>([]);
     const [currentProjectPath, setCurrentProjectPath] = useState<string | null>(null);
+    const syncTimeoutRef = useRef<NodeJS.Timeout | null>(null);
     const navigate = useNavigate();
 
     useEffect(() => {
@@ -198,7 +199,14 @@ export const ProjectProvider = ({ children }: { children: ReactNode }) => {
         setProjectState(prev => {
             if (!prev) return null;
             const updated = { ...prev, ...newState, last_modified: new Date().toISOString() };
-            invoke('update_project_state', { state: updated }).catch(console.error);
+            
+            if (syncTimeoutRef.current) {
+                clearTimeout(syncTimeoutRef.current);
+            }
+            syncTimeoutRef.current = setTimeout(() => {
+                invoke('update_project_state', { state: updated }).catch(console.error);
+            }, 300);
+            
             return updated;
         });
     };
