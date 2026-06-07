@@ -7,7 +7,6 @@ import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, us
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { createLogger } from './utils/logger';
-import { setEditorContainerSize } from './editorDimensions';
 import PrintScreen from './PrintScreen';
 
 const logger = createLogger('App');
@@ -62,9 +61,11 @@ export default function EditorScreen() {
   // Selected Image Metadata
   const [imgMeta, setImgMeta] = useState<{ width: number, height: number, sizeMB: string } | null>(null);
 
-  // XY Bounds Measurement
+  // Canvas & Viewport
   const containerRef = useRef<HTMLDivElement>(null);
+  const viewportRef = useRef<HTMLElement>(null);
   const textRef = useRef<HTMLDivElement>(null);
+  const [canvasScale, setCanvasScale] = useState(1);
   const [xyBounds, setXyBounds] = useState({ minX: -500, maxX: 500, minY: -500, maxY: 500 });
 
   // DnD Sensors
@@ -113,6 +114,17 @@ export default function EditorScreen() {
         }
         if (urls.length > 0 && selectedIdx === null) setSelectedIdx(0);
         setIsLoaded(true);
+        
+        // Auto-detect canvas size from first image if still at default
+        if (urls.length > 0 && projectState.canvas_width === 1024 && projectState.canvas_height === 1024) {
+            const img = new Image();
+            img.onload = () => {
+                if (img.naturalWidth !== 1024 || img.naturalHeight !== 1024) {
+                    updateProjectState({ canvas_width: img.naturalWidth, canvas_height: img.naturalHeight });
+                }
+            };
+            img.src = urls[0];
+        }
     }
   }, [activeWorkspaceId]); // Run once when workspace changes
 
@@ -216,21 +228,43 @@ export default function EditorScreen() {
 
   const currentText = selectedIdx !== null ? parsedScript.get(selectedIdx) : "";
 
-  // Dynamic bounds logic needs to be after currentText is defined
+  // Measure viewport and compute canvas scale
+  const canvasW = projectState?.canvas_width || 1024;
+  const canvasH = projectState?.canvas_height || 1024;
+  
   useEffect(() => {
-    if (!containerRef.current || !textRef.current || selectedIdx === null) return;
+    const measure = () => {
+      if (!viewportRef.current) return;
+      const style = getComputedStyle(viewportRef.current);
+      const padL = parseFloat(style.paddingLeft) || 0;
+      const padR = parseFloat(style.paddingRight) || 0;
+      const padT = parseFloat(style.paddingTop) || 0;
+      const padB = parseFloat(style.paddingBottom) || 0;
+      const availW = viewportRef.current.clientWidth - padL - padR;
+      const availH = viewportRef.current.clientHeight - padT - padB;
+      const S = Math.min(availW / canvasW, availH / canvasH);
+      setCanvasScale(S);
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    if (viewportRef.current) ro.observe(viewportRef.current);
+    return () => ro.disconnect();
+  }, [canvasW, canvasH]);
+
+  // Dynamic bounds logic — now in canvas coordinates
+  useEffect(() => {
+    if (!textRef.current || selectedIdx === null) return;
     
     const measureBounds = () => {
-        if (!containerRef.current || !textRef.current) return;
-        const Cw = containerRef.current.clientWidth;
-        const Ch = containerRef.current.clientHeight;
-        setEditorContainerSize(Cw, Ch);
+        if (!textRef.current) return;
+        // Text dimensions are in canvas coords (CSS transform doesn't affect scrollWidth/Height
+        // of the element itself, since transform is on the parent)
         const Tw = textRef.current.scrollWidth;
         const Th = textRef.current.scrollHeight;
         
-        // Max offset based on container and text dimensions
-        const maxOffset = Math.max(0, (Cw - Tw) / 2);
-        const minY = -(Ch - 40 - Th);
+        // Max offset based on canvas and text dimensions
+        const maxOffset = Math.max(0, (canvasW - Tw) / 2);
+        const minY = -(canvasH - 40 - Th);
         const maxY = 40;
         
         setXyBounds({
@@ -243,11 +277,10 @@ export default function EditorScreen() {
 
     measureBounds();
     const ro = new ResizeObserver(measureBounds);
-    ro.observe(containerRef.current);
     ro.observe(textRef.current);
     
     return () => ro.disconnect();
-  }, [selectedIdx, currentText, projectState?.cover_text_settings?.font_size, projectState?.inner_text_settings?.font_size]);
+  }, [selectedIdx, currentText, canvasW, canvasH, projectState?.cover_text_settings?.font_size, projectState?.inner_text_settings?.font_size]);
 
   // Auto-snap logic
   useEffect(() => {
@@ -432,12 +465,22 @@ export default function EditorScreen() {
           </button>
 
           {/* Center: Main Canvas */}
-          <main className="flex-1 bg-muted relative flex items-center justify-center p-8 overflow-hidden">
+          <main ref={viewportRef} className="flex-1 bg-muted relative flex items-center justify-center p-8 overflow-hidden">
             {selectedIdx !== null && images[selectedIdx] ? (
-              <div ref={containerRef} className="relative max-w-full max-h-full shadow-2xl ring-1 ring-border/50 bg-background/50 backdrop-blur-3xl rounded-sm transition-all duration-300">
+              <div 
+                ref={containerRef}
+                className="relative shadow-2xl ring-1 ring-border/50 bg-background/50 backdrop-blur-3xl rounded-sm"
+                style={{
+                  width: `${canvasW}px`,
+                  height: `${canvasH}px`,
+                  transform: `scale(${canvasScale})`,
+                  transformOrigin: 'center center',
+                }}
+              >
                 <img 
                   src={images[selectedIdx]} 
-                  className="max-w-full max-h-[85vh] object-contain rounded-sm"
+                  className="rounded-sm"
+                  style={{ width: '100%', height: '100%', objectFit: 'contain' }}
                   alt="Selected page" 
                 />
                 {currentText && (

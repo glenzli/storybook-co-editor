@@ -76,6 +76,8 @@ impl Default for PrintSettings {
     }
 }
 
+fn default_canvas_size() -> u32 { 1024 }
+
 #[derive(Serialize, Deserialize, Clone)]
 pub struct ProjectState {
     pub project_name: String,
@@ -89,6 +91,10 @@ pub struct ProjectState {
     pub inner_text_settings: TextSettings,
     #[serde(default)]
     pub print_settings: PrintSettings,
+    #[serde(default = "default_canvas_size")]
+    pub canvas_width: u32,
+    #[serde(default = "default_canvas_size")]
+    pub canvas_height: u32,
 }
 
 impl Default for ProjectState {
@@ -102,6 +108,8 @@ impl Default for ProjectState {
             cover_text_settings: TextSettings { font_size: 40.0, ..TextSettings::default() },
             inner_text_settings: TextSettings::default(),
             print_settings: PrintSettings::default(),
+            canvas_width: 1024,
+            canvas_height: 1024,
         }
     }
 }

@@ -2,7 +2,6 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { useProject } from './ProjectContext';
 import { Settings, Printer, Download, AlertTriangle, FileText } from 'lucide-react';
 import { invoke } from '@tauri-apps/api/core';
-import { getEditorContainerSize } from './editorDimensions';
 
 function getShadowStyle(hexColor: string, hasShadow: boolean) {
     if (!hasShadow) return 'none';
@@ -176,63 +175,39 @@ export default function PrintScreen() {
     }, [projectState?.global_script]);
 
     // Helper: render text overlay for a page.
-    // Strategy: render the text with EXACTLY the same CSS as the editor (same classes, same styles),
-    // inside a div at the editor's container size. Then CSS transform: scale() the whole thing
-    // to fit the print preview's rendered image bounds. This is pixel-perfect — no manual recalculation needed.
-    const renderTextOverlay = (pageIdx: number, contentW: number, contentH: number, objPos: string) => {
+    // Uses the same fixed canvas (canvas_width × canvas_height) as the editor.
+    // Text CSS is identical to editor. The canvas is CSS-transform-scaled to fit the print preview slot.
+    const canvasW = projectState?.canvas_width || 1024;
+    const canvasH = projectState?.canvas_height || 1024;
+    
+    const renderTextOverlay = (pageIdx: number, contentW: number, contentH: number, _objPos: string) => {
         const text = parsedScript.get(pageIdx);
         if (!text) return null;
-        const dims = imageDims[pageIdx];
-        if (!dims) return null;
         
         const isCover = pageIdx === 0;
         const ts = isCover ? projectState?.cover_text_settings : projectState?.inner_text_settings;
         const ff = ts?.font_family || 'serif';
         const fontFamily = ff === 'sans' ? 'ui-sans-serif, system-ui, sans-serif' : ff === 'serif' ? 'ui-serif, Georgia, serif' : `'${ff}', sans-serif`;
         
-        // 1. Compute rendered image bounds within print preview container (object-contain logic)
-        const imgAspect = dims.w / dims.h;
-        const containerAspect = contentW / contentH;
-        let renderedW: number, renderedH: number, imgLeft: number, imgTop: number;
+        // Scale to fit canvas into the content slot
+        const S = Math.min(contentW / canvasW, contentH / canvasH);
+        const scaledW = canvasW * S;
+        const scaledH = canvasH * S;
+        // Center the scaled canvas in the slot
+        const offsetLeft = (contentW - scaledW) / 2;
+        const offsetTop = (contentH - scaledH) / 2;
         
-        if (containerAspect > imgAspect) {
-            renderedH = contentH;
-            renderedW = contentH * imgAspect;
-        } else {
-            renderedW = contentW;
-            renderedH = contentW / imgAspect;
-        }
-        
-        if (objPos === 'left center') {
-            imgLeft = 0;
-            imgTop = (contentH - renderedH) / 2;
-        } else if (objPos === 'right center') {
-            imgLeft = contentW - renderedW;
-            imgTop = (contentH - renderedH) / 2;
-        } else {
-            imgLeft = (contentW - renderedW) / 2;
-            imgTop = (contentH - renderedH) / 2;
-        }
-        
-        // 2. Use the actual measured editor container size
-        const editorContainer = getEditorContainerSize();
-        
-        // 3. Scale = how much to shrink editor container to fit rendered image bounds
-        const S = renderedH / editorContainer.h;
-        
-        // 4. Render: outer viewport clips to rendered image bounds,
-        //    inner canvas is at editor dimensions with CSS transform: scale(S)
         return (
             <div className="absolute pointer-events-none z-10" style={{
-                left: `${imgLeft}px`,
-                top: `${imgTop}px`,
-                width: `${renderedW}px`,
-                height: `${renderedH}px`,
+                left: `${offsetLeft}px`,
+                top: `${offsetTop}px`,
+                width: `${scaledW}px`,
+                height: `${scaledH}px`,
                 overflow: 'hidden',
             }}>
                 <div style={{
-                    width: `${editorContainer.w}px`,
-                    height: `${editorContainer.h}px`,
+                    width: `${canvasW}px`,
+                    height: `${canvasH}px`,
                     transform: `scale(${S})`,
                     transformOrigin: 'top left',
                     position: 'relative',

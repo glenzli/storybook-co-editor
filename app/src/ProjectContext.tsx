@@ -37,6 +37,8 @@ export interface ProjectState {
     cover_text_settings?: TextSettings;
     inner_text_settings?: TextSettings;
     print_settings?: PrintSettings;
+    canvas_width: number;
+    canvas_height: number;
 }
 
 export interface ProjectInfo {
