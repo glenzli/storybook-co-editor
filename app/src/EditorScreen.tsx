@@ -7,6 +7,7 @@ import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, us
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { createLogger } from './utils/logger';
+import { setEditorImageDimensions } from './editorDimensions';
 import PrintScreen from './PrintScreen';
 
 const logger = createLogger('App');
@@ -223,6 +224,7 @@ export default function EditorScreen() {
         if (!containerRef.current || !textRef.current) return;
         const Cw = containerRef.current.clientWidth;
         const Ch = containerRef.current.clientHeight;
+        setEditorImageDimensions(Cw, Ch);
         const Tw = textRef.current.scrollWidth;
         const Th = textRef.current.scrollHeight;
         
