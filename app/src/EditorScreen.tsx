@@ -467,48 +467,53 @@ export default function EditorScreen() {
           {/* Center: Main Canvas */}
           <main ref={viewportRef} className="flex-1 bg-muted relative flex items-center justify-center p-8 overflow-hidden">
             {selectedIdx !== null && images[selectedIdx] ? (
-              <div 
-                ref={containerRef}
-                className="relative shadow-2xl ring-1 ring-border/50 bg-background/50 backdrop-blur-3xl rounded-sm"
-                style={{
-                  width: `${canvasW}px`,
-                  height: `${canvasH}px`,
-                  transform: `scale(${canvasScale})`,
-                  transformOrigin: 'center center',
-                }}
-              >
-                <img 
-                  src={images[selectedIdx]} 
-                  className="rounded-sm"
-                  style={{ width: '100%', height: '100%', objectFit: 'contain' }}
-                  alt="Selected page" 
-                />
-                {currentText && (
-                  <div className="absolute bottom-10 left-0 w-full px-12 pointer-events-none flex justify-center">
-                    <div 
-                      ref={textRef}
-                      className="text-center tracking-wide whitespace-pre-wrap pointer-events-auto"
-                      style={{
-                        fontFamily: (() => {
-                          const settings = selectedIdx === 0 ? projectState?.cover_text_settings : projectState?.inner_text_settings;
-                          const ff = settings?.font_family || 'serif';
-                          if (ff === 'sans') return 'ui-sans-serif, system-ui, sans-serif';
-                          if (ff === 'serif') return 'ui-serif, Georgia, serif';
-                          return `'${ff}', sans-serif`;
-                        })(),
-                        fontSize: `${(selectedIdx === 0 ? projectState?.cover_text_settings?.font_size : projectState?.inner_text_settings?.font_size) || (selectedIdx === 0 ? 40 : 20)}px`,
-                        color: (selectedIdx === 0 ? projectState?.cover_text_settings?.text_color : projectState?.inner_text_settings?.text_color) || '#ffffff',
-                        filter: getShadowStyle(
-                            (selectedIdx === 0 ? projectState?.cover_text_settings?.text_color : projectState?.inner_text_settings?.text_color) || '#ffffff',
-                            (selectedIdx === 0 ? projectState?.cover_text_settings?.has_shadow : projectState?.inner_text_settings?.has_shadow) ?? true
-                        ),
-                        transform: `translate(${(selectedIdx === 0 ? projectState?.cover_text_settings?.offset_x : projectState?.inner_text_settings?.offset_x) || 0}px, ${(selectedIdx === 0 ? projectState?.cover_text_settings?.offset_y : projectState?.inner_text_settings?.offset_y) || 0}px)`
-                      }}
-                    >
-                      {currentText}
+              <div style={{
+                width: `${canvasW * canvasScale}px`,
+                height: `${canvasH * canvasScale}px`,
+              }}>
+                <div 
+                  ref={containerRef}
+                  className="relative shadow-2xl ring-1 ring-border/50 bg-background/50 backdrop-blur-3xl rounded-sm"
+                  style={{
+                    width: `${canvasW}px`,
+                    height: `${canvasH}px`,
+                    transform: `scale(${canvasScale})`,
+                    transformOrigin: 'top left',
+                  }}
+                >
+                  <img 
+                    src={images[selectedIdx]} 
+                    className="rounded-sm"
+                    style={{ width: '100%', height: '100%', objectFit: 'contain' }}
+                    alt="Selected page" 
+                  />
+                  {currentText && (
+                    <div className="absolute bottom-10 left-0 w-full px-12 pointer-events-none flex justify-center">
+                      <div 
+                        ref={textRef}
+                        className="text-center tracking-wide whitespace-pre-wrap pointer-events-auto"
+                        style={{
+                          fontFamily: (() => {
+                            const settings = selectedIdx === 0 ? projectState?.cover_text_settings : projectState?.inner_text_settings;
+                            const ff = settings?.font_family || 'serif';
+                            if (ff === 'sans') return 'ui-sans-serif, system-ui, sans-serif';
+                            if (ff === 'serif') return 'ui-serif, Georgia, serif';
+                            return `'${ff}', sans-serif`;
+                          })(),
+                          fontSize: `${(selectedIdx === 0 ? projectState?.cover_text_settings?.font_size : projectState?.inner_text_settings?.font_size) || (selectedIdx === 0 ? 40 : 20)}px`,
+                          color: (selectedIdx === 0 ? projectState?.cover_text_settings?.text_color : projectState?.inner_text_settings?.text_color) || '#ffffff',
+                          filter: getShadowStyle(
+                              (selectedIdx === 0 ? projectState?.cover_text_settings?.text_color : projectState?.inner_text_settings?.text_color) || '#ffffff',
+                              (selectedIdx === 0 ? projectState?.cover_text_settings?.has_shadow : projectState?.inner_text_settings?.has_shadow) ?? true
+                          ),
+                          transform: `translate(${(selectedIdx === 0 ? projectState?.cover_text_settings?.offset_x : projectState?.inner_text_settings?.offset_x) || 0}px, ${(selectedIdx === 0 ? projectState?.cover_text_settings?.offset_y : projectState?.inner_text_settings?.offset_y) || 0}px)`
+                        }}
+                      >
+                        {currentText}
+                      </div>
                     </div>
-                  </div>
-                )}
+                  )}
+                </div>
               </div>
             ) : (
               <div className="text-muted-foreground flex flex-col items-center gap-4">
