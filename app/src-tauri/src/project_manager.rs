@@ -95,6 +95,10 @@ pub struct ProjectState {
     pub canvas_width: u32,
     #[serde(default = "default_canvas_size")]
     pub canvas_height: u32,
+    #[serde(default)]
+    pub author_name: String,
+    #[serde(default)]
+    pub author_text_settings: TextSettings,
 }
 
 impl Default for ProjectState {
@@ -110,6 +114,8 @@ impl Default for ProjectState {
             print_settings: PrintSettings::default(),
             canvas_width: 1024,
             canvas_height: 1024,
+            author_name: "".to_string(),
+            author_text_settings: TextSettings { font_size: 16.0, ..TextSettings::default() },
         }
     }
 }

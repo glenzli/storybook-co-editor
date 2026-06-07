@@ -244,6 +244,25 @@ export default function PrintScreen() {
                             </div>
                         </div>
                     )}
+                    {/* Author overlay — cover only */}
+                    {isCover && projectState?.author_name && (() => {
+                        const ats = projectState?.author_text_settings;
+                        const aff = ats?.font_family || 'serif';
+                        const authorFont = aff === 'sans' ? 'ui-sans-serif, system-ui, sans-serif' : aff === 'serif' ? 'ui-serif, Georgia, serif' : `'${aff}', sans-serif`;
+                        return (
+                            <div className="absolute bottom-10 left-0 w-full px-12 flex justify-center">
+                                <div className="text-center tracking-wide whitespace-pre-wrap" style={{
+                                    fontFamily: authorFont,
+                                    fontSize: `${ats?.font_size || 16}px`,
+                                    color: ats?.text_color || '#ffffff',
+                                    filter: getShadowStyle(ats?.text_color || '#ffffff', ats?.has_shadow ?? true),
+                                    transform: `translate(${ats?.offset_x || 0}px, ${ats?.offset_y || 0}px)`,
+                                }}>
+                                    {projectState.author_name}
+                                </div>
+                            </div>
+                        );
+                    })()}
                 </div>
             </div>
         );
@@ -575,7 +594,7 @@ export default function PrintScreen() {
                                                         </span>
                                                     </div>
                                                 ) : (
-                                                    <span className="text-gray-300 font-mono text-sm">空白页 (Blank)</span>
+                                                    <span className="text-gray-300 font-mono text-sm">空白页</span>
                                                 )}
                                             </div>
                                             
@@ -598,7 +617,7 @@ export default function PrintScreen() {
                                                         </span>
                                                     </div>
                                                 ) : (
-                                                    <span className="text-gray-300 font-mono text-sm">空白页 (Blank)</span>
+                                                    <span className="text-gray-300 font-mono text-sm">空白页</span>
                                                 )}
                                             </div>
                                             )}
@@ -712,7 +731,7 @@ export default function PrintScreen() {
                                                             </span>
                                                         </div>
                                                     ) : (
-                                                        <span className="text-gray-300 font-mono text-sm">空白页 (Blank)</span>
+                                                        <span className="text-gray-300 font-mono text-sm">空白页</span>
                                                     )}
                                                 </div>
                                                 
@@ -735,7 +754,7 @@ export default function PrintScreen() {
                                                             </span>
                                                         </div>
                                                     ) : (
-                                                        <span className="text-gray-300 font-mono text-sm">空白页 (Blank)</span>
+                                                        <span className="text-gray-300 font-mono text-sm">空白页</span>
                                                     )}
                                                 </div>
                                                 )}

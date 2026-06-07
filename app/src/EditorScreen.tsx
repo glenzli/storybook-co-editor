@@ -1,7 +1,8 @@
 import { useEffect, useState, useMemo, useRef } from 'react';
 import { listen } from '@tauri-apps/api/event';
 import { convertFileSrc, invoke } from '@tauri-apps/api/core';
-import { Image as ImageIcon, Send, PenTool, LayoutTemplate, Moon, Sun, Info, XOctagon, RefreshCw, ChevronLeft, ChevronRight, Trash2, ArchiveRestore, Save, FileBox, XCircle, FolderOpen, Type, Maximize2, ZoomIn } from 'lucide-react';
+import { Image as ImageIcon, Send, PenTool, LayoutTemplate, Moon, Sun, Info, XOctagon, RefreshCw, ChevronLeft, ChevronRight, ChevronDown, Trash2, ArchiveRestore, Save, FileBox, XCircle, FolderOpen, Type, Maximize2, ZoomIn } from 'lucide-react';
+import { getPaletteSync } from 'colorthief';
 import { useProject } from './ProjectContext';
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
@@ -54,6 +55,8 @@ export default function EditorScreen() {
   // Sidebar States
   const [isLeftOpen, setIsLeftOpen] = useState(true);
   const [isRightOpen, setIsRightOpen] = useState(true);
+  const [rightTab, setRightTab] = useState<'script' | 'style'>('script');
+  const [openSections, setOpenSections] = useState<Record<string, boolean>>({ canvas: false, author: true, text: true });
 
   // Tabs
   const [activeTab, setActiveTab] = useState<'edit' | 'print'>('edit');
@@ -67,6 +70,7 @@ export default function EditorScreen() {
   const textRef = useRef<HTMLDivElement>(null);
   const [canvasScale, setCanvasScale] = useState(1);
   const [xyBounds, setXyBounds] = useState({ minX: -500, maxX: 500, minY: -500, maxY: 500 });
+  const [extractedColors, setExtractedColors] = useState<string[]>([]);
 
   // DnD Sensors
   const sensors = useSensors(
@@ -207,6 +211,28 @@ export default function EditorScreen() {
           img.src = url;
       })
       .catch(() => setImgMeta(null));
+  }, [selectedIdx, images]);
+
+  // Extract dominant colors from current image
+  useEffect(() => {
+    if (selectedIdx === null || !images[selectedIdx]) {
+      setExtractedColors([]);
+      return;
+    }
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => {
+      try {
+        const palette = getPaletteSync(img, { colorCount: 8 });
+        if (palette) {
+          const hexColors = palette.map(c => c.hex());
+          setExtractedColors([...new Set(hexColors)]);
+        }
+      } catch {
+        setExtractedColors([]);
+      }
+    };
+    img.src = images[selectedIdx];
   }, [selectedIdx, images]);
 
   // Parse global script into a map
@@ -513,6 +539,28 @@ export default function EditorScreen() {
                       </div>
                     </div>
                   )}
+                  {/* Author text overlay — cover only */}
+                  {selectedIdx === 0 && projectState?.author_name && (() => {
+                    const ats = projectState?.author_text_settings;
+                    const ff = ats?.font_family || 'serif';
+                    const fontFamily = ff === 'sans' ? 'ui-sans-serif, system-ui, sans-serif' : ff === 'serif' ? 'ui-serif, Georgia, serif' : `'${ff}', sans-serif`;
+                    return (
+                      <div className="absolute bottom-10 left-0 w-full px-12 pointer-events-none flex justify-center">
+                        <div 
+                          className="text-center tracking-wide whitespace-pre-wrap pointer-events-auto"
+                          style={{
+                            fontFamily,
+                            fontSize: `${ats?.font_size || 16}px`,
+                            color: ats?.text_color || '#ffffff',
+                            filter: getShadowStyle(ats?.text_color || '#ffffff', ats?.has_shadow ?? true),
+                            transform: `translate(${ats?.offset_x || 0}px, ${ats?.offset_y || 0}px)`
+                          }}
+                        >
+                          {projectState.author_name}
+                        </div>
+                      </div>
+                    );
+                  })()}
                 </div>
               </div>
             ) : (
@@ -531,14 +579,34 @@ export default function EditorScreen() {
             {isRightOpen ? <ChevronRight size={20} className="text-muted-foreground" /> : <ChevronLeft size={20} className="text-muted-foreground" />}
           </button>
 
-          {/* Right Sidebar: Global Script */}
+          {/* Right Sidebar */}
           <aside className={`overflow-hidden border-l border-border bg-card flex flex-col z-20 shadow-xl transition-all duration-300 ease-in-out ${isRightOpen ? 'w-80 min-w-[320px]' : 'w-0'}`}>
-            <div className="p-4 border-b border-border flex items-center gap-2 w-80">
-              <PenTool size={20} className="text-amber-500" />
-              <h2 className="font-bold whitespace-nowrap">全局绘本剧本</h2>
+            {/* Tab Header */}
+            <div className="flex border-b border-border w-80 flex-shrink-0">
+              <button
+                onClick={() => setRightTab('script')}
+                className={`flex-1 py-2.5 text-sm font-medium flex items-center justify-center gap-1.5 transition-colors ${
+                  rightTab === 'script' ? 'text-primary border-b-2 border-primary bg-primary/5' : 'text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                <PenTool size={14} />
+                剧本
+              </button>
+              <button
+                onClick={() => setRightTab('style')}
+                className={`flex-1 py-2.5 text-sm font-medium flex items-center justify-center gap-1.5 transition-colors ${
+                  rightTab === 'style' ? 'text-primary border-b-2 border-primary bg-primary/5' : 'text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                <Type size={14} />
+                样式
+              </button>
             </div>
-            <div className="p-4 flex-1 flex flex-col gap-4 w-80 overflow-y-auto">
-              <p className="text-xs text-muted-foreground">
+
+            {/* Script Tab */}
+            {rightTab === 'script' && (
+            <div className="p-4 flex-1 flex flex-col gap-3 w-80 overflow-hidden">
+              <p className="text-xs text-muted-foreground flex-shrink-0">
                 使用 [Cover] 和 [1], [2] 标记将剧本与图片关联。第一张图默认为封面。
               </p>
               <textarea 
@@ -546,13 +614,24 @@ export default function EditorScreen() {
                 value={globalScript}
                 onChange={(e) => setGlobalScript(e.target.value)}
               />
+            </div>
+            )}
+
+            {/* Style Tab */}
+            {rightTab === 'style' && (
+            <div className="p-4 flex-1 flex flex-col gap-4 w-80 overflow-y-auto">
               
               {/* Canvas Settings */}
-              <div className="border-t border-border pt-4 flex flex-col gap-3">
-                <div className="flex items-center gap-2 mb-1">
-                  <Maximize2 size={16} className="text-emerald-500" />
-                  <h3 className="font-bold text-sm">画布设置 (Canvas)</h3>
-                </div>
+              <div className="border-b border-border pb-2">
+                <button onClick={() => setOpenSections(s => ({...s, canvas: !s.canvas}))} className="flex items-center justify-between w-full py-1.5 hover:text-foreground transition-colors">
+                  <div className="flex items-center gap-2">
+                    <Maximize2 size={14} className="text-emerald-500" />
+                    <span className="font-bold text-sm">画布设置</span>
+                  </div>
+                  <ChevronDown size={14} className={`text-muted-foreground transition-transform ${openSections.canvas ? 'rotate-180' : ''}`} />
+                </button>
+                {openSections.canvas && (
+                <div className="flex flex-col gap-3 pt-2">
                 {imgMeta && (canvasW !== imgMeta.width || canvasH !== imgMeta.height) && (
                   <div className="text-xs bg-amber-500/10 border border-amber-500/30 text-amber-600 dark:text-amber-400 rounded-md px-2 py-1.5">
                     ⚠️ 当前图片 {imgMeta.width}×{imgMeta.height} ≠ 画布 {canvasW}×{canvasH}
@@ -560,7 +639,7 @@ export default function EditorScreen() {
                 )}
                 <div className="flex items-center gap-2">
                   <div className="flex flex-col gap-1 flex-1">
-                    <label className="text-xs text-muted-foreground">宽度 (W)</label>
+                    <label className="text-xs text-muted-foreground">宽度</label>
                     <input 
                       type="number" 
                       className="w-full bg-background border border-border rounded-md p-1.5 text-sm text-center font-mono focus:ring-1 focus:ring-primary outline-none"
@@ -570,7 +649,7 @@ export default function EditorScreen() {
                   </div>
                   <span className="text-muted-foreground mt-5">×</span>
                   <div className="flex flex-col gap-1 flex-1">
-                    <label className="text-xs text-muted-foreground">高度 (H)</label>
+                    <label className="text-xs text-muted-foreground">高度</label>
                     <input 
                       type="number" 
                       className="w-full bg-background border border-border rounded-md p-1.5 text-sm text-center font-mono focus:ring-1 focus:ring-primary outline-none"
@@ -590,17 +669,126 @@ export default function EditorScreen() {
                 >
                   🎯 匹配当前图片 {imgMeta ? `(${imgMeta.width}×${imgMeta.height})` : ''}
                 </button>
+                </div>
+                )}
               </div>
 
-              {/* Text Styling Panel */}
-              <div className="border-t border-border pt-4 flex flex-col gap-3">
-                <div className="flex items-center gap-2 mb-1">
-                  <Type size={16} className="text-primary" />
-                  <h3 className="font-bold text-sm">
-                    {selectedIdx === 0 ? "封面文字样式 (Cover)" : "正文文字样式 (Inner)"}
-                  </h3>
+              {/* Author Settings — Cover only */}
+              {selectedIdx === 0 && (
+              <div className="border-b border-border pb-2">
+                <button onClick={() => setOpenSections(s => ({...s, author: !s.author}))} className="flex items-center justify-between w-full py-1.5 hover:text-foreground transition-colors">
+                  <div className="flex items-center gap-2">
+                    <PenTool size={14} className="text-violet-500" />
+                    <span className="font-bold text-sm">作者署名</span>
+                  </div>
+                  <ChevronDown size={14} className={`text-muted-foreground transition-transform ${openSections.author ? 'rotate-180' : ''}`} />
+                </button>
+                {openSections.author && (
+                <div className="flex flex-col gap-3 pt-2">
+                <input 
+                  type="text"
+                  placeholder="输入作者名..."
+                  className="w-full bg-background border border-border rounded-md p-2 text-sm focus:ring-1 focus:ring-primary outline-none"
+                  value={projectState?.author_name || ''}
+                  onChange={(e) => updateProjectState({ author_name: e.target.value })}
+                />
+                {projectState?.author_name && (() => {
+                  const ats = projectState?.author_text_settings || { font_size: 16, text_color: '#ffffff', font_family: 'serif', has_shadow: true, offset_x: 0, offset_y: 0 };
+                  const updateAts = (updates: any) => updateProjectState({ author_text_settings: { ...ats, ...updates } });
+                  return (
+                    <>
+                      <div className="flex flex-col gap-1.5">
+                        <label className="text-xs text-muted-foreground">字体</label>
+                        <select 
+                          className="w-full bg-background border border-border rounded-md p-2 text-sm focus:ring-1 focus:ring-primary outline-none"
+                          value={ats.font_family || 'serif'}
+                          onChange={(e) => updateAts({ font_family: e.target.value })}
+                        >
+                          <optgroup label="内置在线字体">
+                            <option value="serif">系统衬线体 (Serif)</option>
+                            <option value="sans">系统无衬线体 (Sans)</option>
+                            <option value="LXGW WenKai">霞鹜文楷 (手写/绘本)</option>
+                            <option value="ZCOOL KuaiLe">站酷快乐体 (卡通)</option>
+                            <option value="Noto Serif SC">思源宋体 (端庄)</option>
+                            <option value="Noto Sans SC">思源黑体 (现代)</option>
+                          </optgroup>
+                        </select>
+                      </div>
+
+                      <div className="flex flex-col gap-1.5">
+                        <div className="flex justify-between">
+                          <label className="text-xs text-muted-foreground">字号</label>
+                          <span className="text-xs font-mono">{ats.font_size || 16}px</span>
+                        </div>
+                        <input 
+                          type="range" min="8" max="100" step="1"
+                          className="w-full accent-primary"
+                          value={ats.font_size || 16}
+                          onChange={(e) => updateAts({ font_size: parseInt(e.target.value) })}
+                        />
+                      </div>
+
+                      <div className="flex items-center justify-between mt-1 border-t border-border pt-2">
+                        <div className="flex flex-col gap-1.5 flex-1 pr-4 border-r border-border">
+                          <label className="text-xs text-muted-foreground">颜色</label>
+                          <div className="flex gap-1.5 items-center flex-wrap">
+                            {['#ffffff','#000000', ...extractedColors.slice(0,4)].map((c, i) => (
+                              <button key={`a-${c}-${i}`} onClick={() => updateAts({ text_color: c })}
+                                className={`w-5 h-5 rounded-full border-2 transition-transform hover:scale-125 ${ats.text_color === c ? 'border-primary ring-2 ring-primary/30 scale-110' : 'border-border'}`}
+                                style={{ backgroundColor: c }} />
+                            ))}
+                            <label className="relative cursor-pointer" title="自定义颜色">
+                              <input type="color" value={ats.text_color || '#ffffff'} onChange={(e) => updateAts({ text_color: e.target.value })} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" />
+                              <span className="w-5 h-5 rounded-full border-2 border-dashed border-muted-foreground flex items-center justify-center text-[10px] text-muted-foreground">+</span>
+                            </label>
+                          </div>
+                        </div>
+                        <div className="flex flex-col gap-1.5 pl-4 items-center justify-center">
+                          <label className="text-xs text-muted-foreground">智能阴影</label>
+                          <input type="checkbox" className="accent-primary w-4 h-4"
+                            checked={ats.has_shadow ?? true}
+                            onChange={(e) => updateAts({ has_shadow: e.target.checked })}
+                          />
+                        </div>
+                      </div>
+
+                      <div className="flex flex-col gap-3 mt-2 border-t border-border pt-2">
+                        <div className="flex flex-col gap-1.5">
+                          <div className="flex justify-between">
+                            <label className="text-xs text-muted-foreground">水平偏移 (X)</label>
+                            <span className="text-xs font-mono">{ats.offset_x || 0}px</span>
+                          </div>
+                          <input type="range" min={-500} max={500} step={1} className="w-full accent-primary" value={ats.offset_x || 0} onChange={(e) => updateAts({ offset_x: parseInt(e.target.value) })} />
+                        </div>
+                        <div className="flex flex-col gap-1.5">
+                          <div className="flex justify-between">
+                            <label className="text-xs text-muted-foreground">垂直偏移 (Y)</label>
+                            <span className="text-xs font-mono">{ats.offset_y || 0}px</span>
+                          </div>
+                          <input type="range" min={-500} max={500} step={1} className="w-full accent-primary" value={ats.offset_y || 0} onChange={(e) => updateAts({ offset_y: parseInt(e.target.value) })} />
+                        </div>
+                      </div>
+                    </>
+                  );
+                })()}
                 </div>
-                
+                )}
+              </div>
+              )}
+
+              {/* Text Styling Panel */}
+              <div className="border-b border-border pb-2">
+                <button onClick={() => setOpenSections(s => ({...s, text: !s.text}))} className="flex items-center justify-between w-full py-1.5 hover:text-foreground transition-colors">
+                  <div className="flex items-center gap-2">
+                    <Type size={14} className="text-primary" />
+                    <span className="font-bold text-sm">
+                      {selectedIdx === 0 ? "封面文字" : "正文文字"}
+                    </span>
+                  </div>
+                  <ChevronDown size={14} className={`text-muted-foreground transition-transform ${openSections.text ? 'rotate-180' : ''}`} />
+                </button>
+                {openSections.text && (
+                <div className="flex flex-col gap-3 pt-2">
                 {(() => {
                   const isCover = selectedIdx === 0;
                   const currentSettings = isCover ? projectState?.cover_text_settings : projectState?.inner_text_settings;
@@ -625,7 +813,7 @@ export default function EditorScreen() {
                   return (
                     <>
                       <div className="flex flex-col gap-1.5">
-                        <label className="text-xs text-muted-foreground">字体 (Font Family)</label>
+                        <label className="text-xs text-muted-foreground">字体</label>
                         <select 
                           className="w-full bg-background border border-border rounded-md p-2 text-sm focus:ring-1 focus:ring-primary outline-none"
                           value={settings.font_family}
@@ -649,7 +837,7 @@ export default function EditorScreen() {
 
                       <div className="flex flex-col gap-1.5">
                         <div className="flex justify-between">
-                          <label className="text-xs text-muted-foreground">字号 (Size)</label>
+                          <label className="text-xs text-muted-foreground">字号</label>
                           <span className="text-xs font-mono">{settings.font_size}px</span>
                         </div>
                         <input 
@@ -664,15 +852,25 @@ export default function EditorScreen() {
                       <div className="flex items-center justify-between mt-1 border-t border-border pt-2">
                           <div className="flex flex-col gap-1.5 flex-1 pr-4 border-r border-border">
                               <label className="text-xs text-muted-foreground">颜色</label>
-                              <div className="flex gap-2 items-center">
-                                  <input 
-                                    type="color" 
-                                    value={settings.text_color}
-                                    onChange={(e) => updateSettings({ text_color: e.target.value })}
-                                    className="w-6 h-6 rounded cursor-pointer border-0 p-0"
-                                  />
-                                  <button onClick={() => updateSettings({ text_color: '#ffffff' })} className="w-5 h-5 rounded border border-border bg-white" title="白色" />
-                                  <button onClick={() => updateSettings({ text_color: '#000000' })} className="w-5 h-5 rounded border border-border bg-black" title="黑色" />
+                              <div className="flex gap-1.5 items-center flex-wrap">
+                                  {['#ffffff','#000000', ...extractedColors].map((c, i) => (
+                                    <button 
+                                      key={`${c}-${i}`} 
+                                      onClick={() => updateSettings({ text_color: c })} 
+                                      className={`w-5 h-5 rounded-full border-2 transition-transform hover:scale-125 ${settings.text_color === c ? 'border-primary ring-2 ring-primary/30 scale-110' : 'border-border'}`}
+                                      style={{ backgroundColor: c }}
+                                      title={c}
+                                    />
+                                  ))}
+                                  <label className="relative cursor-pointer" title="自定义颜色">
+                                    <input 
+                                      type="color" 
+                                      value={settings.text_color}
+                                      onChange={(e) => updateSettings({ text_color: e.target.value })}
+                                      className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                                    />
+                                    <span className="w-5 h-5 rounded-full border-2 border-dashed border-muted-foreground flex items-center justify-center text-[10px] text-muted-foreground">+</span>
+                                  </label>
                               </div>
                           </div>
                           <div className="flex flex-col gap-1.5 pl-4 items-center justify-center">
@@ -713,6 +911,8 @@ export default function EditorScreen() {
                     </>
                   );
                 })()}
+                </div>
+                )}
               </div>
 
               <button className="w-full py-3 bg-primary hover:bg-primary/90 text-primary-foreground rounded-md font-medium transition-colors flex items-center justify-center gap-2 shadow-md whitespace-nowrap mt-auto">
@@ -720,6 +920,7 @@ export default function EditorScreen() {
                 执行智能排版
               </button>
             </div>
+            )}
           </aside>
       </div>
       ) : (
@@ -735,7 +936,7 @@ export default function EditorScreen() {
                     <span>{imgMeta.sizeMB}</span>
                  </>
              ) : (
-                 <span>Ready</span>
+                 <span>就绪</span>
              )}
              {activeTab === 'edit' && (
                <div className="flex items-center gap-2 ml-4 border-l border-border pl-4">
@@ -763,9 +964,9 @@ export default function EditorScreen() {
                        setCanvasScale(Math.min(availW / canvasW, availH / canvasH));
                      }
                    }}
-                   title="适应窗口 (Fit)"
+                   title="适应窗口"
                  >
-                   Fit
+                   适应
                  </button>
                </div>
              )}
@@ -785,7 +986,7 @@ export default function EditorScreen() {
               )}
               <div className="flex items-center gap-4 text-xs font-mono text-muted-foreground/80">
                   <span className="font-bold text-foreground/50">STORYBOOK CO-EDITOR v1.0</span>
-                  <span>Local Bridge Active</span>
+                  <span>本地桥接已连接</span>
               </div>
           </div>
       </footer>

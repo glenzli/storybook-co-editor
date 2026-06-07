@@ -9,6 +9,9 @@ export interface TextSettings {
     font_family: string;
     font_size: number;
     text_color: string;
+    has_shadow?: boolean;
+    offset_x?: number;
+    offset_y?: number;
 }
 
 export interface PrintSettings {
@@ -39,6 +42,8 @@ export interface ProjectState {
     print_settings?: PrintSettings;
     canvas_width: number;
     canvas_height: number;
+    author_name?: string;
+    author_text_settings?: TextSettings;
 }
 
 export interface ProjectInfo {
