@@ -1,7 +1,7 @@
 import { useEffect, useState, useMemo, useRef } from 'react';
 import { listen } from '@tauri-apps/api/event';
 import { convertFileSrc, invoke } from '@tauri-apps/api/core';
-import { Image as ImageIcon, Send, PenTool, LayoutTemplate, Moon, Sun, Info, XOctagon, RefreshCw, ChevronLeft, ChevronRight, ChevronDown, Trash2, ArchiveRestore, Save, FileBox, XCircle, FolderOpen, Type, Maximize2, ZoomIn } from 'lucide-react';
+import { Image as ImageIcon, Send, PenTool, LayoutTemplate, Moon, Sun, Info, XOctagon, RefreshCw, ChevronLeft, ChevronRight, ChevronDown, Trash2, ArchiveRestore, Save, FileBox, XCircle, FolderOpen, Type, Maximize2, ZoomIn, Undo2, Redo2 } from 'lucide-react';
 import { getPaletteSync } from 'colorthief';
 import { useProject } from './ProjectContext';
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
@@ -36,7 +36,7 @@ interface BatchEvent {
 }
 
 export default function EditorScreen() {
-  const { activeWorkspaceId, projectState, updateProjectState, saveProject, saveProjectAs, closeProject, currentProjectPath } = useProject();
+  const { activeWorkspaceId, projectState, updateProjectState, saveProject, saveProjectAs, closeProject, currentProjectPath, isDirty, undo, redo, canUndo, canRedo } = useProject();
   const [images, setImages] = useState<string[]>([]);
   const [selectedIdx, setSelectedIdx] = useState<number | null>(null);
   
@@ -391,6 +391,24 @@ export default function EditorScreen() {
       setTrashedImages(prev => prev.filter(url => url !== idToRestore));
   };
 
+  // Keyboard shortcuts: Cmd+S, Cmd+Z, Cmd+Shift+Z
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 's') {
+        e.preventDefault();
+        if (isDirty) saveProject();
+      } else if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key === 'z') {
+        e.preventDefault();
+        redo();
+      } else if ((e.metaKey || e.ctrlKey) && e.key === 'z') {
+        e.preventDefault();
+        undo();
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [isDirty, saveProject, undo, redo]);
+
   return (
     <div className="flex flex-col h-screen bg-background text-foreground overflow-hidden transition-colors duration-300">
       
@@ -400,9 +418,10 @@ export default function EditorScreen() {
               <span className="font-semibold text-primary flex items-center gap-2">
                   <FileBox size={16} />
                   {projectState?.project_name || "Untitled"}
+                  {isDirty && <span className="w-2 h-2 rounded-full bg-amber-500" title="有未保存的修改" />}
               </span>
-              <span className="text-xs text-muted-foreground truncate max-w-[200px]" title={currentProjectPath || "Not saved yet"}>
-                  {currentProjectPath ? currentProjectPath.split('/').pop() : "(Unsaved)"}
+              <span className="text-xs text-muted-foreground truncate max-w-[200px]" title={currentProjectPath || "未保存"}>
+                  {currentProjectPath ? currentProjectPath.split('/').pop() : "(未保存)"}
               </span>
           </div>
 
@@ -421,16 +440,28 @@ export default function EditorScreen() {
               </button>
           </div>
 
-          <div className="flex items-center justify-end gap-2 w-1/3">
-              <button onClick={() => saveProject()} className="flex items-center gap-2 px-3 py-1.5 rounded-md hover:bg-muted text-foreground transition-colors border border-transparent hover:border-border">
-                  <Save size={14} /> 保存
+          <div className="flex items-center justify-end gap-1 w-1/3">
+              <button onClick={undo} disabled={!canUndo} className={`p-1.5 rounded-md transition-colors ${canUndo ? 'hover:bg-muted text-foreground' : 'text-muted-foreground/30 cursor-not-allowed'}`} title="撤销 (Cmd+Z)">
+                  <Undo2 size={14} />
               </button>
-              <button onClick={saveProjectAs} className="flex items-center gap-2 px-3 py-1.5 rounded-md hover:bg-muted text-foreground transition-colors border border-transparent hover:border-border">
-                  <FolderOpen size={14} /> 另存为
+              <button onClick={redo} disabled={!canRedo} className={`p-1.5 rounded-md transition-colors ${canRedo ? 'hover:bg-muted text-foreground' : 'text-muted-foreground/30 cursor-not-allowed'}`} title="重做 (Cmd+Shift+Z)">
+                  <Redo2 size={14} />
               </button>
-              <div className="w-px h-4 bg-border mx-2"></div>
-              <button onClick={closeProject} className="flex items-center gap-2 px-3 py-1.5 rounded-md hover:bg-red-500/10 text-red-500 transition-colors border border-transparent hover:border-red-500/20">
-                  <XCircle size={14} /> 关闭项目
+              <div className="w-px h-4 bg-border mx-1"></div>
+              <button 
+                onClick={() => { if (isDirty) saveProject(); }}
+                disabled={!isDirty}
+                className={`p-1.5 rounded-md transition-colors ${isDirty ? 'hover:bg-muted text-primary' : 'text-muted-foreground/30 cursor-not-allowed'}`}
+                title={isDirty ? "保存 (Cmd+S)" : "已保存"}
+              >
+                  <Save size={14} />
+              </button>
+              <button onClick={saveProjectAs} className="p-1.5 rounded-md hover:bg-muted text-foreground transition-colors" title="另存为...">
+                  <FolderOpen size={14} />
+              </button>
+              <div className="w-px h-4 bg-border mx-1"></div>
+              <button onClick={closeProject} className="p-1.5 rounded-md hover:bg-red-500/10 text-red-500 transition-colors" title="关闭项目">
+                  <XCircle size={14} />
               </button>
           </div>
       </header>

@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useRef, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef, useCallback, ReactNode } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import { load } from '@tauri-apps/plugin-store';
@@ -69,6 +69,11 @@ interface ProjectContextType {
     closeProject: () => Promise<void>;
     updateProjectState: (newState: Partial<ProjectState>) => void;
     currentProjectPath: string | null;
+    isDirty: boolean;
+    undo: () => void;
+    redo: () => void;
+    canUndo: boolean;
+    canRedo: boolean;
 }
 
 const ProjectContext = createContext<ProjectContextType | undefined>(undefined);
@@ -79,6 +84,13 @@ export const ProjectProvider = ({ children }: { children: ReactNode }) => {
     const [recentProjects, setRecentProjects] = useState<RecentProject[]>([]);
     const [currentProjectPath, setCurrentProjectPath] = useState<string | null>(null);
     const syncTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+    const autoSaveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+    const [isDirty, setIsDirty] = useState(false);
+    // Undo/Redo history
+    const historyRef = useRef<ProjectState[]>([]);
+    const historyIndexRef = useRef(-1);
+    const isUndoRedoRef = useRef(false);
+    const MAX_HISTORY = 50;
     const navigate = useNavigate();
 
     useEffect(() => {
@@ -186,6 +198,7 @@ export const ProjectProvider = ({ children }: { children: ReactNode }) => {
                 setCurrentProjectPath(filePath);
                 
                 await addRecentProject(filePath, newProjectName);
+                setIsDirty(false);
             }
         } catch (e) {
             console.error("Failed to save project as", e);
@@ -207,6 +220,7 @@ export const ProjectProvider = ({ children }: { children: ReactNode }) => {
             await invoke('save_project', { targetPath });
             setCurrentProjectPath(targetPath);
             await addRecentProject(targetPath, projectName);
+            setIsDirty(false);
         } else {
             await saveProjectAs();
         }
@@ -236,12 +250,63 @@ export const ProjectProvider = ({ children }: { children: ReactNode }) => {
         };
     }, [projectState, activeWorkspaceId]);
 
-    const updateProjectState = (newState: Partial<ProjectState>) => {
+    const updateProjectState = useCallback((newState: Partial<ProjectState>) => {
         setProjectState(prev => {
             if (!prev) return null;
-            return { ...prev, ...newState, last_modified: new Date().toISOString() };
+            const updated = { ...prev, ...newState, last_modified: new Date().toISOString() };
+            return updated;
         });
-    };
+        setIsDirty(true);
+    }, []);
+
+    // Push to undo history when projectState changes (skip undo/redo-triggered changes)
+    useEffect(() => {
+        if (!projectState) return;
+        if (isUndoRedoRef.current) {
+            isUndoRedoRef.current = false;
+            return;
+        }
+        const history = historyRef.current;
+        const idx = historyIndexRef.current;
+        // Trim forward history on new edit
+        historyRef.current = history.slice(0, idx + 1);
+        historyRef.current.push(JSON.parse(JSON.stringify(projectState)));
+        if (historyRef.current.length > MAX_HISTORY) {
+            historyRef.current = historyRef.current.slice(-MAX_HISTORY);
+        }
+        historyIndexRef.current = historyRef.current.length - 1;
+    }, [projectState]);
+
+    const canUndo = historyIndexRef.current > 0;
+    const canRedo = historyIndexRef.current < historyRef.current.length - 1;
+
+    const undo = useCallback(() => {
+        if (historyIndexRef.current <= 0) return;
+        historyIndexRef.current -= 1;
+        isUndoRedoRef.current = true;
+        setProjectState(JSON.parse(JSON.stringify(historyRef.current[historyIndexRef.current])));
+        setIsDirty(true);
+    }, []);
+
+    const redo = useCallback(() => {
+        if (historyIndexRef.current >= historyRef.current.length - 1) return;
+        historyIndexRef.current += 1;
+        isUndoRedoRef.current = true;
+        setProjectState(JSON.parse(JSON.stringify(historyRef.current[historyIndexRef.current])));
+        setIsDirty(true);
+    }, []);
+
+    // Auto-save: 5s after last edit, if dirty and has a save path
+    useEffect(() => {
+        if (!isDirty || !currentProjectPath) return;
+        if (autoSaveTimeoutRef.current) clearTimeout(autoSaveTimeoutRef.current);
+        autoSaveTimeoutRef.current = setTimeout(() => {
+            saveProject().then(() => setIsDirty(false));
+        }, 5000);
+        return () => {
+            if (autoSaveTimeoutRef.current) clearTimeout(autoSaveTimeoutRef.current);
+        };
+    }, [isDirty, projectState, currentProjectPath]);
 
     return (
         <ProjectContext.Provider value={{
@@ -256,6 +321,11 @@ export const ProjectProvider = ({ children }: { children: ReactNode }) => {
             closeProject,
             updateProjectState,
             currentProjectPath,
+            isDirty,
+            undo,
+            redo,
+            canUndo,
+            canRedo,
         }}>
             {children}
         </ProjectContext.Provider>
