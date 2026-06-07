@@ -59,3 +59,17 @@
     @apply bg-background text-foreground;
   }
 }
+
+/* Print Export Overrides */
+body.pdf-exporting .sheet-export-target {
+  box-shadow: none !important;
+  border: none !important;
+  border-radius: 0 !important;
+  outline: none !important;
+  --tw-ring-shadow: 0 0 #000 !important;
+  --tw-ring-color: transparent !important;
+}
+
+body.pdf-exporting .hide-on-export {
+  display: none !important;
+}

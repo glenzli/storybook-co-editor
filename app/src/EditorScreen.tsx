@@ -742,6 +742,7 @@ export default function EditorScreen() {
                         style={{
                           fontFamily,
                           fontSize: `${fontSize}px`,
+                          lineHeight: 1.5,
                           color: textColor,
                           filter: getShadowStyle(textColor, hasShadow),
                           transform: `translate(${offsetX}px, ${offsetY}px)`
@@ -765,6 +766,7 @@ export default function EditorScreen() {
                           style={{
                             fontFamily,
                             fontSize: `${ats?.font_size || 16}px`,
+                            lineHeight: 1.5,
                             color: ats?.text_color || '#ffffff',
                             filter: getShadowStyle(ats?.text_color || '#ffffff', ats?.has_shadow ?? true),
                             transform: `translate(${ats?.offset_x || 0}px, ${ats?.offset_y || 0}px)`

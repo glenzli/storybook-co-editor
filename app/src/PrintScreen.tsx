@@ -1,7 +1,11 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { useProject } from './ProjectContext';
-import { Settings, Printer, Download, AlertTriangle, FileText } from 'lucide-react';
+import { Settings, Printer, Download, AlertTriangle, FileText, RefreshCw } from 'lucide-react';
 import { invoke } from '@tauri-apps/api/core';
+import { save } from '@tauri-apps/plugin-dialog';
+import { writeFile } from '@tauri-apps/plugin-fs';
+import html2canvas from 'html2canvas';
+import { jsPDF } from 'jspdf';
 
 function getShadowStyle(hexColor: string, hasShadow: boolean) {
     if (!hasShadow) return 'none';
@@ -118,19 +122,116 @@ export default function PrintScreen() {
         paper_size: 'A4',
         paper_orientation: 'landscape',
         layout_mode: '2-up',
-        binding_method: 'perfect',
-        has_back_cover: false,
-        spine_mm: 5.0,
-        binding_margin_mm: 10.0,
+        binding_method: 'saddle',
+        has_back_cover: true,
+        spine_mm: 5,
+        binding_margin_mm: 15,
+        hardware_margin_mm: 5,
+        auto_snap_content: true,
         crop_marks: true,
         offset_x: 0.0,
         offset_y: 0.0,
     };
 
+    const [isExporting, setIsExporting] = useState(false);
+    const [exportProgress, setExportProgress] = useState(0);
+
     // Force landscape for saddle/butterfly
     const effectiveOrientation = (settings.binding_method === 'saddle' || settings.binding_method === 'butterfly')
         ? 'landscape'
         : (settings.paper_orientation || 'landscape');
+
+    const generatePDF = async () => {
+        if (isExporting) return;
+        setIsExporting(true);
+        setExportProgress(0);
+
+        try {
+            document.body.classList.add('pdf-exporting');
+            await new Promise(resolve => setTimeout(resolve, 150));
+
+            const targets = document.querySelectorAll('.sheet-export-target');
+            if (targets.length === 0) {
+                throw new Error("No sheets to export");
+            }
+
+            const pdf = new jsPDF({
+                orientation: effectiveOrientation as 'portrait' | 'landscape',
+                unit: 'mm',
+                format: settings.paper_size.toLowerCase()
+            });
+
+            const total = targets.length;
+            const imgDataArray: string[] = new Array(total);
+            const concurrency = 2; // html2canvas is CPU intensive, use lower concurrency
+            
+            for (let i = 0; i < total; i += concurrency) {
+                const chunk = Array.from(targets).slice(i, i + concurrency);
+                const promises = chunk.map(async (node, idx) => {
+                    const globalIdx = i + idx;
+                    // Switch to html2canvas for better WebKit compatibility and CORS handling
+                    const canvas = await html2canvas(node as HTMLElement, { 
+                        scale: 2, // Equivalent to pixelRatio: 2
+                        useCORS: true,
+                        allowTaint: true,
+                        backgroundColor: '#ffffff'
+                    });
+                    imgDataArray[globalIdx] = canvas.toDataURL('image/jpeg', 0.95);
+                });
+                
+                await Promise.all(promises);
+                setExportProgress(Math.round((Math.min(i + concurrency, total) / total) * 100));
+            }
+
+            for (let i = 0; i < total; i++) {
+                if (i > 0) {
+                    pdf.addPage();
+                }
+
+                const pdfWidth = pdf.internal.pageSize.getWidth();
+                const pdfHeight = pdf.internal.pageSize.getHeight();
+                
+                pdf.addImage(imgDataArray[i], 'JPEG', 0, 0, pdfWidth, pdfHeight);
+            }
+
+            let filename = '';
+            if (projectState?.global_script) {
+                const lines = projectState.global_script.split('\n');
+                for (const line of lines) {
+                    const trimmed = line.trim();
+                    if (trimmed.length > 0 && !trimmed.startsWith('[')) {
+                        filename = trimmed.substring(0, 30).replace(/[/\\?%*:|"<>]/g, '-');
+                        break;
+                    }
+                }
+            }
+            if (!filename && projectState?.project_name && projectState.project_name.trim() !== 'Untitled') {
+                filename = projectState.project_name.replace(/[/\\?%*:|"<>]/g, '-');
+            }
+            if (!filename) {
+                filename = '未命名';
+            }
+
+            // Prompt user for save path
+            const filePath = await save({
+                filters: [{ name: 'PDF Document', extensions: ['pdf'] }],
+                defaultPath: `${filename}.pdf`
+            });
+
+            if (filePath) {
+                const arrayBuffer = pdf.output('arraybuffer');
+                await writeFile(filePath, new Uint8Array(arrayBuffer));
+                alert(`成功导出至：\n${filePath}`);
+            }
+        } catch (err) {
+            console.error('PDF export failed:', err);
+            alert('PDF 导出失败');
+        } finally {
+            document.body.classList.remove('pdf-exporting');
+            setIsExporting(false);
+            setExportProgress(0);
+        }
+    };
 
     const updateSettings = (updates: any) => {
         updateProjectState({ print_settings: { ...settings, ...updates } });
@@ -230,6 +331,7 @@ export default function PrintScreen() {
                 }}>
                     {/* Image fills canvas */}
                     <img 
+                        crossOrigin="anonymous"
                         onLoad={e => handleImageLoad(pageIdx, e)}
                         src={`http://127.0.0.1:14320/images/${imgFile}`}
                         style={{ width: '100%', height: '100%', objectFit: 'contain' }}
@@ -240,6 +342,7 @@ export default function PrintScreen() {
                             <div className="text-center tracking-wide whitespace-pre-wrap" style={{
                                 fontFamily,
                                 fontSize: `${ts?.font_size || (isCover ? 40 : 20)}px`,
+                                lineHeight: 1.5,
                                 color: effectiveColor,
                                 filter: getShadowStyle(effectiveColor, ts?.has_shadow ?? true),
                                 transform: `translate(${effectiveOffsetX}px, ${effectiveOffsetY}px)`,
@@ -258,9 +361,10 @@ export default function PrintScreen() {
                                 <div className="text-center tracking-wide whitespace-pre-wrap" style={{
                                     fontFamily: authorFont,
                                     fontSize: `${ats?.font_size || 16}px`,
+                                    lineHeight: 1.5,
                                     color: ats?.text_color || '#ffffff',
                                     filter: getShadowStyle(ats?.text_color || '#ffffff', ats?.has_shadow ?? true),
-                                    transform: `translate(${ats?.offset_x || 0}px, ${ats?.offset_y || 0}px)`,
+                                    transform: `translate(${ats?.offset_x ?? 0}px, ${ats?.offset_y ?? 0}px)`,
                                 }}>
                                     {projectState.author_name}
                                 </div>
@@ -432,11 +536,6 @@ export default function PrintScreen() {
                             <input type="checkbox" checked={settings.crop_marks} onChange={e => updateSettings({ crop_marks: e.target.checked })} className="accent-primary w-4 h-4" />
                             <span className="text-sm">生成印刷裁剪线 (Crop Marks)</span>
                         </label>
-
-                        <label className="flex items-center gap-2 cursor-pointer mt-1">
-                            <input type="checkbox" checked={settings.duplex_printing ?? false} onChange={e => updateSettings({ duplex_printing: e.target.checked })} className="accent-primary w-4 h-4" />
-                            <span className="text-sm">打印机管理双面翻转</span>
-                        </label>
                         
                         <label className="flex items-center gap-2 cursor-pointer">
                             <input type="checkbox" checked={settings.has_back_cover} onChange={e => updateSettings({ has_back_cover: e.target.checked })} className="accent-primary w-4 h-4" />
@@ -446,9 +545,13 @@ export default function PrintScreen() {
                 </div>
 
                 <div className="p-4 border-t border-border">
-                    <button className="w-full py-3 bg-primary text-primary-foreground rounded-md font-bold flex items-center justify-center gap-2 hover:opacity-90 transition-opacity shadow-md">
-                        <Download size={18} />
-                        生成高清 PDF
+                    <button 
+                        onClick={generatePDF}
+                        disabled={isExporting}
+                        className="w-full py-3 bg-primary text-primary-foreground rounded-md font-bold flex items-center justify-center gap-2 hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-opacity shadow-md"
+                    >
+                        {isExporting ? <RefreshCw size={18} className="animate-spin" /> : <Download size={18} />}
+                        {isExporting ? `导出中... ${exportProgress}%` : '生成高清 PDF'}
                     </button>
                 </div>
             </aside>
@@ -527,8 +630,8 @@ export default function PrintScreen() {
                         <div className="flex gap-12 flex-wrap justify-center w-full max-w-5xl">
                             {/* Front Side */}
                             <div className="flex flex-col items-center gap-2">
-                                <span className="text-xs font-mono text-muted-foreground">正面 (Front Side)</span>
-                                <div className="relative shadow-xl ring-1 ring-border/50 rounded-sm flex items-stretch overflow-hidden"
+                                <span className="text-xs font-mono text-muted-foreground hide-on-export">正面 (Front Side)</span>
+                                <div className="relative shadow-xl ring-1 ring-border/50 rounded-sm flex items-stretch overflow-hidden sheet-export-target"
                                      style={{ 
                                          width: `${w}px`, 
                                          height: `${h}px`,
@@ -550,9 +653,9 @@ export default function PrintScreen() {
                                              }}>
                                              
                                             {/* Spine / Center Line (only 2-up) */}
-                                            {!is1up && <div className="absolute top-0 bottom-0 left-1/2 -translate-x-1/2 w-px bg-blue-300/50 border-r border-dashed border-blue-400 z-20" />}
+                                            {!is1up && <div className="absolute top-0 bottom-0 left-1/2 -translate-x-1/2 w-px bg-blue-300/50 border-r border-dashed border-blue-400 z-20 hide-on-export" />}
                                             {sheet.isCover && settings.spine_mm > 0 && !is1up && (
-                                                <div className="absolute top-0 bottom-0 left-1/2 -translate-x-1/2 bg-yellow-200/40 border-x border-yellow-400/50 z-20 flex items-center justify-center overflow-hidden" style={{ width: `${settings.spine_mm * pxPerMm}px` }}>
+                                                <div className="absolute top-0 bottom-0 left-1/2 -translate-x-1/2 bg-yellow-200/40 border-x border-yellow-400/50 z-20 flex items-center justify-center overflow-hidden hide-on-export" style={{ width: `${settings.spine_mm * pxPerMm}px` }}>
                                                     <span className="text-[8px] text-yellow-700 -rotate-90 whitespace-nowrap">书脊 {settings.spine_mm}mm</span>
                                                 </div>
                                             )}
@@ -561,16 +664,16 @@ export default function PrintScreen() {
                                             {settings.binding_method === 'perfect' && !sheet.isCover && (
                                                 <>
                                                     {is1up ? (
-                                                        <div className="absolute top-0 bottom-0 left-0 bg-blue-200/20 border-r border-blue-300/50 z-20 flex items-center justify-center overflow-hidden" 
+                                                        <div className="absolute top-0 bottom-0 left-0 bg-blue-200/20 border-r border-blue-300/50 z-20 flex items-center justify-center overflow-hidden hide-on-export" 
                                                              style={{ width: `${settings.binding_margin_mm * pxPerMm}px` }}>
                                                             <span className="text-[8px] text-blue-700 -rotate-90 whitespace-nowrap">刷胶 (仅预览)</span>
                                                         </div>
                                                     ) : (
                                                         <>
-                                                            <div className="absolute top-0 bottom-0 left-1/2 -translate-x-full bg-blue-200/20 border-r border-blue-300/50 z-20 flex items-center justify-center overflow-hidden" style={{ width: `${settings.binding_margin_mm * pxPerMm}px` }}>
+                                                            <div className="absolute top-0 bottom-0 left-1/2 -translate-x-full bg-blue-200/20 border-r border-blue-300/50 z-20 flex items-center justify-center overflow-hidden hide-on-export" style={{ width: `${settings.binding_margin_mm * pxPerMm}px` }}>
                                                                 <span className="text-[8px] text-blue-700 -rotate-90 whitespace-nowrap">刷胶 (仅预览)</span>
                                                             </div>
-                                                            <div className="absolute top-0 bottom-0 right-1/2 translate-x-full bg-blue-200/20 border-l border-blue-300/50 z-20 flex items-center justify-center overflow-hidden" style={{ width: `${settings.binding_margin_mm * pxPerMm}px` }}>
+                                                            <div className="absolute top-0 bottom-0 right-1/2 translate-x-full bg-blue-200/20 border-l border-blue-300/50 z-20 flex items-center justify-center overflow-hidden hide-on-export" style={{ width: `${settings.binding_margin_mm * pxPerMm}px` }}>
                                                                 <span className="text-[8px] text-blue-700 -rotate-90 whitespace-nowrap">刷胶 (仅预览)</span>
                                                             </div>
                                                         </>
@@ -670,9 +773,9 @@ export default function PrintScreen() {
 
                             {/* Back Side */}
                             {sheet.back && (
-                                <div className="flex flex-col items-center gap-2 opacity-90">
-                                    <span className="text-xs font-mono text-muted-foreground">反面 (Back Side)</span>
-                                    <div className="relative shadow-xl ring-1 ring-border/50 rounded-sm flex items-stretch overflow-hidden"
+                                <div className="flex flex-col items-center gap-2 opacity-90 back-side-container">
+                                    <span className="text-xs font-mono text-muted-foreground hide-on-export">反面 (Back Side)</span>
+                                    <div className="relative shadow-xl ring-1 ring-border/50 rounded-sm flex items-stretch overflow-hidden sheet-export-target"
                                          style={{ 
                                              width: `${w}px`, 
                                              height: `${h}px`,
@@ -693,22 +796,22 @@ export default function PrintScreen() {
                                                  }}>
                                                  
                                                 {/* Spine / Center Line (only 2-up) */}
-                                                {!is1up && <div className="absolute top-0 bottom-0 left-1/2 -translate-x-1/2 w-px bg-blue-300/50 border-r border-dashed border-blue-400 z-20" />}
+                                                {!is1up && <div className="absolute top-0 bottom-0 left-1/2 -translate-x-1/2 w-px bg-blue-300/50 border-r border-dashed border-blue-400 z-20 hide-on-export" />}
                                                 
                                                 {/* Glue Area (Back Side) */}
                                                 {settings.binding_method === 'perfect' && !sheet.isCover && (
                                                     <>
                                                         {is1up ? (
-                                                            <div className="absolute top-0 bottom-0 right-0 bg-blue-200/20 border-l border-blue-300/50 z-20 flex items-center justify-center overflow-hidden" 
+                                                            <div className="absolute top-0 bottom-0 right-0 bg-blue-200/20 border-l border-blue-300/50 z-20 flex items-center justify-center overflow-hidden hide-on-export" 
                                                                  style={{ width: `${settings.binding_margin_mm * pxPerMm}px` }}>
                                                                 <span className="text-[8px] text-blue-700 -rotate-90 whitespace-nowrap">刷胶 (仅预览)</span>
                                                             </div>
                                                         ) : (
                                                             <>
-                                                                <div className="absolute top-0 bottom-0 left-1/2 -translate-x-full bg-blue-200/20 border-r border-blue-300/50 z-20 flex items-center justify-center overflow-hidden" style={{ width: `${settings.binding_margin_mm * pxPerMm}px` }}>
+                                                                <div className="absolute top-0 bottom-0 left-1/2 -translate-x-full bg-blue-200/20 border-r border-blue-300/50 z-20 flex items-center justify-center overflow-hidden hide-on-export" style={{ width: `${settings.binding_margin_mm * pxPerMm}px` }}>
                                                                     <span className="text-[8px] text-blue-700 -rotate-90 whitespace-nowrap">刷胶 (仅预览)</span>
                                                                 </div>
-                                                                <div className="absolute top-0 bottom-0 right-1/2 translate-x-full bg-blue-200/20 border-l border-blue-300/50 z-20 flex items-center justify-center overflow-hidden" style={{ width: `${settings.binding_margin_mm * pxPerMm}px` }}>
+                                                                <div className="absolute top-0 bottom-0 right-1/2 translate-x-full bg-blue-200/20 border-l border-blue-300/50 z-20 flex items-center justify-center overflow-hidden hide-on-export" style={{ width: `${settings.binding_margin_mm * pxPerMm}px` }}>
                                                                     <span className="text-[8px] text-blue-700 -rotate-90 whitespace-nowrap">刷胶 (仅预览)</span>
                                                                 </div>
                                                             </>
