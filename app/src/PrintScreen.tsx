@@ -214,8 +214,8 @@ export default function PrintScreen() {
             imgTop = (contentH - renderedH) / 2;
         }
         
-        // 2. Compute what the editor container size would be for this image's aspect ratio
-        const editorContainer = getEditorContainerSize(imgAspect);
+        // 2. Use the actual measured editor container size
+        const editorContainer = getEditorContainerSize();
         
         // 3. Scale = how much to shrink editor container to fit rendered image bounds
         const S = renderedH / editorContainer.h;

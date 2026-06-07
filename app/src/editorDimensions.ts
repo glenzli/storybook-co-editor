@@ -1,21 +1,15 @@
-// Shared module-level store for the editor's layout constraints.
-// EditorScreen sets these when the image container resizes;
-// PrintScreen reads them to compute per-image editor container size.
+// Shared store for the editor's actual measured container dimensions.
+// EditorScreen sets these via ResizeObserver on containerRef;
+// PrintScreen reads them for CSS-transform-based text overlay scaling.
 
-let _availW = 700;  // main area content width (px)
-let _maxH = 700;    // max image height = 85vh (px)
+let _w = 700;
+let _h = 700;
 
-export function setEditorConstraints(availW: number, maxH: number) {
-    _availW = availW;
-    _maxH = maxH;
+export function setEditorContainerSize(w: number, h: number) {
+    _w = w;
+    _h = h;
 }
 
-/**
- * Compute what the editor's image container size would be for a given image aspect ratio.
- * The editor uses max-w-full max-h-[85vh] and the container wraps the image tightly.
- */
-export function getEditorContainerSize(imgAspect: number) {
-    const w = Math.min(_availW, _maxH * imgAspect);
-    const h = Math.min(_maxH, _availW / imgAspect);
-    return { w, h };
+export function getEditorContainerSize() {
+    return { w: _w, h: _h };
 }
