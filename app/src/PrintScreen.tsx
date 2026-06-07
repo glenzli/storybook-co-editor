@@ -7,7 +7,8 @@ import { writeFile } from '@tauri-apps/plugin-fs';
 import html2canvas from 'html2canvas';
 import { jsPDF } from 'jspdf';
 
-function getShadowStyle(hexColor: string, hasShadow: boolean) {
+// html2canvas-compatible: use textShadow instead of filter (html2canvas doesn't support CSS filter: drop-shadow)
+function getTextShadowStyle(hexColor: string, hasShadow: boolean): string {
     if (!hasShadow) return 'none';
     let hex = hexColor.replace('#', '');
     if (hex.length === 3) hex = hex.split('').map(c => c + c).join('');
@@ -15,7 +16,8 @@ function getShadowStyle(hexColor: string, hasShadow: boolean) {
     const g = parseInt(hex.substring(2, 4), 16) || 0;
     const b = parseInt(hex.substring(4, 6), 16) || 0;
     const yiq = ((r * 299) + (g * 587) + (b * 114)) / 1000;
-    return yiq >= 128 ? 'drop-shadow(0 2px 4px rgba(0,0,0,0.8))' : 'drop-shadow(0 2px 4px rgba(255,255,255,0.8))';
+    const shadowColor = yiq >= 128 ? 'rgba(0,0,0,0.8)' : 'rgba(255,255,255,0.8)';
+    return `0 2px 4px ${shadowColor}`;
 }
 
 export interface ImposedSheet {
@@ -162,37 +164,208 @@ export default function PrintScreen() {
             });
 
             const total = targets.length;
-            const imgDataArray: string[] = new Array(total);
-            const concurrency = 2; // html2canvas is CPU intensive, use lower concurrency
+            const canvasArray: HTMLCanvasElement[] = new Array(total);
+            const concurrency = 2;
             
             for (let i = 0; i < total; i += concurrency) {
                 const chunk = Array.from(targets).slice(i, i + concurrency);
                 const promises = chunk.map(async (node, idx) => {
                     const globalIdx = i + idx;
-                    // Switch to html2canvas for better WebKit compatibility and CORS handling
                     const canvas = await html2canvas(node as HTMLElement, { 
-                        scale: 2, // Equivalent to pixelRatio: 2
+                        scale: 5,
                         useCORS: true,
                         allowTaint: true,
                         backgroundColor: '#ffffff'
                     });
-                    imgDataArray[globalIdx] = canvas.toDataURL('image/jpeg', 0.95);
+                    canvasArray[globalIdx] = canvas;
                 });
                 
                 await Promise.all(promises);
-                setExportProgress(Math.round((Math.min(i + concurrency, total) / total) * 100));
+                setExportProgress(Math.round((Math.min(i + concurrency, total) / total) * 80));
             }
 
+            // Now draw text directly onto each canvas using Canvas 2D API.
+            // This bypasses html2canvas's text rendering entirely for pixel-perfect positioning.
+            const canvasW = projectState?.canvas_width || 1024;
+            const canvasH = projectState?.canvas_height || 1024;
+            const parsedScriptLocal = new Map<number, string>();
+            const script = projectState?.global_script || '';
+            const blocks = script.split(/(?=\[(?:Cover|封面|\d+)\])/i);
+            blocks.forEach(block => {
+                const match = block.match(/\[(Cover|封面|\d+)\]\s*([\s\S]*)/i);
+                if (match) {
+                    const key = match[1].toLowerCase();
+                    const text = match[2].trim();
+                    const idx = (key === 'cover' || key === '封面') ? 0 : parseInt(key, 10);
+                    parsedScriptLocal.set(idx, text);
+                }
+            });
+
+            // For each sheet-export-target, find which page containers (data-page-idx) are inside it,
+            // then draw their text directly onto the captured canvas.
+            const h2cScale = 5; // must match html2canvas scale above
+            const baseBottomPx = 40; // Tailwind bottom-10 in canvas coords
+            const basePadPx = 48;    // Tailwind px-12 in canvas coords
+
+            // Map font family keys to canvas-compatible font strings
+            const mapFont = (ff: string) => {
+                if (ff === 'sans') return '"Helvetica Neue", "PingFang SC", sans-serif';
+                if (ff === 'serif') return 'Georgia, "Songti SC", serif';
+                return `"${ff}", "PingFang SC", sans-serif`;
+            };
+
+            // Helper: get shadow color based on text brightness
+            const getShadowColor = (hexColor: string) => {
+                let h = hexColor.replace('#', '');
+                if (h.length === 3) h = h.split('').map(c => c + c).join('');
+                const r = parseInt(h.substring(0, 2), 16) || 0;
+                const g = parseInt(h.substring(2, 4), 16) || 0;
+                const b = parseInt(h.substring(4, 6), 16) || 0;
+                const yiq = ((r * 299) + (g * 587) + (b * 114)) / 1000;
+                return yiq >= 128 ? 'rgba(0,0,0,0.8)' : 'rgba(255,255,255,0.8)';
+            };
+
+            // Draw text on canvas for a specific page
+            const drawTextOnCanvas = (
+                ctx: CanvasRenderingContext2D,
+                pageEl: HTMLElement, // the [data-page-idx] element
+                sheetEl: Element,    // the .sheet-export-target element
+            ) => {
+                const pageIdx = parseInt(pageEl.dataset.pageIdx || '', 10);
+                if (isNaN(pageIdx)) return;
+
+                const isCover = pageIdx === 0;
+                const ts = isCover ? projectState?.cover_text_settings : projectState?.inner_text_settings;
+                const pageOverride = !isCover ? projectState?.page_text_overrides?.[String(pageIdx)] : undefined;
+                const ff = ts?.font_family || 'serif';
+
+                // Get page element's position relative to the sheet-export-target
+                const sheetRect = sheetEl.getBoundingClientRect();
+                const pageRect = pageEl.getBoundingClientRect();
+                const relLeft = pageRect.left - sheetRect.left;
+                const relTop = pageRect.top - sheetRect.top;
+                const pageW = pageRect.width;
+                const pageH = pageRect.height;
+
+                // Scale factor from canvas coords to page element pixels
+                const S = Math.min(pageW / canvasW, pageH / canvasH);
+
+                // All coordinates below are in page-element pixels, relative to page-element origin.
+                // Then we add relLeft/relTop to get sheet-relative, then multiply by h2cScale for canvas pixels.
+
+                const drawSingleText = (
+                    content: string,
+                    fontFamily: string,
+                    fontSize: number,
+                    color: string,
+                    hasShadow: boolean,
+                    oxCanvas: number,
+                    oyCanvas: number,
+                ) => {
+                    if (!content) return;
+
+                    // Reset any transforms html2canvas may have left on the context
+                    ctx.setTransform(1, 0, 0, 1, 0, 0);
+
+                    const scaledFontSize = fontSize * S * h2cScale;
+                    const fontStr = `${scaledFontSize}px ${mapFont(fontFamily)}`;
+                    ctx.font = fontStr;
+                    ctx.fillStyle = color;
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'bottom';
+
+                    // Shadow
+                    if (hasShadow) {
+                        ctx.shadowColor = getShadowColor(color);
+                        ctx.shadowBlur = 4 * h2cScale;
+                        ctx.shadowOffsetX = 0;
+                        ctx.shadowOffsetY = 2 * h2cScale;
+                    } else {
+                        ctx.shadowColor = 'transparent';
+                        ctx.shadowBlur = 0;
+                    }
+
+                    // Position: center X with offset, bottom with offset
+                    const centerX = (relLeft + pageW / 2 + oxCanvas * S) * h2cScale;
+                    const bottomY = (relTop + pageH - (baseBottomPx - oyCanvas) * S) * h2cScale;
+
+
+                    // Handle multi-line text
+                    const lines = content.split('\n');
+                    const lineHeight = scaledFontSize * 1.5;
+                    for (let li = lines.length - 1; li >= 0; li--) {
+                        const y = bottomY - (lines.length - 1 - li) * lineHeight;
+                        ctx.fillText(lines[li], centerX, y);
+                    }
+
+                    // Reset shadow
+                    ctx.shadowColor = 'transparent';
+                    ctx.shadowBlur = 0;
+                    ctx.shadowOffsetX = 0;
+                    ctx.shadowOffsetY = 0;
+                };
+
+                // Draw title text
+                const titleText = parsedScriptLocal.get(pageIdx);
+                if (titleText) {
+                    const effectiveColor = (pageOverride?.text_color ?? ts?.text_color) || '#ffffff';
+                    const effectiveOffsetX = pageOverride?.offset_x ?? ts?.offset_x ?? 0;
+                    const effectiveOffsetY = pageOverride?.offset_y ?? ts?.offset_y ?? 0;
+                    drawSingleText(
+                        titleText, ff,
+                        ts?.font_size || (isCover ? 40 : 20),
+                        effectiveColor, ts?.has_shadow ?? true,
+                        effectiveOffsetX, effectiveOffsetY,
+                    );
+                }
+
+                // Draw author text (cover only)
+                if (isCover && projectState?.author_name) {
+                    const ats = projectState?.author_text_settings;
+                    drawSingleText(
+                        projectState.author_name,
+                        ats?.font_family || 'serif',
+                        ats?.font_size || 16,
+                        ats?.text_color || '#ffffff',
+                        ats?.has_shadow ?? true,
+                        ats?.offset_x ?? 0,
+                        ats?.offset_y ?? 0,
+                    );
+                }
+            };
+
+            // For each captured canvas, find the page containers and draw text
             for (let i = 0; i < total; i++) {
-                if (i > 0) {
+                const canvas = canvasArray[i];
+                const ctx = canvas.getContext('2d');
+                if (!ctx) continue;
+
+                const target = targets[i];
+                const pageEls = target.querySelectorAll('[data-page-idx]');
+                pageEls.forEach(el => {
+                    drawTextOnCanvas(ctx, el as HTMLElement, target);
+                });
+            }
+
+            let firstPage = true;
+            for (let i = 0; i < total; i++) {
+                // Skip blank sheets (no image content)
+                const pageEls = targets[i].querySelectorAll('[data-page-idx]');
+                if (pageEls.length === 0) continue;
+
+                if (!firstPage) {
                     pdf.addPage();
                 }
+                firstPage = false;
 
                 const pdfWidth = pdf.internal.pageSize.getWidth();
                 const pdfHeight = pdf.internal.pageSize.getHeight();
                 
-                pdf.addImage(imgDataArray[i], 'JPEG', 0, 0, pdfWidth, pdfHeight);
+                const imgData = canvasArray[i].toDataURL('image/jpeg', 0.95);
+                pdf.addImage(imgData, 'JPEG', 0, 0, pdfWidth, pdfHeight);
             }
+
+            setExportProgress(95);
 
             let filename = '';
             if (projectState?.global_script) {
@@ -313,65 +486,92 @@ export default function PrintScreen() {
             left = (slotW - scaledW) / 2;
             top = (slotH - scaledH) / 2;
         }
+
+        const baseBottomPx = 40;
+        const basePadPx = 48;
+        
+        // Text overlay — visible on screen preview, hidden during export.
+        // During export, text is drawn via Canvas 2D API for pixel-perfect positioning.
+        const renderTextOverlay = (
+            content: string,
+            font: string,
+            fontSize: number,
+            color: string,
+            hasShadow: boolean,
+            oxCanvas: number,
+            oyCanvas: number,
+        ) => {
+            return (
+                <div className="hide-on-export" style={{
+                    position: 'absolute',
+                    top: 0,
+                    left: 0,
+                    width: '100%',
+                    height: '100%',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    justifyContent: 'flex-end',
+                    alignItems: 'center',
+                    paddingBottom: `${(baseBottomPx - oyCanvas) * S}px`,
+                    paddingLeft: `${(basePadPx + oxCanvas) * S}px`,
+                    paddingRight: `${(basePadPx - oxCanvas) * S}px`,
+                    boxSizing: 'border-box',
+                    pointerEvents: 'none' as const,
+                }}>
+                    <div className="text-center tracking-wide whitespace-pre-wrap" style={{
+                        fontFamily: font,
+                        fontSize: `${fontSize * S}px`,
+                        lineHeight: 1.5,
+                        color,
+                        textShadow: getTextShadowStyle(color, hasShadow),
+                    }}>
+                        {content}
+                    </div>
+                </div>
+            );
+        };
         
         return (
-            <div className="absolute" style={{
+            <div className="absolute" data-page-idx={pageIdx} style={{
                 left: `${left}px`,
                 top: `${top}px`,
                 width: `${scaledW}px`,
                 height: `${scaledH}px`,
                 overflow: 'hidden',
+                position: 'relative',
             }}>
-                <div style={{
-                    width: `${canvasW}px`,
-                    height: `${canvasH}px`,
-                    transform: `scale(${S})`,
-                    transformOrigin: 'top left',
-                    position: 'relative',
-                }}>
-                    {/* Image fills canvas */}
-                    <img 
-                        crossOrigin="anonymous"
-                        onLoad={e => handleImageLoad(pageIdx, e)}
-                        src={`http://127.0.0.1:14320/images/${imgFile}`}
-                        style={{ width: '100%', height: '100%', objectFit: 'contain' }}
-                    />
-                    {/* Text overlay — EXACT same CSS as editor */}
-                    {text && (
-                        <div className="absolute bottom-10 left-0 w-full px-12 flex justify-center">
-                            <div className="text-center tracking-wide whitespace-pre-wrap" style={{
-                                fontFamily,
-                                fontSize: `${ts?.font_size || (isCover ? 40 : 20)}px`,
-                                lineHeight: 1.5,
-                                color: effectiveColor,
-                                filter: getShadowStyle(effectiveColor, ts?.has_shadow ?? true),
-                                transform: `translate(${effectiveOffsetX}px, ${effectiveOffsetY}px)`,
-                            }}>
-                                {text}
-                            </div>
-                        </div>
-                    )}
-                    {/* Author overlay — cover only */}
-                    {isCover && projectState?.author_name && (() => {
-                        const ats = projectState?.author_text_settings;
-                        const aff = ats?.font_family || 'serif';
-                        const authorFont = aff === 'sans' ? 'ui-sans-serif, system-ui, sans-serif' : aff === 'serif' ? 'ui-serif, Georgia, serif' : `'${aff}', sans-serif`;
-                        return (
-                            <div className="absolute bottom-10 left-0 w-full px-12 flex justify-center">
-                                <div className="text-center tracking-wide whitespace-pre-wrap" style={{
-                                    fontFamily: authorFont,
-                                    fontSize: `${ats?.font_size || 16}px`,
-                                    lineHeight: 1.5,
-                                    color: ats?.text_color || '#ffffff',
-                                    filter: getShadowStyle(ats?.text_color || '#ffffff', ats?.has_shadow ?? true),
-                                    transform: `translate(${ats?.offset_x ?? 0}px, ${ats?.offset_y ?? 0}px)`,
-                                }}>
-                                    {projectState.author_name}
-                                </div>
-                            </div>
-                        );
-                    })()}
-                </div>
+                {/* Image fills canvas */}
+                <img 
+                    crossOrigin="anonymous"
+                    onLoad={e => handleImageLoad(pageIdx, e)}
+                    src={`http://127.0.0.1:14320/images/${imgFile}`}
+                    style={{ width: '100%', height: '100%', objectFit: 'contain' }}
+                />
+                {/* Title text overlay */}
+                {text && renderTextOverlay(
+                    text,
+                    fontFamily,
+                    ts?.font_size || (isCover ? 40 : 20),
+                    effectiveColor,
+                    ts?.has_shadow ?? true,
+                    effectiveOffsetX,
+                    effectiveOffsetY,
+                )}
+                {/* Author overlay — cover only */}
+                {isCover && projectState?.author_name && (() => {
+                    const ats = projectState?.author_text_settings;
+                    const aff = ats?.font_family || 'serif';
+                    const authorFont = aff === 'sans' ? 'ui-sans-serif, system-ui, sans-serif' : aff === 'serif' ? 'ui-serif, Georgia, serif' : `'${aff}', sans-serif`;
+                    return renderTextOverlay(
+                        projectState.author_name,
+                        authorFont,
+                        ats?.font_size || 16,
+                        ats?.text_color || '#ffffff',
+                        ats?.has_shadow ?? true,
+                        ats?.offset_x ?? 0,
+                        ats?.offset_y ?? 0,
+                    );
+                })()}
             </div>
         );
     };
@@ -701,7 +901,7 @@ export default function PrintScreen() {
                                                         </span>
                                                     </div>
                                                 ) : (
-                                                    <span className="text-gray-300 font-mono text-sm">空白页</span>
+                                                    <span className="text-gray-300 font-mono text-sm hide-on-export">空白页</span>
                                                 )}
                                             </div>
                                             
@@ -724,7 +924,7 @@ export default function PrintScreen() {
                                                         </span>
                                                     </div>
                                                 ) : (
-                                                    <span className="text-gray-300 font-mono text-sm">空白页</span>
+                                                    <span className="text-gray-300 font-mono text-sm hide-on-export">空白页</span>
                                                 )}
                                             </div>
                                             )}
@@ -838,7 +1038,7 @@ export default function PrintScreen() {
                                                             </span>
                                                         </div>
                                                     ) : (
-                                                        <span className="text-gray-300 font-mono text-sm">空白页</span>
+                                                        <span className="text-gray-300 font-mono text-sm hide-on-export">空白页</span>
                                                     )}
                                                 </div>
                                                 
@@ -861,7 +1061,7 @@ export default function PrintScreen() {
                                                             </span>
                                                         </div>
                                                     ) : (
-                                                        <span className="text-gray-300 font-mono text-sm">空白页</span>
+                                                        <span className="text-gray-300 font-mono text-sm hide-on-export">空白页</span>
                                                     )}
                                                 </div>
                                                 )}
