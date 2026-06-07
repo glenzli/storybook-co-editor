@@ -175,38 +175,77 @@ export default function PrintScreen() {
     }, [projectState?.global_script]);
 
     // Helper: render text overlay for a page
-    // Editor text is positioned in a container of height ~85vh with absolute px values.
-    // In print preview, the container is containerH px (before fitScale).
-    // We scale all px values by the ratio to maintain proportional positioning.
-    const renderTextOverlay = (pageIdx: number, containerH: number) => {
+    // Computes the actual rendered image rectangle within the container (object-contain + objectPosition),
+    // then positions text within that rectangle, scaled proportionally to the editor's layout.
+    const renderTextOverlay = (pageIdx: number, contentW: number, contentH: number, objPos: string) => {
         const text = parsedScript.get(pageIdx);
         if (!text) return null;
+        const dims = imageDims[pageIdx];
+        if (!dims) return null; // Wait for image to load
+        
         const isCover = pageIdx === 0;
         const ts = isCover ? projectState?.cover_text_settings : projectState?.inner_text_settings;
         const ff = ts?.font_family || 'serif';
         const fontFamily = ff === 'sans' ? 'ui-sans-serif, system-ui, sans-serif' : ff === 'serif' ? 'ui-serif, Georgia, serif' : `'${ff}', sans-serif`;
         
-        // Scale factor: print container height / editor container height
+        // Compute rendered image bounds (object-contain logic)
+        const imgAspect = dims.w / dims.h;
+        const containerAspect = contentW / contentH;
+        let renderedW: number, renderedH: number, imgLeft: number, imgTop: number;
+        
+        if (containerAspect > imgAspect) {
+            // Container wider than image: image fills height, has horizontal white space
+            renderedH = contentH;
+            renderedW = contentH * imgAspect;
+        } else {
+            // Container taller than image: image fills width, has vertical white space
+            renderedW = contentW;
+            renderedH = contentW / imgAspect;
+        }
+        
+        // Position based on objectPosition
+        if (objPos === 'left center') {
+            imgLeft = 0;
+            imgTop = (contentH - renderedH) / 2;
+        } else if (objPos === 'right center') {
+            imgLeft = contentW - renderedW;
+            imgTop = (contentH - renderedH) / 2;
+        } else {
+            imgLeft = (contentW - renderedW) / 2;
+            imgTop = (contentH - renderedH) / 2;
+        }
+        
+        // Scale: rendered image height / editor container height (85vh)
         const editorRefHeight = typeof window !== 'undefined' ? window.innerHeight * 0.85 : 800;
-        const textScale = containerH / editorRefHeight;
+        const textScale = renderedH / editorRefHeight;
         
         const fontSize = (ts?.font_size || (isCover ? 40 : 20)) * textScale;
-        const bottomPx = 40 * textScale;   // editor's bottom-10 = 2.5rem ≈ 40px
-        const padXPx = 48 * textScale;     // editor's px-12 = 3rem ≈ 48px
+        const bottomPx = 40 * textScale;
+        const padXPx = 48 * textScale;
         const offsetX = (ts?.offset_x || 0) * textScale;
         const offsetY = (ts?.offset_y || 0) * textScale;
         
         return (
-            <div className="absolute left-0 w-full pointer-events-none flex justify-center z-10"
-                 style={{ bottom: `${bottomPx}px`, paddingLeft: `${padXPx}px`, paddingRight: `${padXPx}px` }}>
-                <div className="text-center tracking-wide whitespace-pre-wrap" style={{
-                    fontFamily,
-                    fontSize: `${fontSize}px`,
-                    color: ts?.text_color || '#ffffff',
-                    filter: getShadowStyle(ts?.text_color || '#ffffff', ts?.has_shadow ?? true),
-                    transform: `translate(${offsetX}px, ${offsetY}px)`,
+            <div className="absolute pointer-events-none z-10" style={{
+                left: `${imgLeft}px`,
+                top: `${imgTop}px`,
+                width: `${renderedW}px`,
+                height: `${renderedH}px`,
+            }}>
+                <div className="absolute left-0 w-full flex justify-center" style={{
+                    bottom: `${bottomPx}px`,
+                    paddingLeft: `${padXPx}px`,
+                    paddingRight: `${padXPx}px`,
                 }}>
-                    {text}
+                    <div className="text-center tracking-wide whitespace-pre-wrap" style={{
+                        fontFamily,
+                        fontSize: `${fontSize}px`,
+                        color: ts?.text_color || '#ffffff',
+                        filter: getShadowStyle(ts?.text_color || '#ffffff', ts?.has_shadow ?? true),
+                        transform: `translate(${offsetX}px, ${offsetY}px)`,
+                    }}>
+                        {text}
+                    </div>
                 </div>
             </div>
         );
@@ -536,7 +575,13 @@ export default function PrintScreen() {
                                                                     : 'center center'
                                                             }}
                                                         />
-                                                        {sheet.front.left !== null && renderTextOverlay(sheet.front.left, bookBlockHeightPx)}
+                                                        {(() => {
+                                                            const padL = (settings.binding_method === 'perfect' && is1up && !sheet.isCover) ? (settings.binding_margin_mm + effectiveOffsetX) * pxPerMm : 0;
+                                                            const padR = (settings.binding_method === 'perfect' && !is1up && !sheet.isCover) ? (settings.binding_margin_mm + effectiveOffsetX) * pxPerMm : 0;
+                                                            const cW = bookBlockWidthPx * (is1up ? 1 : 0.5) - padL - padR;
+                                                            const objPos = (settings.binding_method === 'perfect' && !sheet.isCover) ? (is1up ? 'left center' : 'right center') : 'center center';
+                                                            return sheet.front.left !== null && renderTextOverlay(sheet.front.left, cW, bookBlockHeightPx, objPos);
+                                                        })()}
                                                         <span className="absolute bottom-1 text-[10px] bg-black/50 text-white px-2 rounded-full opacity-0 hover:opacity-100 transition-opacity z-30">
                                                             {sheet.front.left === 0 ? 'Cover' : `P${sheet.front.left}`}
                                                         </span>
@@ -564,7 +609,12 @@ export default function PrintScreen() {
                                                                     : 'center center'
                                                             }}
                                                         />
-                                                        {sheet.front.right !== null && renderTextOverlay(sheet.front.right, bookBlockHeightPx)}
+                                                        {(() => {
+                                                            const padL2 = (settings.binding_method === 'perfect' && !is1up && !sheet.isCover) ? (settings.binding_margin_mm + effectiveOffsetX) * pxPerMm : 0;
+                                                            const cW2 = bookBlockWidthPx * 0.5 - padL2;
+                                                            const objPos2 = (settings.binding_method === 'perfect' && !sheet.isCover) ? 'left center' : 'center center';
+                                                            return sheet.front.right !== null && renderTextOverlay(sheet.front.right, cW2, bookBlockHeightPx, objPos2);
+                                                        })()}
                                                         <span className="absolute bottom-1 text-[10px] bg-black/50 text-white px-2 rounded-full opacity-0 hover:opacity-100 transition-opacity z-30">
                                                             {sheet.front.right === 0 ? 'Cover' : `P${sheet.front.right}`}
                                                         </span>
@@ -682,7 +732,13 @@ export default function PrintScreen() {
                                                                         : 'center center'
                                                                 }}
                                                             />
-                                                            {sheet.back.left !== null && renderTextOverlay(sheet.back.left, bookBlockHeightPx)}
+                                                            {(() => {
+                                                                const padR_b = (settings.binding_method === 'perfect' && is1up && !sheet.isCover) ? (settings.binding_margin_mm + effectiveOffsetX) * pxPerMm : 0;
+                                                                const padL_b = (settings.binding_method === 'perfect' && !is1up && !sheet.isCover) ? (settings.binding_margin_mm + effectiveOffsetX) * pxPerMm : 0;
+                                                                const cW_b = bookBlockWidthPx * (is1up ? 1 : 0.5) - padL_b - padR_b;
+                                                                const objPos_b = (settings.binding_method === 'perfect' && !sheet.isCover) ? (is1up ? 'right center' : 'left center') : 'center center';
+                                                                return sheet.back.left !== null && renderTextOverlay(sheet.back.left, cW_b, bookBlockHeightPx, objPos_b);
+                                                            })()}
                                                             <span className="absolute bottom-1 text-[10px] bg-black/50 text-white px-2 rounded-full opacity-0 hover:opacity-100 transition-opacity z-30">
                                                                 {sheet.back.left === 0 ? 'Cover' : `P${sheet.back.left}`}
                                                             </span>
@@ -710,7 +766,12 @@ export default function PrintScreen() {
                                                                         : 'center center'
                                                                 }}
                                                             />
-                                                            {sheet.back.right !== null && renderTextOverlay(sheet.back.right, bookBlockHeightPx)}
+                                                            {(() => {
+                                                                const padR_br = (settings.binding_method === 'perfect' && !is1up && !sheet.isCover) ? (settings.binding_margin_mm + effectiveOffsetX) * pxPerMm : 0;
+                                                                const cW_br = bookBlockWidthPx * 0.5 - padR_br;
+                                                                const objPos_br = (settings.binding_method === 'perfect' && !sheet.isCover) ? 'right center' : 'center center';
+                                                                return sheet.back.right !== null && renderTextOverlay(sheet.back.right, cW_br, bookBlockHeightPx, objPos_br);
+                                                            })()}
                                                             <span className="absolute bottom-1 text-[10px] bg-black/50 text-white px-2 rounded-full opacity-0 hover:opacity-100 transition-opacity z-30">
                                                                 {sheet.back.right === 0 ? 'Cover' : `P${sheet.back.right}`}
                                                             </span>
