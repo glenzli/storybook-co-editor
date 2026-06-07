@@ -62,6 +62,9 @@ export default function EditorScreen() {
   // Tabs
   const [activeTab, setActiveTab] = useState<'edit' | 'print'>('edit');
 
+  // Loading states
+  const [isSmartLayoutLoading, setIsSmartLayoutLoading] = useState(false);
+
   // Selected Image Metadata
   const [imgMeta, setImgMeta] = useState<{ width: number, height: number, sizeMB: string } | null>(null);
 
@@ -69,8 +72,10 @@ export default function EditorScreen() {
   const containerRef = useRef<HTMLDivElement>(null);
   const viewportRef = useRef<HTMLElement>(null);
   const textRef = useRef<HTMLDivElement>(null);
+  const authorTextRef = useRef<HTMLDivElement>(null);
   const [canvasScale, setCanvasScale] = useState(1);
   const [xyBounds, setXyBounds] = useState({ minX: -500, maxX: 500, minY: -500, maxY: 500 });
+  const [authorBounds, setAuthorBounds] = useState({ minX: -500, maxX: 500, minY: -500, maxY: 40 });
   const [extractedColors, setExtractedColors] = useState<string[]>([]);
 
   // DnD Sensors
@@ -300,14 +305,30 @@ export default function EditorScreen() {
             minY: Math.floor(minY),
             maxY: Math.floor(maxY)
         });
+
+        if (authorTextRef.current) {
+            const aTw = authorTextRef.current.scrollWidth;
+            const aTh = authorTextRef.current.scrollHeight;
+            const maxAuthorOffset = Math.max(0, (canvasW - aTw) / 2);
+            const minAuthorY = -(canvasH - 40 - aTh);
+            setAuthorBounds({
+                minX: -Math.floor(maxAuthorOffset),
+                maxX: Math.floor(maxAuthorOffset),
+                minY: Math.floor(minAuthorY),
+                maxY: 40
+            });
+        }
     };
 
     measureBounds();
     const ro = new ResizeObserver(measureBounds);
     ro.observe(textRef.current);
+    if (authorTextRef.current) {
+        ro.observe(authorTextRef.current);
+    }
     
     return () => ro.disconnect();
-  }, [selectedIdx, currentText, canvasW, canvasH, projectState?.cover_text_settings?.font_size, projectState?.inner_text_settings?.font_size]);
+  }, [selectedIdx, currentText, projectState?.author_name, canvasW, canvasH, projectState?.cover_text_settings?.font_size, projectState?.inner_text_settings?.font_size, projectState?.author_text_settings?.font_size]);
 
   // Auto-snap: clamp offsets to stay within canvas bounds
   useEffect(() => {
@@ -323,26 +344,43 @@ export default function EditorScreen() {
     const currentX = pageOverride?.offset_x ?? settings?.offset_x ?? 0;
     const currentY = pageOverride?.offset_y ?? settings?.offset_y ?? 0;
 
-    let changed = false;
     let newX = currentX;
     let newY = currentY;
+    let changed = false;
 
     if (newX < xyBounds.minX) { newX = xyBounds.minX; changed = true; }
     if (newX > xyBounds.maxX) { newX = xyBounds.maxX; changed = true; }
     if (newY < xyBounds.minY) { newY = xyBounds.minY; changed = true; }
     if (newY > xyBounds.maxY) { newY = xyBounds.maxY; changed = true; }
 
-    if (changed) {
-      if (isCover) {
-        updateProjectState({ cover_text_settings: { ...settings!, offset_x: newX, offset_y: newY } });
-      } else {
-        // Write to per-page override
-        const existing = projectState?.page_text_overrides || {};
-        const current = existing[pageKey] || { offset_x: 0, offset_y: 0 };
-        updateProjectState({ page_text_overrides: { ...existing, [pageKey]: { ...current, offset_x: newX, offset_y: newY } } });
-      }
+    let authorChanged = false;
+    let authorX = projectState?.author_text_settings?.offset_x || 0;
+    let authorY = projectState?.author_text_settings?.offset_y || 0;
+    if (isCover) {
+      if (authorX < authorBounds.minX) { authorX = authorBounds.minX; authorChanged = true; }
+      if (authorX > authorBounds.maxX) { authorX = authorBounds.maxX; authorChanged = true; }
+      if (authorY < authorBounds.minY) { authorY = authorBounds.minY; authorChanged = true; }
+      if (authorY > authorBounds.maxY) { authorY = authorBounds.maxY; authorChanged = true; }
     }
-  }, [xyBounds, selectedIdx]);
+
+    if (changed || authorChanged) {
+      const updates: any = {};
+      if (changed) {
+        if (isCover) {
+          updates.cover_text_settings = { ...(settings || {}), offset_x: newX, offset_y: newY };
+        } else {
+          updates.page_text_overrides = {
+            ...(projectState?.page_text_overrides || {}),
+            [pageKey]: { ...(pageOverride || {}), offset_x: newX, offset_y: newY }
+          };
+        }
+      }
+      if (authorChanged) {
+        updates.author_text_settings = { ...(projectState?.author_text_settings || {}), offset_x: authorX, offset_y: authorY };
+      }
+      updateProjectState(updates);
+    }
+  }, [xyBounds, authorBounds, selectedIdx]);
 
   const cancelReceive = async () => {
       try {
@@ -405,47 +443,100 @@ export default function EditorScreen() {
   // Smart text placement using U²-Net saliency detection
   const handleSmartLayout = async () => {
     if (selectedIdx === null || !images[selectedIdx]) return;
-    const imgUrl = images[selectedIdx];
-    const canvasH = projectState?.canvas_height || 1024;
+    setIsSmartLayoutLoading(true);
+    // Yield the main thread to allow React to render the loading spinner
+    await new Promise(resolve => setTimeout(resolve, 50));
+    try {
+      const imgUrl = images[selectedIdx];
+      const canvasH = projectState?.canvas_height || 1024;
 
-    // Try saliency model first
-    const saliency = await getSaliencyMap(imgUrl);
-    let result: { offsetY: number; textColor: string; authorOffsetY: number };
+      // Try saliency model first
+      const saliency = await getSaliencyMap(imgUrl);
+      let result: { offsetY: number; textColor: string; authorOffsetY: number };
 
-    if (saliency) {
-      result = findBestTextPosition(
-        saliency.map, saliency.width, saliency.height,
-        canvasH, xyBounds.minY, xyBounds.maxY
-      );
-      // Determine text color from actual image brightness at chosen position
-      const bestYNorm = (result.offsetY + canvasH * 0.85) / canvasH;
-      const brightAtPos = await getAvgBrightness(imgUrl, bestYNorm);
-      result.textColor = brightAtPos > 140 ? '#000000' : '#ffffff';
-    } else {
-      // Fallback: default bottom position
-      result = { offsetY: 0, textColor: '#ffffff', authorOffsetY: Math.round(canvasH * 0.06) };
-    }
-
-    const isCover = selectedIdx === 0;
-    const updates: any = {};
-
-    if (isCover) {
-      const current = projectState?.cover_text_settings || { font_size: 40, text_color: '#ffffff', font_family: 'serif', has_shadow: true, offset_x: 0, offset_y: 0 };
-      updates.cover_text_settings = { ...current, offset_y: result.offsetY, text_color: result.textColor };
-      if (projectState?.author_name) {
-        const authorCurrent = projectState?.author_text_settings || { font_size: 16, text_color: '#ffffff', font_family: 'serif', has_shadow: true, offset_x: 0, offset_y: 0 };
-        updates.author_text_settings = { ...authorCurrent, offset_y: result.authorOffsetY, text_color: result.textColor };
+      if (saliency) {
+        result = findBestTextPosition(
+          saliency.map, saliency.width, saliency.height,
+          canvasH, xyBounds.minY, xyBounds.maxY, authorBounds.minY, authorBounds.maxY
+        );
+        // Determine text color from actual image brightness at chosen position
+        const bestYNorm = (result.offsetY + canvasH * 0.85) / canvasH;
+        const brightAtPos = await getAvgBrightness(imgUrl, bestYNorm);
+        result.textColor = brightAtPos > 140 ? '#000000' : '#ffffff';
+      } else {
+        // Fallback: default bottom position, clamped to bounds
+        const fallbackAuthorY = Math.max(authorBounds.minY, Math.min(authorBounds.maxY, Math.round(canvasH * 0.06)));
+        result = { offsetY: 0, textColor: '#ffffff', authorOffsetY: fallbackAuthorY };
       }
-    } else {
-      const existing = projectState?.page_text_overrides || {};
-      const pageKey = String(selectedIdx);
-      const currentOverride = existing[pageKey] || { offset_x: 0, offset_y: 0 };
-      updates.page_text_overrides = { 
-        ...existing, 
-        [pageKey]: { ...currentOverride, offset_y: result.offsetY, text_color: result.textColor } 
-      };
+
+      const isCover = selectedIdx === 0;
+      const updates: any = {};
+
+      if (isCover) {
+        const current = projectState?.cover_text_settings || { font_size: 40, text_color: '#ffffff', font_family: 'serif', has_shadow: true, offset_x: 0, offset_y: 0 };
+        updates.cover_text_settings = { ...current, offset_y: result.offsetY, text_color: result.textColor };
+        if (projectState?.author_name) {
+          const authorCurrent = projectState?.author_text_settings || { font_size: 16, text_color: '#ffffff', font_family: 'serif', has_shadow: true, offset_x: 0, offset_y: 0 };
+          updates.author_text_settings = { ...authorCurrent, offset_y: result.authorOffsetY, text_color: result.textColor };
+        }
+      } else {
+        const existing = projectState?.page_text_overrides || {};
+        const pageKey = String(selectedIdx);
+        const currentOverride = existing[pageKey] || { offset_x: 0, offset_y: 0 };
+        updates.page_text_overrides = { 
+          ...existing, 
+          [pageKey]: { ...currentOverride, offset_y: result.offsetY, text_color: result.textColor } 
+        };
+      }
+      updateProjectState(updates);
+    } finally {
+      setIsSmartLayoutLoading(false);
     }
-    updateProjectState(updates);
+  };
+
+  const handleSmartLayoutAll = async () => {
+    if (!images || images.length === 0) return;
+    setIsSmartLayoutLoading(true);
+    // Yield the main thread to allow React to render the loading spinner
+    await new Promise(resolve => setTimeout(resolve, 50));
+    try {
+      const updates: any = { page_text_overrides: { ...(projectState?.page_text_overrides || {}) } };
+      
+      for (let i = 0; i < images.length; i++) {
+        const imgUrl = images[i];
+        const canvasH = projectState?.canvas_height || 1024;
+        const saliency = await getSaliencyMap(imgUrl);
+        let result: { offsetY: number; textColor: string; authorOffsetY: number };
+
+        if (saliency) {
+          result = findBestTextPosition(
+            saliency.map, saliency.width, saliency.height,
+            canvasH, xyBounds.minY, xyBounds.maxY, authorBounds.minY, authorBounds.maxY
+          );
+          const bestYNorm = (result.offsetY + canvasH * 0.85) / canvasH;
+          const brightAtPos = await getAvgBrightness(imgUrl, bestYNorm);
+          result.textColor = brightAtPos > 140 ? '#000000' : '#ffffff';
+        } else {
+          const fallbackAuthorY = Math.max(authorBounds.minY, Math.min(authorBounds.maxY, Math.round(canvasH * 0.06)));
+          result = { offsetY: 0, textColor: '#ffffff', authorOffsetY: fallbackAuthorY };
+        }
+
+        if (i === 0) {
+          const current = projectState?.cover_text_settings || { font_size: 40, text_color: '#ffffff', font_family: 'serif', has_shadow: true, offset_x: 0, offset_y: 0 };
+          updates.cover_text_settings = { ...current, offset_y: result.offsetY, text_color: result.textColor };
+          if (projectState?.author_name) {
+            const authorCurrent = projectState?.author_text_settings || { font_size: 16, text_color: '#ffffff', font_family: 'serif', has_shadow: true, offset_x: 0, offset_y: 0 };
+            updates.author_text_settings = { ...authorCurrent, offset_y: result.authorOffsetY, text_color: result.textColor };
+          }
+        } else {
+          const currentOverride = updates.page_text_overrides[String(i)] || { offset_x: 0, offset_y: 0 };
+          updates.page_text_overrides[String(i)] = { ...currentOverride, offset_y: result.offsetY, text_color: result.textColor };
+        }
+      }
+      updateProjectState(updates);
+    } finally {
+      setIsSmartLayoutLoading(false);
+    }
   };
 
   // Helper: get average brightness at a Y band of an image
@@ -669,6 +760,7 @@ export default function EditorScreen() {
                     return (
                       <div className="absolute bottom-10 left-0 w-full px-12 pointer-events-none flex justify-center">
                         <div 
+                          ref={authorTextRef}
                           className="text-center tracking-wide whitespace-pre-wrap pointer-events-auto"
                           style={{
                             fontFamily,
@@ -884,14 +976,14 @@ export default function EditorScreen() {
                             <label className="text-xs text-muted-foreground">水平偏移 (X)</label>
                             <span className="text-xs font-mono">{ats.offset_x || 0}px</span>
                           </div>
-                          <input type="range" min={-500} max={500} step={1} className="w-full accent-primary" value={ats.offset_x || 0} onChange={(e) => updateAts({ offset_x: parseInt(e.target.value) })} />
+                          <input type="range" min={authorBounds.minX} max={authorBounds.maxX} step={1} className="w-full accent-primary" value={ats.offset_x || 0} onChange={(e) => updateAts({ offset_x: parseInt(e.target.value) })} />
                         </div>
                         <div className="flex flex-col gap-1.5">
                           <div className="flex justify-between">
                             <label className="text-xs text-muted-foreground">垂直偏移 (Y)</label>
                             <span className="text-xs font-mono">{ats.offset_y || 0}px</span>
                           </div>
-                          <input type="range" min={-500} max={500} step={1} className="w-full accent-primary" value={ats.offset_y || 0} onChange={(e) => updateAts({ offset_y: parseInt(e.target.value) })} />
+                          <input type="range" min={authorBounds.minY} max={authorBounds.maxY} step={1} className="w-full accent-primary" value={ats.offset_y || 0} onChange={(e) => updateAts({ offset_y: parseInt(e.target.value) })} />
                         </div>
                       </div>
                     </>
@@ -1071,14 +1163,24 @@ export default function EditorScreen() {
                 )}
               </div>
 
-              <button 
-                onClick={handleSmartLayout}
-                disabled={selectedIdx === null || !images[selectedIdx]}
-                className="w-full py-3 bg-primary hover:bg-primary/90 disabled:opacity-40 disabled:cursor-not-allowed text-primary-foreground rounded-md font-medium transition-colors flex items-center justify-center gap-2 shadow-md whitespace-nowrap mt-auto"
-              >
-                <Send size={16} />
-                智能排版
-              </button>
+              <div className="flex flex-col gap-2 mt-auto">
+                <button 
+                  onClick={handleSmartLayout}
+                  disabled={selectedIdx === null || !images[selectedIdx] || isSmartLayoutLoading}
+                  className="w-full py-2.5 bg-secondary hover:bg-secondary/80 disabled:opacity-50 disabled:cursor-not-allowed text-secondary-foreground border border-border rounded-md font-medium transition-colors flex items-center justify-center gap-2 shadow-sm whitespace-nowrap"
+                >
+                  {isSmartLayoutLoading ? <RefreshCw size={14} className="animate-spin" /> : <LayoutTemplate size={14} />}
+                  排版当前页
+                </button>
+                <button 
+                  onClick={handleSmartLayoutAll}
+                  disabled={images.length === 0 || isSmartLayoutLoading}
+                  className="w-full py-2.5 bg-primary hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed text-primary-foreground rounded-md font-medium transition-colors flex items-center justify-center gap-2 shadow-sm whitespace-nowrap"
+                >
+                  {isSmartLayoutLoading ? <RefreshCw size={14} className="animate-spin" /> : <Send size={14} />}
+                  一键全本排版
+                </button>
+              </div>
             </div>
             )}
           </aside>

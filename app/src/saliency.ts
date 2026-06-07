@@ -116,6 +116,8 @@ export function findBestTextPosition(
   canvasH: number,
   boundsMinY: number,
   boundsMaxY: number,
+  authorBoundsMinY: number,
+  authorBoundsMaxY: number,
   imgUrl?: string,
 ): { offsetY: number; textColor: string; authorOffsetY: number } {
   // Candidate positions (normalized Y, 0=top, 1=bottom)
@@ -166,7 +168,10 @@ export function findBestTextPosition(
   // We'll need actual brightness — use a simple heuristic based on position
   const textColor = best.avgSaliency < 0.3 ? '#ffffff' : '#000000';
 
-  const authorOffsetY = Math.max(boundsMinY, Math.min(boundsMaxY, offsetY + Math.round(canvasH * 0.06)));
+  // Smart author placement: if main text is at the bottom, put author above it; else below it.
+  const isAtBottom = best.yNorm > 0.85;
+  const authorOffsetRaw = offsetY + (isAtBottom ? -Math.round(canvasH * 0.05) : Math.round(canvasH * 0.05));
+  const authorOffsetY = Math.max(authorBoundsMinY, Math.min(authorBoundsMaxY, authorOffsetRaw));
 
   return { offsetY, textColor, authorOffsetY };
 }
