@@ -548,6 +548,11 @@ export default function EditorScreen() {
                   <Maximize2 size={16} className="text-emerald-500" />
                   <h3 className="font-bold text-sm">画布设置 (Canvas)</h3>
                 </div>
+                {imgMeta && (canvasW !== imgMeta.width || canvasH !== imgMeta.height) && (
+                  <div className="text-xs bg-amber-500/10 border border-amber-500/30 text-amber-600 dark:text-amber-400 rounded-md px-2 py-1.5">
+                    ⚠️ 当前图片 {imgMeta.width}×{imgMeta.height} ≠ 画布 {canvasW}×{canvasH}
+                  </div>
+                )}
                 <div className="flex items-center gap-2">
                   <div className="flex flex-col gap-1 flex-1">
                     <label className="text-xs text-muted-foreground">宽度 (W)</label>
@@ -572,16 +577,13 @@ export default function EditorScreen() {
                 <button
                   className="text-xs bg-muted hover:bg-muted/80 border border-border rounded-md px-3 py-1.5 text-muted-foreground hover:text-foreground transition-colors"
                   onClick={() => {
-                    if (images.length > 0) {
-                      const img = new Image();
-                      img.onload = () => {
-                        updateProjectState({ canvas_width: img.naturalWidth, canvas_height: img.naturalHeight });
-                      };
-                      img.src = images[0];
+                    if (imgMeta) {
+                      updateProjectState({ canvas_width: imgMeta.width, canvas_height: imgMeta.height });
                     }
                   }}
+                  disabled={!imgMeta}
                 >
-                  🎯 自动匹配首图尺寸
+                  🎯 匹配当前图片 {imgMeta ? `(${imgMeta.width}×${imgMeta.height})` : ''}
                 </button>
               </div>
 
