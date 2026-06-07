@@ -76,6 +76,8 @@ interface ProjectContextType {
     redo: () => void;
     canUndo: boolean;
     canRedo: boolean;
+    isSaving: boolean;
+    saveProgress: { current: number, total: number } | null;
 }
 
 const ProjectContext = createContext<ProjectContextType | undefined>(undefined);
@@ -88,6 +90,8 @@ export const ProjectProvider = ({ children }: { children: ReactNode }) => {
     const syncTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const autoSaveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const [isDirty, setIsDirty] = useState(false);
+    const [isSaving, setIsSaving] = useState(false);
+    const [saveProgress, setSaveProgress] = useState<{ current: number, total: number } | null>(null);
     // Undo/Redo history
     const historyRef = useRef<ProjectState[]>([]);
     const historyIndexRef = useRef(-1);
@@ -120,8 +124,13 @@ export const ProjectProvider = ({ children }: { children: ReactNode }) => {
             }
         });
 
+        const unlistenProgress = listen<{ current: number, total: number }>('save-progress', (event) => {
+            setSaveProgress(event.payload);
+        });
+
         return () => {
             unlisten.then(f => f());
+            unlistenProgress.then(f => f());
         };
     }, []);
 
@@ -184,6 +193,9 @@ export const ProjectProvider = ({ children }: { children: ReactNode }) => {
     };
 
     const saveProjectAs = async () => {
+        if (isSaving) return;
+        setIsSaving(true);
+        setSaveProgress({ current: 0, total: 1 });
         try {
             const filePath = await save({
                 filters: [{ name: 'Storybook Co-Editor Project', extensions: ['scproj'] }]
@@ -207,10 +219,16 @@ export const ProjectProvider = ({ children }: { children: ReactNode }) => {
         } catch (e) {
             console.error("Failed to save project as", e);
             alert("另存为项目失败: " + (typeof e === 'string' ? e : (e as Error)?.message || String(e)));
+        } finally {
+            setIsSaving(false);
+            setSaveProgress(null);
         }
     };
 
     const saveProject = async (path?: string) => {
+        if (isSaving) return;
+        setIsSaving(true);
+        setSaveProgress({ current: 0, total: 1 });
         try {
             const targetPath = path || currentProjectPath;
             if (targetPath) {
@@ -233,6 +251,9 @@ export const ProjectProvider = ({ children }: { children: ReactNode }) => {
         } catch (e) {
             console.error("Failed to save project", e);
             alert("保存项目失败: " + (typeof e === 'string' ? e : (e as Error)?.message || String(e)));
+        } finally {
+            setIsSaving(false);
+            setSaveProgress(null);
         }
     };
 
@@ -339,6 +360,8 @@ export const ProjectProvider = ({ children }: { children: ReactNode }) => {
             redo,
             canUndo,
             canRedo,
+            isSaving,
+            saveProgress
         }}>
             {children}
         </ProjectContext.Provider>

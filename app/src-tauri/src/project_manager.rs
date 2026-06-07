@@ -166,7 +166,7 @@ pub fn create_project(app: AppHandle, manager: State<ProjectManager>) -> Result<
 }
 
 #[tauri::command]
-pub fn open_project(app: AppHandle, manager: State<ProjectManager>, archive_path: String) -> Result<ProjectInfo, String> {
+pub async fn open_project(app: AppHandle, manager: State<'_, ProjectManager>, archive_path: String) -> Result<ProjectInfo, String> {
     let workspace_id = Uuid::new_v4().to_string();
     let workspace_dir = get_workspace_dir(&app, &workspace_id)?;
 
@@ -206,12 +206,12 @@ pub fn open_project(app: AppHandle, manager: State<ProjectManager>, archive_path
 }
 
 #[tauri::command]
-pub fn save_project(app: AppHandle, manager: State<ProjectManager>, target_path: String) -> Result<(), String> {
+pub async fn save_project(app: AppHandle, manager: State<'_, ProjectManager>, target_path: String) -> Result<(), String> {
     let active = manager.active_workspace.lock().unwrap().clone();
     if let Some(workspace_id) = active {
         let workspace_dir = get_workspace_dir(&app, &workspace_id)?;
         
-        let temp_path = format!("{}.tmp", target_path);
+        let temp_path = format!("{}.{}.tmp", target_path, Uuid::new_v4());
         let file = File::create(&temp_path).map_err(|e| format!("Failed to create temp file: {}", e))?;
         let mut zip = ZipWriter::new(file);
         let options = FileOptions::<()>::default()
@@ -219,9 +219,10 @@ pub fn save_project(app: AppHandle, manager: State<ProjectManager>, target_path:
             .unix_permissions(0o755);
 
         let walkdir = WalkDir::new(&workspace_dir);
-        let it = walkdir.into_iter();
+        let entries: Vec<_> = walkdir.into_iter().filter_map(|e| e.ok()).collect();
+        let total = entries.len();
 
-        for entry in it.filter_map(|e| e.ok()) {
+        for (i, entry) in entries.into_iter().enumerate() {
             let path = entry.path();
             let name = path.strip_prefix(&workspace_dir).unwrap();
             let name_str = name.to_str().unwrap().replace("\\", "/");
@@ -253,6 +254,11 @@ pub fn save_project(app: AppHandle, manager: State<ProjectManager>, target_path:
                     let _ = std::fs::remove_file(&temp_path);
                     return Err(format!("Failed to add directory {}: {}", name_str, e));
                 }
+            }
+            
+            if i % 10 == 0 || i == total - 1 {
+                use tauri::Emitter;
+                let _ = app.emit("save-progress", serde_json::json!({ "current": i + 1, "total": total }));
             }
         }
         

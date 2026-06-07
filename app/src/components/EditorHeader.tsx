@@ -1,4 +1,4 @@
-import { FileBox, Undo2, Redo2, Save, FolderOpen, XCircle } from 'lucide-react';
+import { FileBox, Undo2, Redo2, Save, FolderOpen, XCircle, Loader2 } from 'lucide-react';
 
 interface EditorHeaderProps {
   projectState: any;
@@ -13,6 +13,8 @@ interface EditorHeaderProps {
   saveProject: () => void;
   saveProjectAs: () => void;
   closeProject: () => void;
+  isSaving?: boolean;
+  saveProgress?: { current: number, total: number } | null;
 }
 
 export function EditorHeader({
@@ -27,7 +29,9 @@ export function EditorHeader({
   canRedo,
   saveProject,
   saveProjectAs,
-  closeProject
+  closeProject,
+  isSaving,
+  saveProgress
 }: EditorHeaderProps) {
   return (
     <header className="h-12 bg-card border-b border-border flex items-center justify-between px-4 text-sm flex-shrink-0 relative z-30 shadow-sm">
@@ -35,11 +39,19 @@ export function EditorHeader({
           <span className="font-semibold text-primary flex items-center gap-2">
               <FileBox size={16} />
               {projectState?.project_name || "Untitled"}
-              {isDirty && <span className="w-2 h-2 rounded-full bg-amber-500" title="有未保存的修改" />}
+              {isDirty && !isSaving && <span className="w-2 h-2 rounded-full bg-amber-500" title="有未保存的修改" />}
           </span>
-          <span className="text-xs text-muted-foreground truncate max-w-[200px]" title={currentProjectPath || "未保存"}>
-              {currentProjectPath ? currentProjectPath.split('/').pop() : "(未保存)"}
-          </span>
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-muted-foreground truncate max-w-[200px]" title={currentProjectPath || "未保存"}>
+                {currentProjectPath ? currentProjectPath.split('/').pop() : "(未保存)"}
+            </span>
+            {isSaving && (
+              <span className="text-[11px] text-primary font-medium flex items-center gap-1 ml-1 bg-primary/10 px-1.5 py-0.5 rounded">
+                <Loader2 size={10} className="animate-spin" />
+                正在保存 {saveProgress ? `${Math.round((saveProgress.current / saveProgress.total) * 100)}%` : '...'}
+              </span>
+            )}
+          </div>
       </div>
 
       <div className="flex items-center justify-center gap-1 bg-muted p-1 rounded-md border border-border w-1/3 max-w-[200px]">
@@ -66,14 +78,19 @@ export function EditorHeader({
           </button>
           <div className="w-px h-4 bg-border mx-1"></div>
           <button 
-            onClick={() => { if (isDirty) saveProject(); }}
-            disabled={!isDirty}
-            className={`p-1.5 rounded-md transition-colors ${isDirty ? 'hover:bg-muted text-primary' : 'text-muted-foreground/30 cursor-not-allowed'}`}
-            title={isDirty ? "保存 (Cmd+S)" : "已保存"}
+            onClick={() => { if (isDirty && !isSaving) saveProject(); }}
+            disabled={!isDirty || isSaving}
+            className={`p-1.5 rounded-md transition-colors ${isSaving ? 'text-primary animate-pulse' : isDirty ? 'hover:bg-muted text-primary' : 'text-muted-foreground/30 cursor-not-allowed'}`}
+            title={isSaving ? "正在保存..." : isDirty ? "保存 (Cmd+S)" : "已保存"}
           >
-              <Save size={14} />
+              {isSaving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
           </button>
-          <button onClick={saveProjectAs} className="p-1.5 rounded-md hover:bg-muted text-foreground transition-colors" title="另存为...">
+          <button 
+            onClick={saveProjectAs} 
+            disabled={isSaving}
+            className={`p-1.5 rounded-md transition-colors ${isSaving ? 'text-muted-foreground/30 cursor-not-allowed' : 'hover:bg-muted text-foreground'}`} 
+            title="另存为..."
+          >
               <FolderOpen size={14} />
           </button>
           <div className="w-px h-4 bg-border mx-1"></div>

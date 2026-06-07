@@ -38,7 +38,7 @@ export function SortableImageItem({ id, idx, selectedIdx, setSelectedIdx, onDele
       <div className="absolute top-1 left-1 bg-black/60 text-white text-[10px] font-bold px-1.5 py-0.5 rounded backdrop-blur-sm z-10">
         {idx === 0 ? 'Cover' : idx}
       </div>
-      <img src={id} alt={`Page ${idx}`} className="w-full h-auto object-cover aspect-[3/4]" draggable={false} />
+      <img src={id} alt={`Page ${idx}`} className="w-full h-auto object-contain rounded-md bg-muted/20" draggable={false} />
       
       <button 
         onClick={(e) => { e.stopPropagation(); onDelete(id); }}

@@ -37,7 +37,7 @@ interface BatchEvent {
 }
 
 export default function EditorScreen() {
-  const { activeWorkspaceId, projectState, updateProjectState, saveProject, saveProjectAs, closeProject, currentProjectPath, isDirty, undo, redo, canUndo, canRedo } = useProject();
+  const { activeWorkspaceId, projectState, updateProjectState, saveProject, saveProjectAs, closeProject, currentProjectPath, isDirty, undo, redo, canUndo, canRedo, isSaving, saveProgress } = useProject();
   const [images, setImages] = useState<string[]>([]);
   const [selectedIdx, setSelectedIdx] = useState<number | null>(null);
   
@@ -321,57 +321,6 @@ export default function EditorScreen() {
     return () => ro.disconnect();
   }, [selectedIdx, currentText, projectState?.author_name, canvasW, canvasH, projectState?.cover_text_settings?.font_size, projectState?.inner_text_settings?.font_size, projectState?.author_text_settings?.font_size]);
 
-  // Auto-snap: clamp offsets to stay within canvas bounds
-  useEffect(() => {
-    if (selectedIdx === null) return;
-    const isCover = selectedIdx === 0;
-
-    // Get effective offsets (per-page override for inner pages)
-    const pageKey = String(selectedIdx);
-    const pageOverride = !isCover ? projectState?.page_text_overrides?.[pageKey] : undefined;
-    const settings = isCover ? projectState?.cover_text_settings : projectState?.inner_text_settings;
-    if (!settings && !pageOverride) return;
-
-    const currentX = pageOverride?.offset_x ?? settings?.offset_x ?? 0;
-    const currentY = pageOverride?.offset_y ?? settings?.offset_y ?? 0;
-
-    let newX = currentX;
-    let newY = currentY;
-    let changed = false;
-
-    if (newX < xyBounds.minX) { newX = xyBounds.minX; changed = true; }
-    if (newX > xyBounds.maxX) { newX = xyBounds.maxX; changed = true; }
-    if (newY < xyBounds.minY) { newY = xyBounds.minY; changed = true; }
-    if (newY > xyBounds.maxY) { newY = xyBounds.maxY; changed = true; }
-
-    let authorChanged = false;
-    let authorX = projectState?.author_text_settings?.offset_x || 0;
-    let authorY = projectState?.author_text_settings?.offset_y || 0;
-    if (isCover) {
-      if (authorX < authorBounds.minX) { authorX = authorBounds.minX; authorChanged = true; }
-      if (authorX > authorBounds.maxX) { authorX = authorBounds.maxX; authorChanged = true; }
-      if (authorY < authorBounds.minY) { authorY = authorBounds.minY; authorChanged = true; }
-      if (authorY > authorBounds.maxY) { authorY = authorBounds.maxY; authorChanged = true; }
-    }
-
-    if (changed || authorChanged) {
-      const updates: any = {};
-      if (changed) {
-        if (isCover) {
-          updates.cover_text_settings = { ...(settings || {}), offset_x: newX, offset_y: newY };
-        } else {
-          updates.page_text_overrides = {
-            ...(projectState?.page_text_overrides || {}),
-            [pageKey]: { ...(pageOverride || {}), offset_x: newX, offset_y: newY }
-          };
-        }
-      }
-      if (authorChanged) {
-        updates.author_text_settings = { ...(projectState?.author_text_settings || {}), offset_x: authorX, offset_y: authorY };
-      }
-      updateProjectState(updates);
-    }
-  }, [xyBounds, authorBounds, selectedIdx]);
 
   const cancelReceive = async () => {
       try {
@@ -436,9 +385,11 @@ export default function EditorScreen() {
   // Keyboard shortcuts: Cmd+S, Cmd+Z, Cmd+Shift+Z
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key === 's') {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 's') {
         e.preventDefault();
-        if (isDirty) saveProject();
+        if (isDirty && !isSaving) {
+          saveProject();
+        }
       } else if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key === 'z') {
         e.preventDefault();
         redo();
@@ -449,7 +400,7 @@ export default function EditorScreen() {
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [isDirty, saveProject, undo, redo]);
+  }, [isDirty, isSaving, saveProject, undo, redo]);
 
   return (
     <div className="flex flex-col h-screen bg-background text-foreground overflow-hidden transition-colors duration-300">
@@ -468,6 +419,8 @@ export default function EditorScreen() {
         saveProject={saveProject}
         saveProjectAs={saveProjectAs}
         closeProject={closeProject}
+        isSaving={isSaving}
+        saveProgress={saveProgress}
       />
 
       {/* Main Area */}
