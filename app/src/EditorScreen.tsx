@@ -256,8 +256,13 @@ export default function EditorScreen() {
         const style = getComputedStyle(mainRef.current);
         const padL = parseFloat(style.paddingLeft) || 0;
         const padR = parseFloat(style.paddingRight) || 0;
+        const padT = parseFloat(style.paddingTop) || 0;
+        const padB = parseFloat(style.paddingBottom) || 0;
         const availW = mainRef.current.clientWidth - padL - padR;
-        const maxH = window.innerHeight * 0.85;
+        // img has max-h-[85vh], but containerRef has max-h-full (= main content height).
+        // Actual constraint is the smaller of the two.
+        const mainContentH = mainRef.current.clientHeight - padT - padB;
+        const maxH = Math.min(mainContentH, window.innerHeight * 0.85);
         setEditorConstraints(availW, maxH);
       }
     };
