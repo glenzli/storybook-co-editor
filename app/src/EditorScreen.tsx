@@ -1,7 +1,7 @@
 import { useEffect, useState, useMemo, useRef } from 'react';
 import { listen } from '@tauri-apps/api/event';
 import { convertFileSrc, invoke } from '@tauri-apps/api/core';
-import { Image as ImageIcon, Send, PenTool, LayoutTemplate, Moon, Sun, Info, XOctagon, RefreshCw, ChevronLeft, ChevronRight, Trash2, ArchiveRestore, Save, FileBox, XCircle, FolderOpen, Type } from 'lucide-react';
+import { Image as ImageIcon, Send, PenTool, LayoutTemplate, Moon, Sun, Info, XOctagon, RefreshCw, ChevronLeft, ChevronRight, Trash2, ArchiveRestore, Save, FileBox, XCircle, FolderOpen, Type, Maximize2, ZoomIn } from 'lucide-react';
 import { useProject } from './ProjectContext';
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
@@ -542,6 +542,49 @@ export default function EditorScreen() {
                 onChange={(e) => setGlobalScript(e.target.value)}
               />
               
+              {/* Canvas Settings */}
+              <div className="border-t border-border pt-4 flex flex-col gap-3">
+                <div className="flex items-center gap-2 mb-1">
+                  <Maximize2 size={16} className="text-emerald-500" />
+                  <h3 className="font-bold text-sm">画布设置 (Canvas)</h3>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="flex flex-col gap-1 flex-1">
+                    <label className="text-xs text-muted-foreground">宽度 (W)</label>
+                    <input 
+                      type="number" 
+                      className="w-full bg-background border border-border rounded-md p-1.5 text-sm text-center font-mono focus:ring-1 focus:ring-primary outline-none"
+                      value={canvasW}
+                      onChange={(e) => updateProjectState({ canvas_width: parseInt(e.target.value) || 1024 })}
+                    />
+                  </div>
+                  <span className="text-muted-foreground mt-5">×</span>
+                  <div className="flex flex-col gap-1 flex-1">
+                    <label className="text-xs text-muted-foreground">高度 (H)</label>
+                    <input 
+                      type="number" 
+                      className="w-full bg-background border border-border rounded-md p-1.5 text-sm text-center font-mono focus:ring-1 focus:ring-primary outline-none"
+                      value={canvasH}
+                      onChange={(e) => updateProjectState({ canvas_height: parseInt(e.target.value) || 1024 })}
+                    />
+                  </div>
+                </div>
+                <button
+                  className="text-xs bg-muted hover:bg-muted/80 border border-border rounded-md px-3 py-1.5 text-muted-foreground hover:text-foreground transition-colors"
+                  onClick={() => {
+                    if (images.length > 0) {
+                      const img = new Image();
+                      img.onload = () => {
+                        updateProjectState({ canvas_width: img.naturalWidth, canvas_height: img.naturalHeight });
+                      };
+                      img.src = images[0];
+                    }
+                  }}
+                >
+                  🎯 自动匹配首图尺寸
+                </button>
+              </div>
+
               {/* Text Styling Panel */}
               <div className="border-t border-border pt-4 flex flex-col gap-3">
                 <div className="flex items-center gap-2 mb-1">
@@ -686,6 +729,38 @@ export default function EditorScreen() {
                  </>
              ) : (
                  <span>Ready</span>
+             )}
+             {activeTab === 'edit' && (
+               <div className="flex items-center gap-2 ml-4 border-l border-border pl-4">
+                 <ZoomIn size={14} className="text-muted-foreground" />
+                 <input 
+                   type="range" 
+                   min="10" max="200" step="1"
+                   value={Math.round(canvasScale * 100)}
+                   onChange={(e) => setCanvasScale(parseInt(e.target.value) / 100)}
+                   className="w-20 accent-primary"
+                 />
+                 <span className="font-mono w-10 text-right">{Math.round(canvasScale * 100)}%</span>
+                 <button 
+                   className="text-muted-foreground hover:text-foreground transition-colors px-1"
+                   onClick={() => {
+                     // Reset to auto-fit
+                     if (viewportRef.current) {
+                       const style = getComputedStyle(viewportRef.current);
+                       const padL = parseFloat(style.paddingLeft) || 0;
+                       const padR = parseFloat(style.paddingRight) || 0;
+                       const padT = parseFloat(style.paddingTop) || 0;
+                       const padB = parseFloat(style.paddingBottom) || 0;
+                       const availW = viewportRef.current.clientWidth - padL - padR;
+                       const availH = viewportRef.current.clientHeight - padT - padB;
+                       setCanvasScale(Math.min(availW / canvasW, availH / canvasH));
+                     }
+                   }}
+                   title="适应窗口 (Fit)"
+                 >
+                   Fit
+                 </button>
+               </div>
              )}
           </div>
           

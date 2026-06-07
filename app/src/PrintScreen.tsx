@@ -174,33 +174,45 @@ export default function PrintScreen() {
         return map;
     }, [projectState?.global_script]);
 
-    // Helper: render text overlay for a page.
-    // Uses the same fixed canvas (canvas_width × canvas_height) as the editor.
-    // Text CSS is identical to editor. The canvas is CSS-transform-scaled to fit the print preview slot.
+    // Helper: render a complete page cell (image + text) inside a single canvas div.
+    // Both image and text share the same canvas coordinate system (canvas_width × canvas_height),
+    // then the canvas is CSS-transform-scaled to fit the page slot.
     const canvasW = projectState?.canvas_width || 1024;
     const canvasH = projectState?.canvas_height || 1024;
     
-    const renderTextOverlay = (pageIdx: number, contentW: number, contentH: number, _objPos: string) => {
-        const text = parsedScript.get(pageIdx);
-        if (!text) return null;
+    const renderPageCanvas = (pageIdx: number, slotW: number, slotH: number, objPos: string) => {
+        if (pageIdx === null || pageIdx === undefined) return null;
+        const imgFile = projectState?.visible_images[pageIdx];
+        if (!imgFile) return null;
         
+        const text = parsedScript.get(pageIdx);
         const isCover = pageIdx === 0;
         const ts = isCover ? projectState?.cover_text_settings : projectState?.inner_text_settings;
         const ff = ts?.font_family || 'serif';
         const fontFamily = ff === 'sans' ? 'ui-sans-serif, system-ui, sans-serif' : ff === 'serif' ? 'ui-serif, Georgia, serif' : `'${ff}', sans-serif`;
         
-        // Scale to fit canvas into the content slot
-        const S = Math.min(contentW / canvasW, contentH / canvasH);
+        // Scale canvas to fit slot
+        const S = Math.min(slotW / canvasW, slotH / canvasH);
         const scaledW = canvasW * S;
         const scaledH = canvasH * S;
-        // Center the scaled canvas in the slot
-        const offsetLeft = (contentW - scaledW) / 2;
-        const offsetTop = (contentH - scaledH) / 2;
+        
+        // Position the scaled canvas within the slot based on objPos
+        let left: number, top: number;
+        if (objPos === 'left center') {
+            left = 0;
+            top = (slotH - scaledH) / 2;
+        } else if (objPos === 'right center') {
+            left = slotW - scaledW;
+            top = (slotH - scaledH) / 2;
+        } else {
+            left = (slotW - scaledW) / 2;
+            top = (slotH - scaledH) / 2;
+        }
         
         return (
-            <div className="absolute pointer-events-none z-10" style={{
-                left: `${offsetLeft}px`,
-                top: `${offsetTop}px`,
+            <div className="absolute" style={{
+                left: `${left}px`,
+                top: `${top}px`,
                 width: `${scaledW}px`,
                 height: `${scaledH}px`,
                 overflow: 'hidden',
@@ -212,18 +224,26 @@ export default function PrintScreen() {
                     transformOrigin: 'top left',
                     position: 'relative',
                 }}>
-                    {/* EXACT same text overlay structure as EditorScreen */}
-                    <div className="absolute bottom-10 left-0 w-full px-12 flex justify-center">
-                        <div className="text-center tracking-wide whitespace-pre-wrap" style={{
-                            fontFamily,
-                            fontSize: `${ts?.font_size || (isCover ? 40 : 20)}px`,
-                            color: ts?.text_color || '#ffffff',
-                            filter: getShadowStyle(ts?.text_color || '#ffffff', ts?.has_shadow ?? true),
-                            transform: `translate(${ts?.offset_x || 0}px, ${ts?.offset_y || 0}px)`,
-                        }}>
-                            {text}
+                    {/* Image fills canvas */}
+                    <img 
+                        onLoad={e => handleImageLoad(pageIdx, e)}
+                        src={`http://127.0.0.1:14320/images/${imgFile}`}
+                        style={{ width: '100%', height: '100%', objectFit: 'contain' }}
+                    />
+                    {/* Text overlay — EXACT same CSS as editor */}
+                    {text && (
+                        <div className="absolute bottom-10 left-0 w-full px-12 flex justify-center">
+                            <div className="text-center tracking-wide whitespace-pre-wrap" style={{
+                                fontFamily,
+                                fontSize: `${ts?.font_size || (isCover ? 40 : 20)}px`,
+                                color: ts?.text_color || '#ffffff',
+                                filter: getShadowStyle(ts?.text_color || '#ffffff', ts?.has_shadow ?? true),
+                                transform: `translate(${ts?.offset_x || 0}px, ${ts?.offset_y || 0}px)`,
+                            }}>
+                                {text}
+                            </div>
                         </div>
-                    </div>
+                    )}
                 </div>
             </div>
         );
@@ -542,23 +562,13 @@ export default function PrintScreen() {
                                                      paddingRight: (settings.binding_method === 'perfect' && !is1up && !sheet.isCover) ? `${(settings.binding_margin_mm + effectiveOffsetX) * pxPerMm}px` : '0px'
                                                  }}>
                                                 {sheet.front.left !== null ? (
-                                                    <div className="w-full h-full flex flex-col items-center justify-center relative">
-                                                        <img 
-                                                            onLoad={e => sheet.front.left !== null && handleImageLoad(sheet.front.left, e)}
-                                                            src={`http://127.0.0.1:14320/images/${projectState?.visible_images[sheet.front.left]}`} 
-                                                            className="w-full h-full object-contain" 
-                                                            style={{ 
-                                                                objectPosition: (settings.binding_method === 'perfect' && !sheet.isCover)
-                                                                    ? (is1up ? 'left center' : 'right center') 
-                                                                    : 'center center'
-                                                            }}
-                                                        />
+                                                    <div className="w-full h-full relative">
                                                         {(() => {
                                                             const padL = (settings.binding_method === 'perfect' && is1up && !sheet.isCover) ? (settings.binding_margin_mm + effectiveOffsetX) * pxPerMm : 0;
                                                             const padR = (settings.binding_method === 'perfect' && !is1up && !sheet.isCover) ? (settings.binding_margin_mm + effectiveOffsetX) * pxPerMm : 0;
                                                             const cW = bookBlockWidthPx * (is1up ? 1 : 0.5) - padL - padR;
                                                             const objPos = (settings.binding_method === 'perfect' && !sheet.isCover) ? (is1up ? 'left center' : 'right center') : 'center center';
-                                                            return sheet.front.left !== null && renderTextOverlay(sheet.front.left, cW, bookBlockHeightPx, objPos);
+                                                            return renderPageCanvas(sheet.front.left, cW, bookBlockHeightPx, objPos);
                                                         })()}
                                                         <span className="absolute bottom-1 text-[10px] bg-black/50 text-white px-2 rounded-full opacity-0 hover:opacity-100 transition-opacity z-30">
                                                             {sheet.front.left === 0 ? 'Cover' : `P${sheet.front.left}`}
@@ -576,22 +586,12 @@ export default function PrintScreen() {
                                                      paddingLeft: (settings.binding_method === 'perfect' && !is1up && !sheet.isCover) ? `${(settings.binding_margin_mm + effectiveOffsetX) * pxPerMm}px` : '0px'
                                                  }}>
                                                 {sheet.front.right !== null ? (
-                                                    <div className="w-full h-full flex flex-col items-center justify-center relative">
-                                                        <img 
-                                                            onLoad={e => sheet.front.right !== null && handleImageLoad(sheet.front.right, e)}
-                                                            src={`http://127.0.0.1:14320/images/${projectState?.visible_images[sheet.front.right]}`} 
-                                                            className="w-full h-full object-contain"
-                                                            style={{ 
-                                                                objectPosition: (settings.binding_method === 'perfect' && !sheet.isCover)
-                                                                    ? 'left center' 
-                                                                    : 'center center'
-                                                            }}
-                                                        />
+                                                    <div className="w-full h-full relative">
                                                         {(() => {
                                                             const padL2 = (settings.binding_method === 'perfect' && !is1up && !sheet.isCover) ? (settings.binding_margin_mm + effectiveOffsetX) * pxPerMm : 0;
                                                             const cW2 = bookBlockWidthPx * 0.5 - padL2;
                                                             const objPos2 = (settings.binding_method === 'perfect' && !sheet.isCover) ? 'left center' : 'center center';
-                                                            return sheet.front.right !== null && renderTextOverlay(sheet.front.right, cW2, bookBlockHeightPx, objPos2);
+                                                            return renderPageCanvas(sheet.front.right, cW2, bookBlockHeightPx, objPos2);
                                                         })()}
                                                         <span className="absolute bottom-1 text-[10px] bg-black/50 text-white px-2 rounded-full opacity-0 hover:opacity-100 transition-opacity z-30">
                                                             {sheet.front.right === 0 ? 'Cover' : `P${sheet.front.right}`}
@@ -699,23 +699,13 @@ export default function PrintScreen() {
                                                          paddingLeft: (settings.binding_method === 'perfect' && !is1up && !sheet.isCover) ? `${(settings.binding_margin_mm + effectiveOffsetX) * pxPerMm}px` : '0px'
                                                      }}>
                                                     {sheet.back.left !== null ? (
-                                                        <div className="w-full h-full flex flex-col items-center justify-center relative">
-                                                            <img 
-                                                                onLoad={e => sheet.back!.left !== null && handleImageLoad(sheet.back!.left, e)}
-                                                                src={`http://127.0.0.1:14320/images/${projectState?.visible_images[sheet.back.left]}`} 
-                                                                className="w-full h-full object-contain"
-                                                                style={{ 
-                                                                    objectPosition: (settings.binding_method === 'perfect' && !sheet.isCover)
-                                                                        ? (is1up ? 'right center' : 'left center') 
-                                                                        : 'center center'
-                                                                }}
-                                                            />
+                                                        <div className="w-full h-full relative">
                                                             {(() => {
                                                                 const padR_b = (settings.binding_method === 'perfect' && is1up && !sheet.isCover) ? (settings.binding_margin_mm + effectiveOffsetX) * pxPerMm : 0;
                                                                 const padL_b = (settings.binding_method === 'perfect' && !is1up && !sheet.isCover) ? (settings.binding_margin_mm + effectiveOffsetX) * pxPerMm : 0;
                                                                 const cW_b = bookBlockWidthPx * (is1up ? 1 : 0.5) - padL_b - padR_b;
                                                                 const objPos_b = (settings.binding_method === 'perfect' && !sheet.isCover) ? (is1up ? 'right center' : 'left center') : 'center center';
-                                                                return sheet.back.left !== null && renderTextOverlay(sheet.back.left, cW_b, bookBlockHeightPx, objPos_b);
+                                                                return renderPageCanvas(sheet.back.left, cW_b, bookBlockHeightPx, objPos_b);
                                                             })()}
                                                             <span className="absolute bottom-1 text-[10px] bg-black/50 text-white px-2 rounded-full opacity-0 hover:opacity-100 transition-opacity z-30">
                                                                 {sheet.back.left === 0 ? 'Cover' : `P${sheet.back.left}`}
@@ -733,22 +723,12 @@ export default function PrintScreen() {
                                                          paddingRight: (settings.binding_method === 'perfect' && !is1up && !sheet.isCover) ? `${(settings.binding_margin_mm + effectiveOffsetX) * pxPerMm}px` : '0px'
                                                      }}>
                                                     {sheet.back.right !== null ? (
-                                                        <div className="w-full h-full flex flex-col items-center justify-center relative">
-                                                            <img 
-                                                                onLoad={e => sheet.back!.right !== null && handleImageLoad(sheet.back!.right, e)}
-                                                                src={`http://127.0.0.1:14320/images/${projectState?.visible_images[sheet.back.right]}`} 
-                                                                className="w-full h-full object-contain"
-                                                                style={{ 
-                                                                    objectPosition: (settings.binding_method === 'perfect' && !sheet.isCover)
-                                                                        ? 'right center' 
-                                                                        : 'center center'
-                                                                }}
-                                                            />
+                                                        <div className="w-full h-full relative">
                                                             {(() => {
                                                                 const padR_br = (settings.binding_method === 'perfect' && !is1up && !sheet.isCover) ? (settings.binding_margin_mm + effectiveOffsetX) * pxPerMm : 0;
                                                                 const cW_br = bookBlockWidthPx * 0.5 - padR_br;
                                                                 const objPos_br = (settings.binding_method === 'perfect' && !sheet.isCover) ? 'right center' : 'center center';
-                                                                return sheet.back.right !== null && renderTextOverlay(sheet.back.right, cW_br, bookBlockHeightPx, objPos_br);
+                                                                return renderPageCanvas(sheet.back.right, cW_br, bookBlockHeightPx, objPos_br);
                                                             })()}
                                                             <span className="absolute bottom-1 text-[10px] bg-black/50 text-white px-2 rounded-full opacity-0 hover:opacity-100 transition-opacity z-30">
                                                                 {sheet.back.right === 0 ? 'Cover' : `P${sheet.back.right}`}
