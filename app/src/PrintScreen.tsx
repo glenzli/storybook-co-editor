@@ -215,9 +215,17 @@ export default function PrintScreen() {
             imgTop = (contentH - renderedH) / 2;
         }
         
-        // Scale: rendered image height / editor container height (85vh)
-        const editorRefHeight = typeof window !== 'undefined' ? window.innerHeight * 0.85 : 800;
-        const textScale = renderedH / editorRefHeight;
+        // Compute what the editor's actual rendered image height would be.
+        // Editor layout: img has max-w-full max-h-[85vh] inside main area.
+        // Main area width ≈ window.innerWidth - left sidebar(256px) - right sidebar(320px) - padding(64px)
+        const editorMaxH = typeof window !== 'undefined' ? window.innerHeight * 0.85 : 800;
+        const editorAvailW = typeof window !== 'undefined' ? Math.max(300, window.innerWidth - 256 - 320 - 64) : 600;
+        // Editor image uses object-contain within (editorAvailW × editorMaxH)
+        const editorContainerAspect = editorAvailW / editorMaxH;
+        const editorRenderedH = editorContainerAspect > imgAspect
+            ? editorMaxH                        // height-limited
+            : editorAvailW / imgAspect;          // width-limited
+        const textScale = renderedH / editorRenderedH;
         
         const fontSize = (ts?.font_size || (isCover ? 40 : 20)) * textScale;
         const bottomPx = 40 * textScale;
