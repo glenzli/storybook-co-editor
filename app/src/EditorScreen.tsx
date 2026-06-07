@@ -7,7 +7,7 @@ import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, us
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { createLogger } from './utils/logger';
-import { setEditorImageDimensions } from './editorDimensions';
+import { setEditorConstraints } from './editorDimensions';
 import PrintScreen from './PrintScreen';
 
 const logger = createLogger('App');
@@ -64,6 +64,7 @@ export default function EditorScreen() {
 
   // XY Bounds Measurement
   const containerRef = useRef<HTMLDivElement>(null);
+  const mainRef = useRef<HTMLElement>(null);
   const textRef = useRef<HTMLDivElement>(null);
   const [xyBounds, setXyBounds] = useState({ minX: -500, maxX: 500, minY: -500, maxY: 500 });
 
@@ -224,7 +225,6 @@ export default function EditorScreen() {
         if (!containerRef.current || !textRef.current) return;
         const Cw = containerRef.current.clientWidth;
         const Ch = containerRef.current.clientHeight;
-        setEditorImageDimensions(Cw, Ch);
         const Tw = textRef.current.scrollWidth;
         const Th = textRef.current.scrollHeight;
         
@@ -248,6 +248,23 @@ export default function EditorScreen() {
     
     return () => ro.disconnect();
   }, [selectedIdx, currentText, projectState?.cover_text_settings?.font_size, projectState?.inner_text_settings?.font_size]);
+
+  // Report editor layout constraints for PrintScreen text overlay scaling
+  useEffect(() => {
+    const measure = () => {
+      if (mainRef.current) {
+        const style = getComputedStyle(mainRef.current);
+        const padL = parseFloat(style.paddingLeft) || 0;
+        const padR = parseFloat(style.paddingRight) || 0;
+        const availW = mainRef.current.clientWidth - padL - padR;
+        const maxH = window.innerHeight * 0.85;
+        setEditorConstraints(availW, maxH);
+      }
+    };
+    measure();
+    window.addEventListener('resize', measure);
+    return () => window.removeEventListener('resize', measure);
+  }, []);
 
   // Auto-snap logic
   useEffect(() => {
@@ -432,7 +449,7 @@ export default function EditorScreen() {
           </button>
 
           {/* Center: Main Canvas */}
-          <main className="flex-1 bg-muted relative flex items-center justify-center p-8 overflow-hidden">
+          <main ref={mainRef} className="flex-1 bg-muted relative flex items-center justify-center p-8 overflow-hidden">
             {selectedIdx !== null && images[selectedIdx] ? (
               <div ref={containerRef} className="relative max-w-full max-h-full shadow-2xl ring-1 ring-border/50 bg-background/50 backdrop-blur-3xl rounded-sm transition-all duration-300">
                 <img 

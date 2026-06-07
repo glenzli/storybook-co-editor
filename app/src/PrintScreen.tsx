@@ -2,7 +2,7 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { useProject } from './ProjectContext';
 import { Settings, Printer, Download, AlertTriangle, FileText } from 'lucide-react';
 import { invoke } from '@tauri-apps/api/core';
-import { getEditorImageDimensions } from './editorDimensions';
+import { getEditorContainerSize } from './editorDimensions';
 
 function getShadowStyle(hexColor: string, hasShadow: boolean) {
     if (!hasShadow) return 'none';
@@ -175,36 +175,34 @@ export default function PrintScreen() {
         return map;
     }, [projectState?.global_script]);
 
-    // Helper: render text overlay for a page
-    // Computes the actual rendered image rectangle within the container (object-contain + objectPosition),
-    // then positions text within that rectangle, scaled proportionally to the editor's layout.
+    // Helper: render text overlay for a page.
+    // Strategy: render the text with EXACTLY the same CSS as the editor (same classes, same styles),
+    // inside a div at the editor's container size. Then CSS transform: scale() the whole thing
+    // to fit the print preview's rendered image bounds. This is pixel-perfect — no manual recalculation needed.
     const renderTextOverlay = (pageIdx: number, contentW: number, contentH: number, objPos: string) => {
         const text = parsedScript.get(pageIdx);
         if (!text) return null;
         const dims = imageDims[pageIdx];
-        if (!dims) return null; // Wait for image to load
+        if (!dims) return null;
         
         const isCover = pageIdx === 0;
         const ts = isCover ? projectState?.cover_text_settings : projectState?.inner_text_settings;
         const ff = ts?.font_family || 'serif';
         const fontFamily = ff === 'sans' ? 'ui-sans-serif, system-ui, sans-serif' : ff === 'serif' ? 'ui-serif, Georgia, serif' : `'${ff}', sans-serif`;
         
-        // Compute rendered image bounds (object-contain logic)
+        // 1. Compute rendered image bounds within print preview container (object-contain logic)
         const imgAspect = dims.w / dims.h;
         const containerAspect = contentW / contentH;
         let renderedW: number, renderedH: number, imgLeft: number, imgTop: number;
         
         if (containerAspect > imgAspect) {
-            // Container wider than image: image fills height, has horizontal white space
             renderedH = contentH;
             renderedW = contentH * imgAspect;
         } else {
-            // Container taller than image: image fills width, has vertical white space
             renderedW = contentW;
             renderedH = contentW / imgAspect;
         }
         
-        // Position based on objectPosition
         if (objPos === 'left center') {
             imgLeft = 0;
             imgTop = (contentH - renderedH) / 2;
@@ -216,37 +214,40 @@ export default function PrintScreen() {
             imgTop = (contentH - renderedH) / 2;
         }
         
-        // Use the actual measured editor image container height for accurate scaling.
-        // EditorScreen reports its containerRef dimensions via the shared editorDimensions module.
-        const editorDims = getEditorImageDimensions();
-        const textScale = renderedH / editorDims.h;
+        // 2. Compute what the editor container size would be for this image's aspect ratio
+        const editorContainer = getEditorContainerSize(imgAspect);
         
-        const fontSize = (ts?.font_size || (isCover ? 40 : 20)) * textScale;
-        const bottomPx = 40 * textScale;
-        const padXPx = 48 * textScale;
-        const offsetX = (ts?.offset_x || 0) * textScale;
-        const offsetY = (ts?.offset_y || 0) * textScale;
+        // 3. Scale = how much to shrink editor container to fit rendered image bounds
+        const S = renderedH / editorContainer.h;
         
+        // 4. Render: outer viewport clips to rendered image bounds,
+        //    inner canvas is at editor dimensions with CSS transform: scale(S)
         return (
             <div className="absolute pointer-events-none z-10" style={{
                 left: `${imgLeft}px`,
                 top: `${imgTop}px`,
                 width: `${renderedW}px`,
                 height: `${renderedH}px`,
+                overflow: 'hidden',
             }}>
-                <div className="absolute left-0 w-full flex justify-center" style={{
-                    bottom: `${bottomPx}px`,
-                    paddingLeft: `${padXPx}px`,
-                    paddingRight: `${padXPx}px`,
+                <div style={{
+                    width: `${editorContainer.w}px`,
+                    height: `${editorContainer.h}px`,
+                    transform: `scale(${S})`,
+                    transformOrigin: 'top left',
+                    position: 'relative',
                 }}>
-                    <div className="text-center tracking-wide whitespace-pre-wrap" style={{
-                        fontFamily,
-                        fontSize: `${fontSize}px`,
-                        color: ts?.text_color || '#ffffff',
-                        filter: getShadowStyle(ts?.text_color || '#ffffff', ts?.has_shadow ?? true),
-                        transform: `translate(${offsetX}px, ${offsetY}px)`,
-                    }}>
-                        {text}
+                    {/* EXACT same text overlay structure as EditorScreen */}
+                    <div className="absolute bottom-10 left-0 w-full px-12 flex justify-center">
+                        <div className="text-center tracking-wide whitespace-pre-wrap" style={{
+                            fontFamily,
+                            fontSize: `${ts?.font_size || (isCover ? 40 : 20)}px`,
+                            color: ts?.text_color || '#ffffff',
+                            filter: getShadowStyle(ts?.text_color || '#ffffff', ts?.has_shadow ?? true),
+                            transform: `translate(${ts?.offset_x || 0}px, ${ts?.offset_y || 0}px)`,
+                        }}>
+                            {text}
+                        </div>
                     </div>
                 </div>
             </div>
