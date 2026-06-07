@@ -1,7 +1,6 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useProject } from './ProjectContext';
-import { Settings, Printer, Download, AlertTriangle, FileText, RefreshCw } from 'lucide-react';
-import { invoke } from '@tauri-apps/api/core';
+import { Printer, Download, AlertTriangle, FileText, RefreshCw } from 'lucide-react';
 import { save } from '@tauri-apps/plugin-dialog';
 import { writeFile } from '@tauri-apps/plugin-fs';
 import html2canvas from 'html2canvas';
@@ -205,7 +204,7 @@ export default function PrintScreen() {
             // then draw their text directly onto the captured canvas.
             const h2cScale = 5; // must match html2canvas scale above
             const baseBottomPx = 40; // Tailwind bottom-10 in canvas coords
-            const basePadPx = 48;    // Tailwind px-12 in canvas coords
+
 
             // Map font family keys to canvas-compatible font strings
             const mapFont = (ff: string) => {

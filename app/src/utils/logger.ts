@@ -3,7 +3,7 @@ export type LogLevel = 'debug' | 'info' | 'warn' | 'error';
 class LogManager {
     private moduleName: string;
     // Vite injects import.meta.env.DEV
-    private isDev = import.meta.env ? import.meta.env.DEV : true;
+    private isDev = (import.meta as any).env ? (import.meta as any).env.DEV : true;
 
     constructor(moduleName: string) {
         this.moduleName = moduleName;

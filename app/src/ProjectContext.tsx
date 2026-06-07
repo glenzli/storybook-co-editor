@@ -1,4 +1,5 @@
-import React, { createContext, useContext, useState, useEffect, useRef, useCallback, ReactNode } from 'react';
+/* eslint-disable react-refresh/only-export-components */
+import { createContext, useContext, useState, useEffect, useRef, useCallback, ReactNode } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import { load } from '@tauri-apps/plugin-store';
@@ -15,7 +16,7 @@ export interface TextSettings {
 }
 
 export interface PrintSettings {
-    paper_size: 'A4' | 'A3';
+    paper_size: 'A5' | 'A4' | 'A3';
     paper_orientation: 'portrait' | 'landscape';
     book_size: 'A5' | 'A4';
     layout_mode: '1-up' | '2-up';
@@ -84,8 +85,8 @@ export const ProjectProvider = ({ children }: { children: ReactNode }) => {
     const [projectState, setProjectState] = useState<ProjectState | null>(null);
     const [recentProjects, setRecentProjects] = useState<RecentProject[]>([]);
     const [currentProjectPath, setCurrentProjectPath] = useState<string | null>(null);
-    const syncTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-    const autoSaveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+    const syncTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const autoSaveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const [isDirty, setIsDirty] = useState(false);
     // Undo/Redo history
     const historyRef = useRef<ProjectState[]>([]);
@@ -97,7 +98,7 @@ export const ProjectProvider = ({ children }: { children: ReactNode }) => {
     useEffect(() => {
         // Load recent projects
         const loadRecent = async () => {
-            const store = await load('settings.json', { autoSave: false });
+            const store = await load('settings.json', { autoSave: false } as any);
             const recent = await store.get<RecentProject[]>('recentProjects');
             if (recent) setRecentProjects(recent);
         };
@@ -125,7 +126,7 @@ export const ProjectProvider = ({ children }: { children: ReactNode }) => {
     }, []);
 
     const saveRecentToStore = async (projects: RecentProject[]) => {
-        const store = await load('settings.json', { autoSave: false });
+        const store = await load('settings.json', { autoSave: false } as any);
         await store.set('recentProjects', projects);
         await store.save();
         setRecentProjects(projects);
@@ -164,6 +165,7 @@ export const ProjectProvider = ({ children }: { children: ReactNode }) => {
             }
         } catch (e) {
             console.error("Failed to open project", e);
+            alert("无法打开项目: " + (typeof e === 'string' ? e : (e as Error)?.message || String(e)));
         }
     };
 
@@ -177,6 +179,7 @@ export const ProjectProvider = ({ children }: { children: ReactNode }) => {
             navigate('/editor');
         } catch (e) {
             console.error("Failed to open recent project", e);
+            alert("无法打开最近的项目: " + (typeof e === 'string' ? e : (e as Error)?.message || String(e)));
         }
     };
 
@@ -203,27 +206,33 @@ export const ProjectProvider = ({ children }: { children: ReactNode }) => {
             }
         } catch (e) {
             console.error("Failed to save project as", e);
+            alert("另存为项目失败: " + (typeof e === 'string' ? e : (e as Error)?.message || String(e)));
         }
     };
 
     const saveProject = async (path?: string) => {
-        const targetPath = path || currentProjectPath;
-        if (targetPath) {
-            const filename = targetPath.split(/[/\\]/).pop() || 'Untitled';
-            const projectName = filename.replace(/\.scproj$/, '');
-            
-            if (projectState) {
-                const updatedState = { ...projectState, project_name: projectName, last_modified: new Date().toISOString() };
-                await invoke('update_project_state', { state: updatedState });
-                setProjectState(updatedState);
+        try {
+            const targetPath = path || currentProjectPath;
+            if (targetPath) {
+                const filename = targetPath.split(/[/\\]/).pop() || 'Untitled';
+                const projectName = filename.replace(/\.scproj$/, '');
+                
+                if (projectState) {
+                    const updatedState = { ...projectState, project_name: projectName, last_modified: new Date().toISOString() };
+                    await invoke('update_project_state', { state: updatedState });
+                    setProjectState(updatedState);
+                }
+                
+                await invoke('save_project', { targetPath });
+                setCurrentProjectPath(targetPath);
+                await addRecentProject(targetPath, projectName);
+                setIsDirty(false);
+            } else {
+                await saveProjectAs();
             }
-            
-            await invoke('save_project', { targetPath });
-            setCurrentProjectPath(targetPath);
-            await addRecentProject(targetPath, projectName);
-            setIsDirty(false);
-        } else {
-            await saveProjectAs();
+        } catch (e) {
+            console.error("Failed to save project", e);
+            alert("保存项目失败: " + (typeof e === 'string' ? e : (e as Error)?.message || String(e)));
         }
     };
 
@@ -278,7 +287,9 @@ export const ProjectProvider = ({ children }: { children: ReactNode }) => {
         historyIndexRef.current = historyRef.current.length - 1;
     }, [projectState]);
 
+    // eslint-disable-next-line react-hooks/refs
     const canUndo = historyIndexRef.current > 0;
+    // eslint-disable-next-line react-hooks/refs
     const canRedo = historyIndexRef.current < historyRef.current.length - 1;
 
     const undo = useCallback(() => {
@@ -307,6 +318,7 @@ export const ProjectProvider = ({ children }: { children: ReactNode }) => {
         return () => {
             if (autoSaveTimeoutRef.current) clearTimeout(autoSaveTimeoutRef.current);
         };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [isDirty, projectState, currentProjectPath]);
 
     return (

@@ -1,6 +1,6 @@
 import { BookOpen, FolderOpen, Plus, Clock } from 'lucide-react';
 import { useProject } from './ProjectContext';
-import { invoke } from '@tauri-apps/api/core';
+
 
 export default function WelcomeScreen() {
     const { createNewProject, openProject, openRecentProject, recentProjects } = useProject();

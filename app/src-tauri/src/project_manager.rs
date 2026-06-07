@@ -211,7 +211,8 @@ pub fn save_project(app: AppHandle, manager: State<ProjectManager>, target_path:
     if let Some(workspace_id) = active {
         let workspace_dir = get_workspace_dir(&app, &workspace_id)?;
         
-        let file = File::create(&target_path).map_err(|e| e.to_string())?;
+        let temp_path = format!("{}.tmp", target_path);
+        let file = File::create(&temp_path).map_err(|e| format!("Failed to create temp file: {}", e))?;
         let mut zip = ZipWriter::new(file);
         let options = FileOptions::<()>::default()
             .compression_method(zip::CompressionMethod::Deflated)
@@ -224,16 +225,43 @@ pub fn save_project(app: AppHandle, manager: State<ProjectManager>, target_path:
             let path = entry.path();
             let name = path.strip_prefix(&workspace_dir).unwrap();
             let name_str = name.to_str().unwrap().replace("\\", "/");
+            
+            // Skip macOS .DS_Store files just in case
+            if name_str.contains(".DS_Store") {
+                continue;
+            }
 
             if path.is_file() {
-                zip.start_file(name_str, options).map_err(|e| e.to_string())?;
-                let mut f = File::open(path).map_err(|e| e.to_string())?;
-                std::io::copy(&mut f, &mut zip).map_err(|e| e.to_string())?;
+                if let Err(e) = zip.start_file(&name_str, options) {
+                    let _ = std::fs::remove_file(&temp_path);
+                    return Err(format!("Failed to start zip file {}: {}", name_str, e));
+                }
+                match File::open(path) {
+                    Ok(mut f) => {
+                        if let Err(e) = std::io::copy(&mut f, &mut zip) {
+                            let _ = std::fs::remove_file(&temp_path);
+                            return Err(format!("Failed to copy file {}: {}", name_str, e));
+                        }
+                    }
+                    Err(e) => {
+                        let _ = std::fs::remove_file(&temp_path);
+                        return Err(format!("Failed to open file {}: {}", name_str, e));
+                    }
+                }
             } else if path.is_dir() && !name_str.is_empty() {
-                zip.add_directory(name_str, options).map_err(|e| e.to_string())?;
+                if let Err(e) = zip.add_directory(&name_str, options) {
+                    let _ = std::fs::remove_file(&temp_path);
+                    return Err(format!("Failed to add directory {}: {}", name_str, e));
+                }
             }
         }
-        zip.finish().map_err(|e| e.to_string())?;
+        
+        if let Err(e) = zip.finish() {
+            let _ = std::fs::remove_file(&temp_path);
+            return Err(format!("Failed to finish zip: {}", e));
+        }
+        
+        std::fs::rename(&temp_path, &target_path).map_err(|e| format!("Failed to atomic rename project file: {}", e))?;
         Ok(())
     } else {
         Err("No active project".to_string())
