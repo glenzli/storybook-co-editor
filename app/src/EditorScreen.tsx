@@ -516,13 +516,13 @@ export default function EditorScreen() {
           <div className="flex items-center justify-center gap-1 bg-muted p-1 rounded-md border border-border w-1/3 max-w-[200px]">
               <button 
                   onClick={() => setActiveTab('edit')}
-                  className={`flex-1 py-1 px-3 rounded text-xs font-medium transition-colors ${activeTab === 'edit' ? 'bg-background shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
+                  className={`flex-1 py-1 px-3 rounded text-xs font-medium transition-colors ${activeTab === 'edit' ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground hover:bg-muted-foreground/10'}`}
               >
                   内容编辑
               </button>
               <button 
                   onClick={() => setActiveTab('print')}
-                  className={`flex-1 py-1 px-3 rounded text-xs font-medium transition-colors ${activeTab === 'print' ? 'bg-background shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
+                  className={`flex-1 py-1 px-3 rounded text-xs font-medium transition-colors ${activeTab === 'print' ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground hover:bg-muted-foreground/10'}`}
               >
                   印前拼版
               </button>
@@ -704,11 +704,13 @@ export default function EditorScreen() {
           {/* Right Sidebar */}
           <aside className={`overflow-hidden border-l border-border bg-card flex flex-col z-20 shadow-xl transition-all duration-300 ease-in-out ${isRightOpen ? 'w-80 min-w-[320px]' : 'w-0'}`}>
             {/* Tab Header */}
-            <div className="flex border-b border-border w-80 flex-shrink-0">
+            <div className="flex w-80 flex-shrink-0 relative">
               <button
                 onClick={() => setRightTab('script')}
-                className={`flex-1 py-2.5 text-sm font-medium flex items-center justify-center gap-1.5 transition-colors ${
-                  rightTab === 'script' ? 'text-primary border-b-2 border-primary bg-primary/5' : 'text-muted-foreground hover:text-foreground'
+                className={`flex-1 py-2.5 text-sm font-medium flex items-center justify-center gap-1.5 transition-colors border-b-2 ${
+                  rightTab === 'script' 
+                    ? 'bg-card text-foreground border-transparent' 
+                    : 'bg-muted/50 text-muted-foreground hover:text-foreground border-border'
                 }`}
               >
                 <PenTool size={14} />
@@ -716,8 +718,10 @@ export default function EditorScreen() {
               </button>
               <button
                 onClick={() => setRightTab('style')}
-                className={`flex-1 py-2.5 text-sm font-medium flex items-center justify-center gap-1.5 transition-colors ${
-                  rightTab === 'style' ? 'text-primary border-b-2 border-primary bg-primary/5' : 'text-muted-foreground hover:text-foreground'
+                className={`flex-1 py-2.5 text-sm font-medium flex items-center justify-center gap-1.5 transition-colors border-b-2 ${
+                  rightTab === 'style' 
+                    ? 'bg-card text-foreground border-transparent' 
+                    : 'bg-muted/50 text-muted-foreground hover:text-foreground border-border'
                 }`}
               >
                 <Type size={14} />
