@@ -8,6 +8,7 @@ import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, us
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { createLogger } from './utils/logger';
+import { getSaliencyMap, findBestTextPosition } from './saliency';
 import PrintScreen from './PrintScreen';
 
 const logger = createLogger('App');
@@ -308,16 +309,23 @@ export default function EditorScreen() {
     return () => ro.disconnect();
   }, [selectedIdx, currentText, canvasW, canvasH, projectState?.cover_text_settings?.font_size, projectState?.inner_text_settings?.font_size]);
 
-  // Auto-snap logic
+  // Auto-snap: clamp offsets to stay within canvas bounds
   useEffect(() => {
     if (selectedIdx === null) return;
     const isCover = selectedIdx === 0;
+
+    // Get effective offsets (per-page override for inner pages)
+    const pageKey = String(selectedIdx);
+    const pageOverride = !isCover ? projectState?.page_text_overrides?.[pageKey] : undefined;
     const settings = isCover ? projectState?.cover_text_settings : projectState?.inner_text_settings;
-    if (!settings) return;
+    if (!settings && !pageOverride) return;
+
+    const currentX = pageOverride?.offset_x ?? settings?.offset_x ?? 0;
+    const currentY = pageOverride?.offset_y ?? settings?.offset_y ?? 0;
 
     let changed = false;
-    let newX = settings.offset_x || 0;
-    let newY = settings.offset_y || 0;
+    let newX = currentX;
+    let newY = currentY;
 
     if (newX < xyBounds.minX) { newX = xyBounds.minX; changed = true; }
     if (newX > xyBounds.maxX) { newX = xyBounds.maxX; changed = true; }
@@ -325,11 +333,14 @@ export default function EditorScreen() {
     if (newY > xyBounds.maxY) { newY = xyBounds.maxY; changed = true; }
 
     if (changed) {
-        if (isCover) {
-            updateProjectState({ cover_text_settings: { ...settings, offset_x: newX, offset_y: newY } });
-        } else {
-            updateProjectState({ inner_text_settings: { ...settings, offset_x: newX, offset_y: newY } });
-        }
+      if (isCover) {
+        updateProjectState({ cover_text_settings: { ...settings!, offset_x: newX, offset_y: newY } });
+      } else {
+        // Write to per-page override
+        const existing = projectState?.page_text_overrides || {};
+        const current = existing[pageKey] || { offset_x: 0, offset_y: 0 };
+        updateProjectState({ page_text_overrides: { ...existing, [pageKey]: { ...current, offset_x: newX, offset_y: newY } } });
+      }
     }
   }, [xyBounds, selectedIdx]);
 
@@ -389,6 +400,83 @@ export default function EditorScreen() {
   const handleRestoreTrash = (idToRestore: string) => {
       setImages(prev => [...prev, idToRestore]);
       setTrashedImages(prev => prev.filter(url => url !== idToRestore));
+  };
+
+  // Smart text placement using U²-Net saliency detection
+  const handleSmartLayout = async () => {
+    if (selectedIdx === null || !images[selectedIdx]) return;
+    const imgUrl = images[selectedIdx];
+    const canvasH = projectState?.canvas_height || 1024;
+
+    // Try saliency model first
+    const saliency = await getSaliencyMap(imgUrl);
+    let result: { offsetY: number; textColor: string; authorOffsetY: number };
+
+    if (saliency) {
+      result = findBestTextPosition(
+        saliency.map, saliency.width, saliency.height,
+        canvasH, xyBounds.minY, xyBounds.maxY
+      );
+      // Determine text color from actual image brightness at chosen position
+      const bestYNorm = (result.offsetY + canvasH * 0.85) / canvasH;
+      const brightAtPos = await getAvgBrightness(imgUrl, bestYNorm);
+      result.textColor = brightAtPos > 140 ? '#000000' : '#ffffff';
+    } else {
+      // Fallback: default bottom position
+      result = { offsetY: 0, textColor: '#ffffff', authorOffsetY: Math.round(canvasH * 0.06) };
+    }
+
+    const isCover = selectedIdx === 0;
+    const updates: any = {};
+
+    if (isCover) {
+      const current = projectState?.cover_text_settings || { font_size: 40, text_color: '#ffffff', font_family: 'serif', has_shadow: true, offset_x: 0, offset_y: 0 };
+      updates.cover_text_settings = { ...current, offset_y: result.offsetY, text_color: result.textColor };
+      if (projectState?.author_name) {
+        const authorCurrent = projectState?.author_text_settings || { font_size: 16, text_color: '#ffffff', font_family: 'serif', has_shadow: true, offset_x: 0, offset_y: 0 };
+        updates.author_text_settings = { ...authorCurrent, offset_y: result.authorOffsetY, text_color: result.textColor };
+      }
+    } else {
+      const existing = projectState?.page_text_overrides || {};
+      const pageKey = String(selectedIdx);
+      const currentOverride = existing[pageKey] || { offset_x: 0, offset_y: 0 };
+      updates.page_text_overrides = { 
+        ...existing, 
+        [pageKey]: { ...currentOverride, offset_y: result.offsetY, text_color: result.textColor } 
+      };
+    }
+    updateProjectState(updates);
+  };
+
+  // Helper: get average brightness at a Y band of an image
+  const getAvgBrightness = (imgUrl: string, yNorm: number): Promise<number> => {
+    return new Promise((resolve) => {
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      img.onload = () => {
+        const W = 200, H = Math.round(200 * img.naturalHeight / img.naturalWidth);
+        const canvas = document.createElement('canvas');
+        canvas.width = W; canvas.height = H;
+        const ctx = canvas.getContext('2d')!;
+        ctx.drawImage(img, 0, 0, W, H);
+        const { data } = ctx.getImageData(0, 0, W, H);
+        const bandH = Math.round(H * 0.1);
+        const cy = Math.round(yNorm * H);
+        const y0 = Math.max(0, cy - bandH / 2);
+        const y1 = Math.min(H, cy + bandH / 2);
+        let sum = 0, n = 0;
+        for (let y = y0; y < y1; y++) {
+          for (let x = 0; x < W; x++) {
+            const i = (y * W + x) * 4;
+            sum += data[i] * 0.299 + data[i+1] * 0.587 + data[i+2] * 0.114;
+            n++;
+          }
+        }
+        resolve(n > 0 ? sum / n : 128);
+      };
+      img.onerror = () => resolve(128);
+      img.src = imgUrl;
+    });
   };
 
   // Keyboard shortcuts: Cmd+S, Cmd+Z, Cmd+Shift+Z
@@ -544,32 +632,35 @@ export default function EditorScreen() {
                     style={{ width: '100%', height: '100%', objectFit: 'contain' }}
                     alt="Selected page" 
                   />
-                  {currentText && (
+                  {currentText && (() => {
+                    const isCover = selectedIdx === 0;
+                    const baseSettings = isCover ? projectState?.cover_text_settings : projectState?.inner_text_settings;
+                    const pageOverride = !isCover && selectedIdx !== null ? projectState?.page_text_overrides?.[String(selectedIdx)] : undefined;
+                    const ff = baseSettings?.font_family || 'serif';
+                    const fontFamily = ff === 'sans' ? 'ui-sans-serif, system-ui, sans-serif' : ff === 'serif' ? 'ui-serif, Georgia, serif' : `'${ff}', sans-serif`;
+                    const fontSize = baseSettings?.font_size || (isCover ? 40 : 20);
+                    const textColor = (pageOverride?.text_color ?? baseSettings?.text_color) || '#ffffff';
+                    const offsetX = pageOverride?.offset_x ?? baseSettings?.offset_x ?? 0;
+                    const offsetY = pageOverride?.offset_y ?? baseSettings?.offset_y ?? 0;
+                    const hasShadow = baseSettings?.has_shadow ?? true;
+                    return (
                     <div className="absolute bottom-10 left-0 w-full px-12 pointer-events-none flex justify-center">
                       <div 
                         ref={textRef}
                         className="text-center tracking-wide whitespace-pre-wrap pointer-events-auto"
                         style={{
-                          fontFamily: (() => {
-                            const settings = selectedIdx === 0 ? projectState?.cover_text_settings : projectState?.inner_text_settings;
-                            const ff = settings?.font_family || 'serif';
-                            if (ff === 'sans') return 'ui-sans-serif, system-ui, sans-serif';
-                            if (ff === 'serif') return 'ui-serif, Georgia, serif';
-                            return `'${ff}', sans-serif`;
-                          })(),
-                          fontSize: `${(selectedIdx === 0 ? projectState?.cover_text_settings?.font_size : projectState?.inner_text_settings?.font_size) || (selectedIdx === 0 ? 40 : 20)}px`,
-                          color: (selectedIdx === 0 ? projectState?.cover_text_settings?.text_color : projectState?.inner_text_settings?.text_color) || '#ffffff',
-                          filter: getShadowStyle(
-                              (selectedIdx === 0 ? projectState?.cover_text_settings?.text_color : projectState?.inner_text_settings?.text_color) || '#ffffff',
-                              (selectedIdx === 0 ? projectState?.cover_text_settings?.has_shadow : projectState?.inner_text_settings?.has_shadow) ?? true
-                          ),
-                          transform: `translate(${(selectedIdx === 0 ? projectState?.cover_text_settings?.offset_x : projectState?.inner_text_settings?.offset_x) || 0}px, ${(selectedIdx === 0 ? projectState?.cover_text_settings?.offset_y : projectState?.inner_text_settings?.offset_y) || 0}px)`
+                          fontFamily,
+                          fontSize: `${fontSize}px`,
+                          color: textColor,
+                          filter: getShadowStyle(textColor, hasShadow),
+                          transform: `translate(${offsetX}px, ${offsetY}px)`
                         }}
                       >
                         {currentText}
                       </div>
                     </div>
-                  )}
+                  );
+                  })()}
                   {/* Author text overlay — cover only */}
                   {selectedIdx === 0 && projectState?.author_name && (() => {
                     const ats = projectState?.author_text_settings;
@@ -833,11 +924,34 @@ export default function EditorScreen() {
                   };
                   const settings = currentSettings || defaultSettings;
 
-                  const updateSettings = (updates: any) => {
+                  // For inner pages, per-page overrides for position/color
+                  const pageKey = String(selectedIdx);
+                  const pageOverride = !isCover ? projectState?.page_text_overrides?.[pageKey] : undefined;
+
+                  // Effective values: per-page overrides take priority for inner pages
+                  const effectiveColor = isCover ? settings.text_color : (pageOverride?.text_color ?? settings.text_color ?? '#ffffff');
+                  const effectiveOffsetX = isCover ? (settings.offset_x || 0) : (pageOverride?.offset_x ?? settings.offset_x ?? 0);
+                  const effectiveOffsetY = isCover ? (settings.offset_y || 0) : (pageOverride?.offset_y ?? settings.offset_y ?? 0);
+
+                  // Update shared style (font/size/shadow)
+                  const updateSharedSettings = (updates: any) => {
                     if (isCover) {
                       updateProjectState({ cover_text_settings: { ...settings, ...updates } });
                     } else {
                       updateProjectState({ inner_text_settings: { ...settings, ...updates } });
+                    }
+                  };
+
+                  // Update per-page overrides (color/offset) — for inner pages only
+                  const updatePageOverride = (updates: Partial<{ offset_x: number; offset_y: number; text_color: string }>) => {
+                    if (isCover) {
+                      updateProjectState({ cover_text_settings: { ...settings, ...updates } });
+                    } else {
+                      const existing = projectState?.page_text_overrides || {};
+                      const current = existing[pageKey] || { offset_x: settings.offset_x || 0, offset_y: settings.offset_y || 0, text_color: settings.text_color };
+                      updateProjectState({ 
+                        page_text_overrides: { ...existing, [pageKey]: { ...current, ...updates } } 
+                      });
                     }
                   };
 
@@ -848,7 +962,7 @@ export default function EditorScreen() {
                         <select 
                           className="w-full bg-background border border-border rounded-md p-2 text-sm focus:ring-1 focus:ring-primary outline-none"
                           value={settings.font_family}
-                          onChange={(e) => updateSettings({ font_family: e.target.value })}
+                          onChange={(e) => updateSharedSettings({ font_family: e.target.value })}
                         >
                           <optgroup label="内置在线字体">
                               <option value="serif">系统衬线体 (Serif)</option>
@@ -876,19 +990,21 @@ export default function EditorScreen() {
                           min="12" max="100" step="2"
                           className="w-full accent-primary"
                           value={settings.font_size}
-                          onChange={(e) => updateSettings({ font_size: parseInt(e.target.value) })}
+                          onChange={(e) => updateSharedSettings({ font_size: parseInt(e.target.value) })}
                         />
                       </div>
 
                       <div className="flex items-center justify-between mt-1 border-t border-border pt-2">
                           <div className="flex flex-col gap-1.5 flex-1 pr-4 border-r border-border">
-                              <label className="text-xs text-muted-foreground">颜色</label>
+                              <label className="text-xs text-muted-foreground">
+                                颜色{!isCover && <span className="text-primary/60 ml-1">(本页)</span>}
+                              </label>
                               <div className="flex gap-1.5 items-center flex-wrap">
                                   {['#ffffff','#000000', ...extractedColors].map((c, i) => (
                                     <button 
                                       key={`${c}-${i}`} 
-                                      onClick={() => updateSettings({ text_color: c })} 
-                                      className={`w-5 h-5 rounded-full border-2 transition-transform hover:scale-125 ${settings.text_color === c ? 'border-primary ring-2 ring-primary/30 scale-110' : 'border-border'}`}
+                                      onClick={() => updatePageOverride({ text_color: c })} 
+                                      className={`w-5 h-5 rounded-full border-2 transition-transform hover:scale-125 ${effectiveColor === c ? 'border-primary ring-2 ring-primary/30 scale-110' : 'border-border'}`}
                                       style={{ backgroundColor: c }}
                                       title={c}
                                     />
@@ -896,8 +1012,8 @@ export default function EditorScreen() {
                                   <label className="relative cursor-pointer" title="自定义颜色">
                                     <input 
                                       type="color" 
-                                      value={settings.text_color}
-                                      onChange={(e) => updateSettings({ text_color: e.target.value })}
+                                      value={effectiveColor}
+                                      onChange={(e) => updatePageOverride({ text_color: e.target.value })}
                                       className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
                                     />
                                     <span className="w-5 h-5 rounded-full border-2 border-dashed border-muted-foreground flex items-center justify-center text-[10px] text-muted-foreground">+</span>
@@ -909,33 +1025,38 @@ export default function EditorScreen() {
                               <input 
                                 type="checkbox" 
                                 checked={settings.has_shadow ?? true}
-                                onChange={(e) => updateSettings({ has_shadow: e.target.checked })}
+                                onChange={(e) => updateSharedSettings({ has_shadow: e.target.checked })}
                                 className="w-4 h-4 accent-primary cursor-pointer"
                               />
                           </div>
                       </div>
 
                       <div className="flex flex-col gap-3 mt-2 border-t border-border pt-2">
+                        {!isCover && (
+                          <div className="text-[10px] text-muted-foreground/60 text-center">
+                            ↕ 偏移为本页独立设置
+                          </div>
+                        )}
                         <div className="flex flex-col gap-1.5">
                           <div className="flex justify-between">
                             <label className="text-xs text-muted-foreground">水平偏移 (X)</label>
-                            <span className="text-xs font-mono">{settings.offset_x || 0}px</span>
+                            <span className="text-xs font-mono">{effectiveOffsetX}px</span>
                           </div>
                           <input 
                             type="range" min={xyBounds.minX} max={xyBounds.maxX} step="1" className="w-full accent-primary"
-                            value={settings.offset_x || 0}
-                            onChange={(e) => updateSettings({ offset_x: parseInt(e.target.value) })}
+                            value={effectiveOffsetX}
+                            onChange={(e) => updatePageOverride({ offset_x: parseInt(e.target.value) })}
                           />
                         </div>
                         <div className="flex flex-col gap-1.5">
                           <div className="flex justify-between">
                             <label className="text-xs text-muted-foreground">垂直偏移 (Y)</label>
-                            <span className="text-xs font-mono">{settings.offset_y || 0}px</span>
+                            <span className="text-xs font-mono">{effectiveOffsetY}px</span>
                           </div>
                           <input 
                             type="range" min={xyBounds.minY} max={xyBounds.maxY} step="1" className="w-full accent-primary"
-                            value={settings.offset_y || 0}
-                            onChange={(e) => updateSettings({ offset_y: parseInt(e.target.value) })}
+                            value={effectiveOffsetY}
+                            onChange={(e) => updatePageOverride({ offset_y: parseInt(e.target.value) })}
                           />
                         </div>
                       </div>
@@ -946,9 +1067,13 @@ export default function EditorScreen() {
                 )}
               </div>
 
-              <button className="w-full py-3 bg-primary hover:bg-primary/90 text-primary-foreground rounded-md font-medium transition-colors flex items-center justify-center gap-2 shadow-md whitespace-nowrap mt-auto">
+              <button 
+                onClick={handleSmartLayout}
+                disabled={selectedIdx === null || !images[selectedIdx]}
+                className="w-full py-3 bg-primary hover:bg-primary/90 disabled:opacity-40 disabled:cursor-not-allowed text-primary-foreground rounded-md font-medium transition-colors flex items-center justify-center gap-2 shadow-md whitespace-nowrap mt-auto"
+              >
                 <Send size={16} />
-                执行智能排版
+                智能排版
               </button>
             </div>
             )}

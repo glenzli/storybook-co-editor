@@ -44,6 +44,7 @@ export interface ProjectState {
     canvas_height: number;
     author_name?: string;
     author_text_settings?: TextSettings;
+    page_text_overrides?: Record<string, { offset_x: number; offset_y: number; text_color?: string }>;
 }
 
 export interface ProjectInfo {

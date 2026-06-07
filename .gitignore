@@ -127,3 +127,7 @@ dist
 .vscode/
 *.swp
 *.swo
+
+# ONNX / WASM runtime files (large binaries)
+*.wasm
+*.onnx

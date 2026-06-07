@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::fs::File;
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
@@ -35,6 +36,16 @@ impl Default for TextSettings {
             auto_snap_content: true,
         }
     }
+}
+
+#[derive(Serialize, Deserialize, Clone, Default)]
+pub struct PageTextOverride {
+    #[serde(default)]
+    pub offset_x: f32,
+    #[serde(default)]
+    pub offset_y: f32,
+    #[serde(default)]
+    pub text_color: Option<String>,
 }
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -99,6 +110,8 @@ pub struct ProjectState {
     pub author_name: String,
     #[serde(default)]
     pub author_text_settings: TextSettings,
+    #[serde(default)]
+    pub page_text_overrides: HashMap<String, PageTextOverride>,
 }
 
 impl Default for ProjectState {
@@ -116,6 +129,7 @@ impl Default for ProjectState {
             canvas_height: 1024,
             author_name: "".to_string(),
             author_text_settings: TextSettings { font_size: 16.0, ..TextSettings::default() },
+            page_text_overrides: HashMap::new(),
         }
     }
 }

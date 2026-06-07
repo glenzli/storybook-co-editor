@@ -188,8 +188,12 @@ export default function PrintScreen() {
         const text = parsedScript.get(pageIdx);
         const isCover = pageIdx === 0;
         const ts = isCover ? projectState?.cover_text_settings : projectState?.inner_text_settings;
+        const pageOverride = !isCover ? projectState?.page_text_overrides?.[String(pageIdx)] : undefined;
         const ff = ts?.font_family || 'serif';
         const fontFamily = ff === 'sans' ? 'ui-sans-serif, system-ui, sans-serif' : ff === 'serif' ? 'ui-serif, Georgia, serif' : `'${ff}', sans-serif`;
+        const effectiveColor = (pageOverride?.text_color ?? ts?.text_color) || '#ffffff';
+        const effectiveOffsetX = pageOverride?.offset_x ?? ts?.offset_x ?? 0;
+        const effectiveOffsetY = pageOverride?.offset_y ?? ts?.offset_y ?? 0;
         
         // Scale canvas to fit slot
         const S = Math.min(slotW / canvasW, slotH / canvasH);
@@ -236,9 +240,9 @@ export default function PrintScreen() {
                             <div className="text-center tracking-wide whitespace-pre-wrap" style={{
                                 fontFamily,
                                 fontSize: `${ts?.font_size || (isCover ? 40 : 20)}px`,
-                                color: ts?.text_color || '#ffffff',
-                                filter: getShadowStyle(ts?.text_color || '#ffffff', ts?.has_shadow ?? true),
-                                transform: `translate(${ts?.offset_x || 0}px, ${ts?.offset_y || 0}px)`,
+                                color: effectiveColor,
+                                filter: getShadowStyle(effectiveColor, ts?.has_shadow ?? true),
+                                transform: `translate(${effectiveOffsetX}px, ${effectiveOffsetY}px)`,
                             }}>
                                 {text}
                             </div>
