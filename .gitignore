@@ -131,3 +131,5 @@ dist
 # ONNX / WASM runtime files (large binaries)
 *.wasm
 *.onnx
+
+release/

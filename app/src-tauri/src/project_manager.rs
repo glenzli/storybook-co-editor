@@ -11,7 +11,8 @@ use zip::write::FileOptions;
 use zip::{ZipArchive, ZipWriter};
 use font_kit::source::SystemSource;
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(default)]
 pub struct TextSettings {
     pub font_family: String,
     pub font_size: f32,

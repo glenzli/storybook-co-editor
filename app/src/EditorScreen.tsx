@@ -8,7 +8,7 @@ import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, us
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { createLogger } from './utils/logger';
-import { getSaliencyMap, findBestTextPosition } from './saliency';
+
 import PrintScreen from './PrintScreen';
 
 const logger = createLogger('App');
@@ -62,8 +62,7 @@ export default function EditorScreen() {
   // Tabs
   const [activeTab, setActiveTab] = useState<'edit' | 'print'>('edit');
 
-  // Loading states
-  const [isSmartLayoutLoading, setIsSmartLayoutLoading] = useState(false);
+
 
   // Selected Image Metadata
   const [imgMeta, setImgMeta] = useState<{ width: number, height: number, sizeMB: string } | null>(null);
@@ -185,11 +184,14 @@ export default function EditorScreen() {
   // Sync project state
   useEffect(() => {
       if (!isLoaded) return;
-      updateProjectState({
-          visible_images: images.map(url => url.split('/').pop()!),
-          trashed_images: trashedImages.map(url => url.split('/').pop()!),
-          global_script: globalScript
-      });
+      const tid = setTimeout(() => {
+        updateProjectState({
+            visible_images: images.map(url => url.split('/').pop()!),
+            trashed_images: trashedImages.map(url => url.split('/').pop()!),
+            global_script: globalScript
+        });
+      }, 500);
+      return () => clearTimeout(tid);
   }, [images, trashedImages, globalScript, isLoaded]);
 
   // Load Image Metadata when selectedIdx changes
@@ -440,135 +442,7 @@ export default function EditorScreen() {
       setTrashedImages(prev => prev.filter(url => url !== idToRestore));
   };
 
-  // Smart text placement using U²-Net saliency detection
-  const handleSmartLayout = async () => {
-    if (selectedIdx === null || !images[selectedIdx]) return;
-    setIsSmartLayoutLoading(true);
-    // Yield the main thread to allow React to render the loading spinner
-    await new Promise(resolve => setTimeout(resolve, 50));
-    try {
-      const imgUrl = images[selectedIdx];
-      const canvasH = projectState?.canvas_height || 1024;
 
-      // Try saliency model first
-      const saliency = await getSaliencyMap(imgUrl);
-      let result: { offsetY: number; textColor: string; authorOffsetY: number };
-
-      if (saliency) {
-        result = findBestTextPosition(
-          saliency.map, saliency.width, saliency.height,
-          canvasH, xyBounds.minY, xyBounds.maxY, authorBounds.minY, authorBounds.maxY
-        );
-        // Determine text color from actual image brightness at chosen position
-        const bestYNorm = (result.offsetY + canvasH * 0.85) / canvasH;
-        const brightAtPos = await getAvgBrightness(imgUrl, bestYNorm);
-        result.textColor = brightAtPos > 140 ? '#000000' : '#ffffff';
-      } else {
-        // Fallback: default bottom position, clamped to bounds
-        const fallbackAuthorY = Math.max(authorBounds.minY, Math.min(authorBounds.maxY, Math.round(canvasH * 0.06)));
-        result = { offsetY: 0, textColor: '#ffffff', authorOffsetY: fallbackAuthorY };
-      }
-
-      const isCover = selectedIdx === 0;
-      const updates: any = {};
-
-      if (isCover) {
-        const current = projectState?.cover_text_settings || { font_size: 40, text_color: '#ffffff', font_family: 'serif', has_shadow: true, offset_x: 0, offset_y: 0 };
-        updates.cover_text_settings = { ...current, offset_y: result.offsetY, text_color: result.textColor };
-        if (projectState?.author_name) {
-          const authorCurrent = projectState?.author_text_settings || { font_size: 16, text_color: '#ffffff', font_family: 'serif', has_shadow: true, offset_x: 0, offset_y: 0 };
-          updates.author_text_settings = { ...authorCurrent, offset_y: result.authorOffsetY, text_color: result.textColor };
-        }
-      } else {
-        const existing = projectState?.page_text_overrides || {};
-        const pageKey = String(selectedIdx);
-        const currentOverride = existing[pageKey] || { offset_x: 0, offset_y: 0 };
-        updates.page_text_overrides = { 
-          ...existing, 
-          [pageKey]: { ...currentOverride, offset_y: result.offsetY, text_color: result.textColor } 
-        };
-      }
-      updateProjectState(updates);
-    } finally {
-      setIsSmartLayoutLoading(false);
-    }
-  };
-
-  const handleSmartLayoutAll = async () => {
-    if (!images || images.length === 0) return;
-    setIsSmartLayoutLoading(true);
-    // Yield the main thread to allow React to render the loading spinner
-    await new Promise(resolve => setTimeout(resolve, 50));
-    try {
-      const updates: any = { page_text_overrides: { ...(projectState?.page_text_overrides || {}) } };
-      
-      for (let i = 0; i < images.length; i++) {
-        const imgUrl = images[i];
-        const canvasH = projectState?.canvas_height || 1024;
-        const saliency = await getSaliencyMap(imgUrl);
-        let result: { offsetY: number; textColor: string; authorOffsetY: number };
-
-        if (saliency) {
-          result = findBestTextPosition(
-            saliency.map, saliency.width, saliency.height,
-            canvasH, xyBounds.minY, xyBounds.maxY, authorBounds.minY, authorBounds.maxY
-          );
-          const bestYNorm = (result.offsetY + canvasH * 0.85) / canvasH;
-          const brightAtPos = await getAvgBrightness(imgUrl, bestYNorm);
-          result.textColor = brightAtPos > 140 ? '#000000' : '#ffffff';
-        } else {
-          const fallbackAuthorY = Math.max(authorBounds.minY, Math.min(authorBounds.maxY, Math.round(canvasH * 0.06)));
-          result = { offsetY: 0, textColor: '#ffffff', authorOffsetY: fallbackAuthorY };
-        }
-
-        if (i === 0) {
-          const current = projectState?.cover_text_settings || { font_size: 40, text_color: '#ffffff', font_family: 'serif', has_shadow: true, offset_x: 0, offset_y: 0 };
-          updates.cover_text_settings = { ...current, offset_y: result.offsetY, text_color: result.textColor };
-          if (projectState?.author_name) {
-            const authorCurrent = projectState?.author_text_settings || { font_size: 16, text_color: '#ffffff', font_family: 'serif', has_shadow: true, offset_x: 0, offset_y: 0 };
-            updates.author_text_settings = { ...authorCurrent, offset_y: result.authorOffsetY, text_color: result.textColor };
-          }
-        } else {
-          const currentOverride = updates.page_text_overrides[String(i)] || { offset_x: 0, offset_y: 0 };
-          updates.page_text_overrides[String(i)] = { ...currentOverride, offset_y: result.offsetY, text_color: result.textColor };
-        }
-      }
-      updateProjectState(updates);
-    } finally {
-      setIsSmartLayoutLoading(false);
-    }
-  };
-
-  // Helper: get average brightness at a Y band of an image
-  const getAvgBrightness = (imgUrl: string, yNorm: number): Promise<number> => {
-    return new Promise((resolve) => {
-      const img = new Image();
-      img.crossOrigin = 'anonymous';
-      img.onload = () => {
-        const W = 200, H = Math.round(200 * img.naturalHeight / img.naturalWidth);
-        const canvas = document.createElement('canvas');
-        canvas.width = W; canvas.height = H;
-        const ctx = canvas.getContext('2d')!;
-        ctx.drawImage(img, 0, 0, W, H);
-        const { data } = ctx.getImageData(0, 0, W, H);
-        const bandH = Math.round(H * 0.1);
-        const cy = Math.round(yNorm * H);
-        const y0 = Math.max(0, cy - bandH / 2);
-        const y1 = Math.min(H, cy + bandH / 2);
-        let sum = 0, n = 0;
-        for (let y = y0; y < y1; y++) {
-          for (let x = 0; x < W; x++) {
-            const i = (y * W + x) * 4;
-            sum += data[i] * 0.299 + data[i+1] * 0.587 + data[i+2] * 0.114;
-            n++;
-          }
-        }
-        resolve(n > 0 ? sum / n : 128);
-      };
-      img.onerror = () => resolve(128);
-      img.src = imgUrl;
-    });
-  };
 
   // Keyboard shortcuts: Cmd+S, Cmd+Z, Cmd+Shift+Z
   useEffect(() => {
@@ -1163,25 +1037,6 @@ export default function EditorScreen() {
                 })()}
                 </div>
                 )}
-              </div>
-
-              <div className="flex flex-col gap-2 mt-auto">
-                <button 
-                  onClick={handleSmartLayout}
-                  disabled={selectedIdx === null || !images[selectedIdx] || isSmartLayoutLoading}
-                  className="w-full py-2.5 bg-secondary hover:bg-secondary/80 disabled:opacity-50 disabled:cursor-not-allowed text-secondary-foreground border border-border rounded-md font-medium transition-colors flex items-center justify-center gap-2 shadow-sm whitespace-nowrap"
-                >
-                  {isSmartLayoutLoading ? <RefreshCw size={14} className="animate-spin" /> : <LayoutTemplate size={14} />}
-                  排版当前页
-                </button>
-                <button 
-                  onClick={handleSmartLayoutAll}
-                  disabled={images.length === 0 || isSmartLayoutLoading}
-                  className="w-full py-2.5 bg-primary hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed text-primary-foreground rounded-md font-medium transition-colors flex items-center justify-center gap-2 shadow-sm whitespace-nowrap"
-                >
-                  {isSmartLayoutLoading ? <RefreshCw size={14} className="animate-spin" /> : <Send size={14} />}
-                  一键全本排版
-                </button>
               </div>
             </div>
             )}
