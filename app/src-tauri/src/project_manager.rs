@@ -215,7 +215,7 @@ pub async fn save_project(app: AppHandle, manager: State<'_, ProjectManager>, ta
         let file = File::create(&temp_path).map_err(|e| format!("Failed to create temp file: {}", e))?;
         let mut zip = ZipWriter::new(file);
         let options = FileOptions::<()>::default()
-            .compression_method(zip::CompressionMethod::Deflated)
+            .compression_method(zip::CompressionMethod::Stored)
             .unix_permissions(0o755);
 
         let walkdir = WalkDir::new(&workspace_dir);

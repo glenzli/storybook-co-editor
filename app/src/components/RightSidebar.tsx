@@ -258,56 +258,62 @@ export function RightSidebar({
                   <div className="flex items-center gap-2">
                     <Type size={14} className="text-primary" />
                     <span className="font-bold text-sm">
-                      {selectedIdx === 0 ? "封面文字" : "正文文字"}
+                      {selectedIdx === 0 ? "封面文字" : (/(?:\[(Title|扉页)\])/i.test(projectState?.global_script || '') && selectedIdx === 1) ? "扉页文字" : "正文文字"}
                     </span>
                   </div>
                   <ChevronDown size={14} className={`text-muted-foreground transition-transform ${openSections.text ? 'rotate-180' : ''}`} />
                 </button>
                 {openSections.text && (
                 <div className="flex flex-col gap-3 pt-2">
-                {(() => {
-                  const isCover = selectedIdx === 0;
-                  const currentSettings = isCover ? projectState?.cover_text_settings : projectState?.inner_text_settings;
-                  const defaultSettings = { 
-                      font_size: isCover ? 40 : 20, 
-                      text_color: '#ffffff', 
-                      font_family: 'serif',
-                      has_shadow: true,
-                      offset_x: 0,
-                      offset_y: 0
-                  };
-                  const settings = currentSettings || defaultSettings;
+                      {(() => {
+                        const isCover = selectedIdx === 0;
+                        const hasTitle = /(?:\[(Title|扉页)\])/i.test(projectState?.global_script || '');
+                        const isTitle = hasTitle && selectedIdx === 1;
+                        const currentSettings = isCover ? projectState?.cover_text_settings : (isTitle ? projectState?.title_text_settings : projectState?.inner_text_settings);
+                        const defaultSettings = { 
+                            font_size: isCover ? 40 : (isTitle ? 32 : 20), 
+                            text_color: '#ffffff', 
+                            font_family: 'serif',
+                            has_shadow: true,
+                            offset_x: 0,
+                            offset_y: 0
+                        };
+                        const settings = currentSettings || defaultSettings;
 
-                  // For inner pages, per-page overrides for position/color
-                  const pageKey = String(selectedIdx);
-                  const pageOverride = !isCover ? projectState?.page_text_overrides?.[pageKey] : undefined;
+                        // For inner pages (not cover, not title), per-page overrides for position/color
+                        const pageKey = String(selectedIdx);
+                        const pageOverride = !isCover && !isTitle ? projectState?.page_text_overrides?.[pageKey] : undefined;
 
-                  // Effective values: per-page overrides take priority for inner pages
-                  const effectiveColor = isCover ? settings.text_color : (pageOverride?.text_color ?? settings.text_color ?? '#ffffff');
-                  const effectiveOffsetX = isCover ? (settings.offset_x || 0) : (pageOverride?.offset_x ?? settings.offset_x ?? 0);
-                  const effectiveOffsetY = isCover ? (settings.offset_y || 0) : (pageOverride?.offset_y ?? settings.offset_y ?? 0);
+                        // Effective values: per-page overrides take priority for inner pages
+                        const effectiveColor = (isCover || isTitle) ? settings.text_color : (pageOverride?.text_color ?? settings.text_color ?? '#ffffff');
+                        const effectiveOffsetX = (isCover || isTitle) ? (settings.offset_x || 0) : (pageOverride?.offset_x ?? settings.offset_x ?? 0);
+                        const effectiveOffsetY = (isCover || isTitle) ? (settings.offset_y || 0) : (pageOverride?.offset_y ?? settings.offset_y ?? 0);
 
-                  // Update shared style (font/size/shadow)
-                  const updateSharedSettings = (updates: any) => {
-                    if (isCover) {
-                      updateProjectState({ cover_text_settings: { ...settings, ...updates } });
-                    } else {
-                      updateProjectState({ inner_text_settings: { ...settings, ...updates } });
-                    }
-                  };
+                        // Update shared style (font/size/shadow)
+                        const updateSharedSettings = (updates: any) => {
+                          if (isCover) {
+                            updateProjectState({ cover_text_settings: { ...settings, ...updates } });
+                          } else if (isTitle) {
+                            updateProjectState({ title_text_settings: { ...settings, ...updates } });
+                          } else {
+                            updateProjectState({ inner_text_settings: { ...settings, ...updates } });
+                          }
+                        };
 
-                  // Update per-page overrides (color/offset) — for inner pages only
-                  const updatePageOverride = (updates: Partial<{ offset_x: number; offset_y: number; text_color: string }>) => {
-                    if (isCover) {
-                      updateProjectState({ cover_text_settings: { ...settings, ...updates } });
-                    } else {
-                      const existing = projectState?.page_text_overrides || {};
-                      const current = existing[pageKey] || { offset_x: settings.offset_x || 0, offset_y: settings.offset_y || 0, text_color: settings.text_color };
-                      updateProjectState({ 
-                        page_text_overrides: { ...existing, [pageKey]: { ...current, ...updates } } 
-                      });
-                    }
-                  };
+                        // Update per-page overrides (color/offset) — for inner pages only
+                        const updatePageOverride = (updates: Partial<{ offset_x: number; offset_y: number; text_color: string }>) => {
+                          if (isCover) {
+                            updateProjectState({ cover_text_settings: { ...settings, ...updates } });
+                          } else if (isTitle) {
+                            updateProjectState({ title_text_settings: { ...settings, ...updates } });
+                          } else {
+                            const existing = projectState?.page_text_overrides || {};
+                            const current = existing[pageKey] || { offset_x: settings.offset_x || 0, offset_y: settings.offset_y || 0, text_color: settings.text_color };
+                            updateProjectState({ 
+                              page_text_overrides: { ...existing, [pageKey]: { ...current, ...updates } } 
+                            });
+                          }
+                        };
 
                   return (
                     <>

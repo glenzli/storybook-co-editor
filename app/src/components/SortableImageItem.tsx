@@ -32,7 +32,7 @@ export function SortableImageItem({ id, idx, selectedIdx, setSelectedIdx, onDele
       {...listeners}
       onClick={() => setSelectedIdx(idx)}
       className={`relative group rounded-md border-2 overflow-hidden cursor-pointer transition-all ${
-        selectedIdx === idx ? 'border-primary ring-2 ring-primary/20 shadow-md scale-[1.02]' : 'border-transparent hover:border-border hover:shadow-sm'
+        selectedIdx === idx ? 'border-primary ring-2 ring-primary/20 shadow-md scale-[1.02]' : 'border-border/50 shadow-sm hover:border-border hover:shadow-md bg-card'
       }`}
     >
       <div className="absolute top-1 left-1 bg-black/60 text-white text-[10px] font-bold px-1.5 py-0.5 rounded backdrop-blur-sm z-10">

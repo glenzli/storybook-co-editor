@@ -189,13 +189,21 @@ export default function PrintScreen() {
             const canvasH = projectState?.canvas_height || 1024;
             const parsedScriptLocal = new Map<number, string>();
             const script = projectState?.global_script || '';
-            const blocks = script.split(/(?=\[(?:Cover|封面|\d+)\])/i);
+            const hasTitle = /(?:\[(Title|扉页)\])/i.test(script);
+            const blocks = script.split(/(?=\[(?:Cover|封面|Title|扉页|\d+)\])/i);
             blocks.forEach(block => {
-                const match = block.match(/\[(Cover|封面|\d+)\]\s*([\s\S]*)/i);
+                const match = block.match(/\[(Cover|封面|Title|扉页|\d+)\]\s*([\s\S]*)/i);
                 if (match) {
                     const key = match[1].toLowerCase();
                     const text = match[2].trim();
-                    const idx = (key === 'cover' || key === '封面') ? 0 : parseInt(key, 10);
+                    let idx = 0;
+                    if (key === 'cover' || key === '封面') {
+                        idx = 0;
+                    } else if (key === 'title' || key === '扉页') {
+                        idx = 1;
+                    } else {
+                        idx = parseInt(key, 10) + (hasTitle ? 1 : 0);
+                    }
                     parsedScriptLocal.set(idx, text);
                 }
             });
@@ -234,8 +242,10 @@ export default function PrintScreen() {
                 if (isNaN(pageIdx)) return;
 
                 const isCover = pageIdx === 0;
-                const ts = isCover ? projectState?.cover_text_settings : projectState?.inner_text_settings;
-                const pageOverride = !isCover ? projectState?.page_text_overrides?.[String(pageIdx)] : undefined;
+                const hasTitle = /(?:\[(Title|扉页)\])/i.test(projectState?.global_script || '');
+                const isTitle = hasTitle && pageIdx === 1;
+                const ts = isCover ? projectState?.cover_text_settings : (isTitle ? projectState?.title_text_settings : projectState?.inner_text_settings);
+                const pageOverride = !isCover && !isTitle ? projectState?.page_text_overrides?.[String(pageIdx)] : undefined;
                 const ff = ts?.font_family || 'serif';
 
                 // Get page element's position relative to the sheet-export-target
@@ -312,7 +322,7 @@ export default function PrintScreen() {
                     const effectiveOffsetY = pageOverride?.offset_y ?? ts?.offset_y ?? 0;
                     drawSingleText(
                         titleText, ff,
-                        ts?.font_size || (isCover ? 40 : 20),
+                        ts?.font_size || (isCover ? 40 : (isTitle ? 32 : 20)),
                         effectiveColor, ts?.has_shadow ?? true,
                         effectiveOffsetX, effectiveOffsetY,
                     );
@@ -434,13 +444,21 @@ export default function PrintScreen() {
     const parsedScript = useMemo(() => {
         const map = new Map<number, string>();
         const script = projectState?.global_script || '';
-        const blocks = script.split(/(?=\[(?:Cover|封面|\d+)\])/i);
+        const hasTitle = /(?:\[(Title|扉页)\])/i.test(script);
+        const blocks = script.split(/(?=\[(?:Cover|封面|Title|扉页|\d+)\])/i);
         blocks.forEach(block => {
-            const match = block.match(/\[(Cover|封面|\d+)\]\s*([\s\S]*)/i);
+            const match = block.match(/\[(Cover|封面|Title|扉页|\d+)\]\s*([\s\S]*)/i);
             if (match) {
                 const key = match[1].toLowerCase();
                 const text = match[2].trim();
-                const idx = (key === 'cover' || key === '封面') ? 0 : parseInt(key, 10);
+                let idx = 0;
+                if (key === 'cover' || key === '封面') {
+                    idx = 0;
+                } else if (key === 'title' || key === '扉页') {
+                    idx = 1;
+                } else {
+                    idx = parseInt(key, 10) + (hasTitle ? 1 : 0);
+                }
                 map.set(idx, text);
             }
         });
@@ -460,8 +478,10 @@ export default function PrintScreen() {
         
         const text = parsedScript.get(pageIdx);
         const isCover = pageIdx === 0;
-        const ts = isCover ? projectState?.cover_text_settings : projectState?.inner_text_settings;
-        const pageOverride = !isCover ? projectState?.page_text_overrides?.[String(pageIdx)] : undefined;
+        const hasTitle = /(?:\[(Title|扉页)\])/i.test(projectState?.global_script || '');
+        const isTitle = hasTitle && pageIdx === 1;
+        const ts = isCover ? projectState?.cover_text_settings : (isTitle ? projectState?.title_text_settings : projectState?.inner_text_settings);
+        const pageOverride = !isCover && !isTitle ? projectState?.page_text_overrides?.[String(pageIdx)] : undefined;
         const ff = ts?.font_family || 'serif';
         const fontFamily = ff === 'sans' ? 'ui-sans-serif, system-ui, sans-serif' : ff === 'serif' ? 'ui-serif, Georgia, serif' : `'${ff}', sans-serif`;
         const effectiveColor = (pageOverride?.text_color ?? ts?.text_color) || '#ffffff';
@@ -550,7 +570,7 @@ export default function PrintScreen() {
                 {text && renderTextOverlay(
                     text,
                     fontFamily,
-                    ts?.font_size || (isCover ? 40 : 20),
+                    ts?.font_size || (isCover ? 40 : (isTitle ? 32 : 20)),
                     effectiveColor,
                     ts?.has_shadow ?? true,
                     effectiveOffsetX,

@@ -1,6 +1,6 @@
 import { DndContext, closestCenter, PointerSensor, KeyboardSensor, useSensor, useSensors } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy, sortableKeyboardCoordinates } from '@dnd-kit/sortable';
-import { LayoutTemplate, Trash2, Sun, Moon, ChevronLeft, ChevronRight } from 'lucide-react';
+import { LayoutTemplate, Trash2, Sun, Moon, ChevronLeft, ChevronRight, FilePlus } from 'lucide-react';
 import { SortableImageItem } from './SortableImageItem';
 
 interface LeftSidebarProps {
@@ -14,6 +14,7 @@ interface LeftSidebarProps {
   handleDelete: (id: string) => void;
   handleOpenTrash: () => void;
   handleDragEnd: (event: any) => void;
+  handleInsertBlank: () => void;
 }
 
 export function LeftSidebar({
@@ -26,7 +27,8 @@ export function LeftSidebar({
   setIsDark,
   handleDelete,
   handleOpenTrash,
-  handleDragEnd
+  handleDragEnd,
+  handleInsertBlank
 }: LeftSidebarProps) {
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
@@ -42,6 +44,9 @@ export function LeftSidebar({
             <h2 className="font-bold whitespace-nowrap">绘本分页</h2>
           </div>
           <div className="flex gap-1">
+            <button onClick={handleInsertBlank} title="插入空白页" className="p-2 rounded-full hover:bg-muted text-muted-foreground transition-colors">
+              <FilePlus size={16} />
+            </button>
             <button onClick={handleOpenTrash} title="回收站" className="p-2 rounded-full hover:bg-red-500/10 text-red-500 transition-colors">
               <Trash2 size={16} />
             </button>

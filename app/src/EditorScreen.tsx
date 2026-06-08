@@ -235,14 +235,22 @@ export default function EditorScreen() {
   // Parse global script into a map
   const parsedScript = useMemo(() => {
     const map = new Map<number, string>();
-    const blocks = globalScript.split(/(?=\[(?:Cover|封面|\d+)\])/i);
+    const hasTitle = /(?:\[(Title|扉页)\])/i.test(globalScript);
+    const blocks = globalScript.split(/(?=\[(?:Cover|封面|Title|扉页|\d+)\])/i);
     
     blocks.forEach(block => {
-      const match = block.match(/\[(Cover|封面|\d+)\]\s*([\s\S]*)/i);
+      const match = block.match(/\[(Cover|封面|Title|扉页|\d+)\]\s*([\s\S]*)/i);
       if (match) {
         const key = match[1].toLowerCase();
         const text = match[2].trim();
-        const idx = (key === 'cover' || key === '封面') ? 0 : parseInt(key, 10);
+        let idx = 0;
+        if (key === 'cover' || key === '封面') {
+            idx = 0;
+        } else if (key === 'title' || key === '扉页') {
+            idx = 1;
+        } else {
+            idx = parseInt(key, 10) + (hasTitle ? 1 : 0);
+        }
         map.set(idx, text);
       }
     });
@@ -401,6 +409,31 @@ export default function EditorScreen() {
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
   }, [isDirty, isSaving, saveProject, undo, redo]);
+  const handleInsertBlankPage = async () => {
+    try {
+      const canvas = document.createElement('canvas');
+      canvas.width = projectState?.canvas_width || 1024;
+      canvas.height = projectState?.canvas_height || 1024;
+      const ctx = canvas.getContext('2d');
+      if (ctx) {
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        // Add a virtually invisible timestamp to ensure a unique SHA256 hash
+        ctx.fillStyle = 'rgba(0,0,0,0.01)';
+        ctx.fillText(Date.now().toString(), 0, 0);
+        const base64 = canvas.toDataURL('image/png');
+        
+        await fetch('http://127.0.0.1:14320/api/save-image', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ base64_data: base64 })
+        });
+      }
+    } catch (e) {
+      console.error("Failed to insert blank page", e);
+    }
+  };
+
 
   return (
     <div className="flex flex-col h-screen bg-background text-foreground overflow-hidden transition-colors duration-300">
@@ -438,6 +471,7 @@ export default function EditorScreen() {
             handleDelete={handleDelete}
             handleOpenTrash={handleOpenTrash}
             handleDragEnd={handleDragEnd}
+            handleInsertBlank={handleInsertBlankPage}
           />
           {/* Center: Main Canvas */}
           <main ref={viewportRef} className="flex-1 bg-muted relative flex items-center justify-center p-8 overflow-hidden">
@@ -464,11 +498,13 @@ export default function EditorScreen() {
                   />
                   {currentText && (() => {
                     const isCover = selectedIdx === 0;
-                    const baseSettings = isCover ? projectState?.cover_text_settings : projectState?.inner_text_settings;
-                    const pageOverride = !isCover && selectedIdx !== null ? projectState?.page_text_overrides?.[String(selectedIdx)] : undefined;
+                    const hasTitle = /(?:\[(Title|扉页)\])/i.test(projectState?.global_script || '');
+                    const isTitle = hasTitle && selectedIdx === 1;
+                    const baseSettings = isCover ? projectState?.cover_text_settings : (isTitle ? projectState?.title_text_settings : projectState?.inner_text_settings);
+                    const pageOverride = !isCover && !isTitle && selectedIdx !== null ? projectState?.page_text_overrides?.[String(selectedIdx)] : undefined;
                     const ff = baseSettings?.font_family || 'serif';
                     const fontFamily = ff === 'sans' ? 'ui-sans-serif, system-ui, sans-serif' : ff === 'serif' ? 'ui-serif, Georgia, serif' : `'${ff}', sans-serif`;
-                    const fontSize = baseSettings?.font_size || (isCover ? 40 : 20);
+                    const fontSize = baseSettings?.font_size || (isCover ? 40 : (isTitle ? 32 : 20));
                     const textColor = (pageOverride?.text_color ?? baseSettings?.text_color) || '#ffffff';
                     const offsetX = pageOverride?.offset_x ?? baseSettings?.offset_x ?? 0;
                     const offsetY = pageOverride?.offset_y ?? baseSettings?.offset_y ?? 0;

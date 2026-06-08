@@ -39,6 +39,7 @@ export interface ProjectState {
     trashed_images: string[];
     global_script: string;
     cover_text_settings?: TextSettings;
+    title_text_settings?: TextSettings;
     inner_text_settings?: TextSettings;
     print_settings?: PrintSettings;
     canvas_width: number;
