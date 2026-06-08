@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { PenTool, Type, Maximize2, ChevronDown, ChevronRight, ChevronLeft } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { PenTool, Type, Maximize2, ChevronDown, ChevronRight, ChevronLeft, LayoutTemplate } from 'lucide-react';
 
 interface RightSidebarProps {
   isRightOpen: boolean;
@@ -17,6 +17,225 @@ interface RightSidebarProps {
   extractedColors: string[];
   xyBounds: { minX: number, maxX: number, minY: number, maxY: number };
   authorBounds: { minX: number, maxX: number, minY: number, maxY: number };
+}
+
+function SliderControl({
+  label,
+  value,
+  min,
+  max,
+  step = 1,
+  defaultValue,
+  unit = "",
+  onChange,
+  className = "",
+  valueFormat = (v: number) => String(v)
+}: {
+  label: string,
+  value: number,
+  min: number,
+  max: number,
+  step?: number,
+  defaultValue: number,
+  unit?: string,
+  onChange: (val: number) => void,
+  className?: string,
+  valueFormat?: (v: number) => string
+}) {
+  const [isEditing, setIsEditing] = useState(false);
+  const [editValue, setEditValue] = useState(valueFormat(value));
+
+  const handleDoubleClick = () => {
+    onChange(defaultValue);
+  };
+
+  const handleEditSubmit = () => {
+    let parsed = parseFloat(editValue);
+    if (!isNaN(parsed)) {
+      if (parsed < min) parsed = min;
+      if (parsed > max) parsed = max;
+      onChange(parsed);
+      setEditValue(valueFormat(parsed));
+    } else {
+      setEditValue(valueFormat(value));
+    }
+    setIsEditing(false);
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') handleEditSubmit();
+    if (e.key === 'Escape') {
+      setIsEditing(false);
+      setEditValue(valueFormat(value));
+    }
+  };
+
+  useEffect(() => {
+    if (!isEditing) {
+      setEditValue(valueFormat(value));
+    }
+  }, [value, isEditing, valueFormat]);
+
+  return (
+    <div className={`flex flex-col gap-1.5 ${className}`}>
+      <div className="flex justify-between items-center">
+        <label className="text-xs text-muted-foreground">{label}</label>
+        {isEditing ? (
+          <input
+            type="number"
+            autoFocus
+            className="w-16 text-xs text-right bg-transparent border-b border-primary outline-none text-foreground font-mono"
+            value={editValue}
+            onChange={(e) => setEditValue(e.target.value)}
+            onBlur={handleEditSubmit}
+            onKeyDown={handleKeyDown}
+          />
+        ) : (
+          <span 
+            className="text-xs font-mono cursor-pointer hover:text-primary transition-colors" 
+            onClick={() => {
+              setEditValue(valueFormat(value));
+              setIsEditing(true);
+            }}
+            title="点击修改"
+          >
+            {valueFormat(value)}{unit}
+          </span>
+        )}
+      </div>
+      <input 
+        type="range" 
+        min={min} 
+        max={max} 
+        step={step} 
+        className="w-full accent-primary cursor-pointer" 
+        value={value} 
+        onChange={(e) => onChange(parseFloat(e.target.value))} 
+        onDoubleClick={handleDoubleClick}
+        title="双击恢复默认"
+      />
+    </div>
+  );
+}
+
+function ColorPickerPanel({ 
+  colors, 
+  value, 
+  onChange, 
+  allowTransparent = false,
+  title = "颜色",
+  className = ""
+}: { 
+  colors: string[], 
+  value: string, 
+  onChange: (c: string) => void,
+  allowTransparent?: boolean,
+  title?: React.ReactNode,
+  className?: string
+}) {
+  return (
+    <div className={`flex flex-col gap-1.5 ${className}`}>
+      {title && <label className="text-xs text-muted-foreground">{title}</label>}
+      <div className="flex gap-1.5 items-center flex-wrap">
+        {allowTransparent && (
+          <button 
+            onClick={() => onChange('transparent')} 
+            className={`w-5 h-5 rounded-full border-2 transition-transform hover:scale-125 ${value === 'transparent' ? 'border-primary ring-2 ring-primary/30 scale-110' : 'border-border'}`}
+            style={{ 
+              backgroundImage: 'linear-gradient(45deg, #ccc 25%, transparent 25%), linear-gradient(-45deg, #ccc 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #ccc 75%), linear-gradient(-45deg, transparent 75%, #ccc 75%)',
+              backgroundSize: '8px 8px',
+              backgroundPosition: '0 0, 0 4px, 4px -4px, -4px 0px'
+            }}
+            title="透明背景"
+          />
+        )}
+        {['#ffffff','#000000', ...colors].map((c, i) => (
+          <button 
+            key={`${c}-${i}`} 
+            onClick={() => onChange(c)} 
+            className={`w-5 h-5 rounded-full border-2 transition-transform hover:scale-125 ${value === c ? 'border-primary ring-2 ring-primary/30 scale-110' : 'border-border'}`}
+            style={{ backgroundColor: c }}
+            title={c}
+          />
+        ))}
+        <label className="relative cursor-pointer" title="自定义颜色 (含屏幕取色)">
+          <input 
+            type="color" 
+            value={value === 'transparent' ? '#ffffff' : value}
+            onChange={(e) => onChange(e.target.value)}
+            className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+          />
+          <span className="w-5 h-5 rounded-full border-2 border-dashed border-muted-foreground flex items-center justify-center text-[10px] text-muted-foreground hover:bg-muted transition-colors">+</span>
+        </label>
+      </div>
+    </div>
+  );
+}
+
+function SyncTextSettingsDialog({
+  effectiveColor,
+  effectiveOffsetX,
+  effectiveOffsetY,
+  onSync
+}: {
+  effectiveColor: string,
+  effectiveOffsetX: number,
+  effectiveOffsetY: number,
+  onSync: (opts: { color: boolean, offsetX: boolean, offsetY: boolean }) => void
+}) {
+  const [isOpen, setIsOpen] = useState(false);
+  const [syncColor, setSyncColor] = useState(true);
+  const [syncOffsetX, setSyncOffsetX] = useState(true);
+  const [syncOffsetY, setSyncOffsetY] = useState(true);
+
+  if (!isOpen) {
+    return (
+      <button 
+        onClick={() => setIsOpen(true)}
+        className="mt-4 w-full text-xs py-1.5 border border-border rounded text-muted-foreground hover:bg-muted hover:text-foreground transition-colors flex items-center justify-center gap-1"
+        title="将当前页的文本颜色和偏移量同步给所有内容页"
+      >
+        <span>同步设置到所有内容页</span>
+      </button>
+    );
+  }
+
+  return (
+    <div className="mt-4 p-2.5 border border-primary/30 bg-primary/5 rounded-md flex flex-col gap-2.5 shadow-sm">
+      <div className="text-xs font-bold text-foreground">同步设置到所有内容页</div>
+      <label className="flex items-center gap-2 text-xs text-muted-foreground cursor-pointer hover:text-foreground transition-colors">
+        <input type="checkbox" checked={syncColor} onChange={(e) => setSyncColor(e.target.checked)} className="accent-primary w-3.5 h-3.5" />
+        <span className="flex items-center gap-1">
+          同步颜色 <span className="w-3 h-3 rounded-full border border-border inline-block ml-1" style={{ backgroundColor: effectiveColor }}></span>
+        </span>
+      </label>
+      <label className="flex items-center gap-2 text-xs text-muted-foreground cursor-pointer hover:text-foreground transition-colors">
+        <input type="checkbox" checked={syncOffsetX} onChange={(e) => setSyncOffsetX(e.target.checked)} className="accent-primary w-3.5 h-3.5" />
+        同步水平偏移 ({effectiveOffsetX}px)
+      </label>
+      <label className="flex items-center gap-2 text-xs text-muted-foreground cursor-pointer hover:text-foreground transition-colors">
+        <input type="checkbox" checked={syncOffsetY} onChange={(e) => setSyncOffsetY(e.target.checked)} className="accent-primary w-3.5 h-3.5" />
+        同步垂直偏移 ({effectiveOffsetY}px)
+      </label>
+      <div className="flex gap-2 mt-1">
+        <button 
+          onClick={() => {
+            onSync({ color: syncColor, offsetX: syncOffsetX, offsetY: syncOffsetY });
+            setIsOpen(false);
+          }}
+          className="flex-1 bg-primary text-primary-foreground text-xs py-1.5 rounded hover:bg-primary/90 font-medium transition-colors"
+        >
+          确定同步
+        </button>
+        <button 
+          onClick={() => setIsOpen(false)}
+          className="flex-1 border border-border text-foreground text-xs py-1.5 rounded hover:bg-muted transition-colors"
+        >
+          取消
+        </button>
+      </div>
+    </div>
+  );
 }
 
 export function RightSidebar({
@@ -37,7 +256,7 @@ export function RightSidebar({
   authorBounds
 }: RightSidebarProps) {
   const [rightTab, setRightTab] = useState<'script' | 'style'>('script');
-  const [openSections, setOpenSections] = useState<Record<string, boolean>>({ canvas: false, author: true, text: true });
+  const [openSections, setOpenSections] = useState<Record<string, boolean>>({ canvas: false, author: true, text: true, image: true });
 
 
 
@@ -191,34 +410,24 @@ export function RightSidebar({
                         </select>
                       </div>
 
-                      <div className="flex flex-col gap-1.5">
-                        <div className="flex justify-between">
-                          <label className="text-xs text-muted-foreground">字号</label>
-                          <span className="text-xs font-mono">{ats.font_size || 16}px</span>
-                        </div>
-                        <input 
-                          type="range" min="8" max="100" step="1"
-                          className="w-full accent-primary"
-                          value={ats.font_size || 16}
-                          onChange={(e) => updateAts({ font_size: parseInt(e.target.value) })}
-                        />
-                      </div>
+                      <SliderControl
+                        label="字号"
+                        value={ats.font_size || 16}
+                        min={8}
+                        max={100}
+                        step={1}
+                        defaultValue={16}
+                        unit="px"
+                        onChange={(val) => updateAts({ font_size: val })}
+                      />
 
                       <div className="flex items-center justify-between mt-1 border-t border-border pt-2">
-                        <div className="flex flex-col gap-1.5 flex-1 pr-4 border-r border-border">
-                          <label className="text-xs text-muted-foreground">颜色</label>
-                          <div className="flex gap-1.5 items-center flex-wrap">
-                            {['#ffffff','#000000', ...extractedColors.slice(0,4)].map((c, i) => (
-                              <button key={`a-${c}-${i}`} onClick={() => updateAts({ text_color: c })}
-                                className={`w-5 h-5 rounded-full border-2 transition-transform hover:scale-125 ${ats.text_color === c ? 'border-primary ring-2 ring-primary/30 scale-110' : 'border-border'}`}
-                                style={{ backgroundColor: c }} />
-                            ))}
-                            <label className="relative cursor-pointer" title="自定义颜色">
-                              <input type="color" value={ats.text_color || '#ffffff'} onChange={(e) => updateAts({ text_color: e.target.value })} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" />
-                              <span className="w-5 h-5 rounded-full border-2 border-dashed border-muted-foreground flex items-center justify-center text-[10px] text-muted-foreground">+</span>
-                            </label>
-                          </div>
-                        </div>
+                        <ColorPickerPanel 
+                          colors={extractedColors.slice(0, 4)}
+                          value={ats.text_color || '#ffffff'}
+                          onChange={(c) => updateAts({ text_color: c })}
+                          className="flex-1 pr-4 border-r border-border"
+                        />
                         <div className="flex flex-col gap-1.5 pl-4 items-center justify-center">
                           <label className="text-xs text-muted-foreground">智能阴影</label>
                           <input type="checkbox" className="accent-primary w-4 h-4"
@@ -229,20 +438,24 @@ export function RightSidebar({
                       </div>
 
                       <div className="flex flex-col gap-3 mt-2 border-t border-border pt-2">
-                        <div className="flex flex-col gap-1.5">
-                          <div className="flex justify-between">
-                            <label className="text-xs text-muted-foreground">水平偏移 (X)</label>
-                            <span className="text-xs font-mono">{ats.offset_x || 0}px</span>
-                          </div>
-                          <input type="range" min={authorBounds.minX} max={authorBounds.maxX} step={1} className="w-full accent-primary" value={ats.offset_x || 0} onChange={(e) => updateAts({ offset_x: parseInt(e.target.value) })} />
-                        </div>
-                        <div className="flex flex-col gap-1.5">
-                          <div className="flex justify-between">
-                            <label className="text-xs text-muted-foreground">垂直偏移 (Y)</label>
-                            <span className="text-xs font-mono">{ats.offset_y || 0}px</span>
-                          </div>
-                          <input type="range" min={authorBounds.minY} max={authorBounds.maxY} step={1} className="w-full accent-primary" value={ats.offset_y || 0} onChange={(e) => updateAts({ offset_y: parseInt(e.target.value) })} />
-                        </div>
+                        <SliderControl
+                          label="水平偏移"
+                          value={ats.offset_x || 0}
+                          min={authorBounds.minX}
+                          max={authorBounds.maxX}
+                          defaultValue={0}
+                          unit="px"
+                          onChange={(val) => updateAts({ offset_x: val })}
+                        />
+                        <SliderControl
+                          label="垂直偏移"
+                          value={ats.offset_y || 0}
+                          min={authorBounds.minY}
+                          max={authorBounds.maxY}
+                          defaultValue={0}
+                          unit="px"
+                          onChange={(val) => updateAts({ offset_y: val })}
+                        />
                       </div>
                     </>
                   );
@@ -340,46 +553,25 @@ export function RightSidebar({
                         </select>
                       </div>
 
-                      <div className="flex flex-col gap-1.5">
-                        <div className="flex justify-between">
-                          <label className="text-xs text-muted-foreground">字号</label>
-                          <span className="text-xs font-mono">{settings.font_size}px</span>
-                        </div>
-                        <input 
-                          type="range" 
-                          min="12" max="100" step="2"
-                          className="w-full accent-primary"
-                          value={settings.font_size}
-                          onChange={(e) => updateSharedSettings({ font_size: parseInt(e.target.value) })}
-                        />
-                      </div>
+                      <SliderControl
+                        label="字号"
+                        value={settings.font_size}
+                        min={12}
+                        max={100}
+                        step={2}
+                        defaultValue={24}
+                        unit="px"
+                        onChange={(val) => updateSharedSettings({ font_size: val })}
+                      />
 
                       <div className="flex items-center justify-between mt-1 border-t border-border pt-2">
-                          <div className="flex flex-col gap-1.5 flex-1 pr-4 border-r border-border">
-                              <label className="text-xs text-muted-foreground">
-                                颜色{!isCover && <span className="text-primary/60 ml-1">(本页)</span>}
-                              </label>
-                              <div className="flex gap-1.5 items-center flex-wrap">
-                                  {['#ffffff','#000000', ...extractedColors].map((c, i) => (
-                                    <button 
-                                      key={`${c}-${i}`} 
-                                      onClick={() => updatePageOverride({ text_color: c })} 
-                                      className={`w-5 h-5 rounded-full border-2 transition-transform hover:scale-125 ${effectiveColor === c ? 'border-primary ring-2 ring-primary/30 scale-110' : 'border-border'}`}
-                                      style={{ backgroundColor: c }}
-                                      title={c}
-                                    />
-                                  ))}
-                                  <label className="relative cursor-pointer" title="自定义颜色">
-                                    <input 
-                                      type="color" 
-                                      value={effectiveColor}
-                                      onChange={(e) => updatePageOverride({ text_color: e.target.value })}
-                                      className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-                                    />
-                                    <span className="w-5 h-5 rounded-full border-2 border-dashed border-muted-foreground flex items-center justify-center text-[10px] text-muted-foreground">+</span>
-                                  </label>
-                              </div>
-                          </div>
+                          <ColorPickerPanel 
+                            colors={extractedColors}
+                            value={effectiveColor}
+                            onChange={(c) => updatePageOverride({ text_color: c })}
+                            className="flex-1 pr-4 border-r border-border"
+                            title={<>颜色{!isCover && <span className="text-primary/60 ml-1">(本页)</span>}</>}
+                          />
                           <div className="flex flex-col gap-1.5 pl-4 items-center justify-center">
                               <label className="text-xs text-muted-foreground">智能阴影</label>
                               <input 
@@ -397,35 +589,143 @@ export function RightSidebar({
                             ↕ 偏移为本页独立设置
                           </div>
                         )}
-                        <div className="flex flex-col gap-1.5">
-                          <div className="flex justify-between">
-                            <label className="text-xs text-muted-foreground">水平偏移 (X)</label>
-                            <span className="text-xs font-mono">{effectiveOffsetX}px</span>
-                          </div>
-                          <input 
-                            type="range" min={xyBounds.minX} max={xyBounds.maxX} step="1" className="w-full accent-primary"
-                            value={effectiveOffsetX}
-                            onChange={(e) => updatePageOverride({ offset_x: parseInt(e.target.value) })}
-                          />
-                        </div>
-                        <div className="flex flex-col gap-1.5">
-                          <div className="flex justify-between">
-                            <label className="text-xs text-muted-foreground">垂直偏移 (Y)</label>
-                            <span className="text-xs font-mono">{effectiveOffsetY}px</span>
-                          </div>
-                          <input 
-                            type="range" min={xyBounds.minY} max={xyBounds.maxY} step="1" className="w-full accent-primary"
-                            value={effectiveOffsetY}
-                            onChange={(e) => updatePageOverride({ offset_y: parseInt(e.target.value) })}
-                          />
-                        </div>
+                        <SliderControl
+                          label="水平偏移"
+                          value={effectiveOffsetX}
+                          min={xyBounds.minX}
+                          max={xyBounds.maxX}
+                          defaultValue={0}
+                          unit="px"
+                          onChange={(val) => updatePageOverride({ offset_x: val })}
+                        />
+                        <SliderControl
+                          label="垂直偏移"
+                          value={effectiveOffsetY}
+                          min={xyBounds.minY}
+                          max={xyBounds.maxY}
+                          defaultValue={0}
+                          unit="px"
+                          onChange={(val) => updatePageOverride({ offset_y: val })}
+                        />
                       </div>
+                      {!isCover && !isTitle && (
+                        <SyncTextSettingsDialog 
+                          effectiveColor={effectiveColor}
+                          effectiveOffsetX={effectiveOffsetX}
+                          effectiveOffsetY={effectiveOffsetY}
+                          onSync={(opts) => {
+                            const overrides = { ...(projectState?.page_text_overrides || {}) };
+                            const paragraphs = (globalScript || '').split(/\n\s*\n/).filter((p: string) => p.trim().length > 0);
+                            const startIndex = hasTitle ? 2 : 1;
+                            const endIndex = paragraphs.length;
+                            for (let i = startIndex; i <= endIndex; i++) {
+                              if (i === selectedIdx) continue;
+                              const currentOverride = { ...overrides[String(i)] };
+                              if (opts.color) currentOverride.text_color = effectiveColor;
+                              if (opts.offsetX) currentOverride.offset_x = effectiveOffsetX;
+                              if (opts.offsetY) currentOverride.offset_y = effectiveOffsetY;
+                              overrides[String(i)] = currentOverride;
+                            }
+                            updateProjectState({ page_text_overrides: overrides });
+                          }}
+                        />
+                      )}
                     </>
                   );
                 })()}
                 </div>
                 )}
               </div>
+
+              {/* Image Adjustments Panel */}
+              <div className="border-b border-border pb-2 mt-4">
+                <button onClick={() => setOpenSections(s => ({...s, image: !s.image}))} className="flex items-center justify-between w-full py-1.5 hover:text-foreground transition-colors">
+                  <div className="flex items-center gap-2">
+                    <LayoutTemplate size={14} className="text-emerald-500" />
+                    <span className="font-bold text-sm">图像微调 (本页)</span>
+                  </div>
+                  <ChevronDown size={14} className={`text-muted-foreground transition-transform ${openSections.image ? 'rotate-180' : ''}`} />
+                </button>
+                {openSections.image && (
+                <div className="flex flex-col gap-3 pt-2">
+                  {(() => {
+                    const pageKey = String(selectedIdx);
+                    const adj = projectState?.image_adjustments?.[pageKey] || {};
+                    const scale = adj.scale ?? 1.0;
+                    const offsetX = adj.offset_x ?? 0;
+                    const offsetY = adj.offset_y ?? 0;
+                    const bgColor = adj.bg_color || 'transparent';
+
+                    const updateAdj = (updates: Partial<typeof adj>) => {
+                      const existing = projectState?.image_adjustments || {};
+                      const current = existing[pageKey] || {};
+                      updateProjectState({
+                        image_adjustments: { ...existing, [pageKey]: { ...current, ...updates } }
+                      });
+                    };
+
+                    const resetAdj = () => {
+                      const existing = projectState?.image_adjustments || {};
+                      const newAdjs = { ...existing };
+                      delete newAdjs[pageKey];
+                      updateProjectState({ image_adjustments: newAdjs });
+                    };
+
+                    return (
+                      <>
+                        <ColorPickerPanel 
+                          colors={extractedColors}
+                          value={bgColor}
+                          onChange={(c) => updateAdj({ bg_color: c })}
+                          allowTransparent={true}
+                          className="border-b border-border pb-2"
+                          title="画布底色"
+                        />
+                        <SliderControl
+                          label="缩放比例"
+                          value={scale}
+                          min={0.5}
+                          max={3.0}
+                          step={0.05}
+                          defaultValue={1.0}
+                          unit="x"
+                          valueFormat={(v) => v.toFixed(2)}
+                          onChange={(val) => updateAdj({ scale: val })}
+                        />
+                        <SliderControl
+                          label="水平偏移"
+                          value={offsetX}
+                          min={-100}
+                          max={100}
+                          step={1}
+                          defaultValue={0}
+                          unit="%"
+                          onChange={(val) => updateAdj({ offset_x: val })}
+                          className="mt-2"
+                        />
+                        <SliderControl
+                          label="垂直偏移"
+                          value={offsetY}
+                          min={-100}
+                          max={100}
+                          step={1}
+                          defaultValue={0}
+                          unit="%"
+                          onChange={(val) => updateAdj({ offset_y: val })}
+                          className="mt-2"
+                        />
+                        {(scale !== 1 || offsetX !== 0 || offsetY !== 0) && (
+                          <button onClick={resetAdj} className="mt-2 text-xs text-red-400 hover:text-red-500 text-right w-full">
+                            恢复默认设置
+                          </button>
+                        )}
+                      </>
+                    );
+                  })()}
+                </div>
+                )}
+              </div>
+
             </div>
             )}
           </aside>

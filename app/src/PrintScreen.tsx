@@ -15,8 +15,9 @@ function getTextShadowStyle(hexColor: string, hasShadow: boolean): string {
     const g = parseInt(hex.substring(2, 4), 16) || 0;
     const b = parseInt(hex.substring(4, 6), 16) || 0;
     const yiq = ((r * 299) + (g * 587) + (b * 114)) / 1000;
-    const shadowColor = yiq >= 128 ? 'rgba(0,0,0,0.8)' : 'rgba(255,255,255,0.8)';
-    return `0 2px 4px ${shadowColor}`;
+    return yiq >= 128 
+        ? '0 0 2px rgba(0,0,0,1), 0 0 6px rgba(0,0,0,0.8), 0 2px 10px rgba(0,0,0,0.4)' 
+        : '0 0 2px rgba(255,255,255,1), 0 0 6px rgba(255,255,255,0.9), 0 2px 10px rgba(255,255,255,0.6)';
 }
 
 export interface ImposedSheet {
@@ -118,8 +119,8 @@ function calculateImposition(images: string[], settings: any): ImposedSheet[] {
 export default function PrintScreen() {
     const { projectState, updateProjectState } = useProject();
 
-    // Default settings if undefined
-    const settings = projectState?.print_settings || {
+    const savedSettings = projectState?.print_settings || {};
+    const settings = {
         paper_size: 'A4',
         paper_orientation: 'landscape',
         layout_mode: '2-up',
@@ -130,8 +131,10 @@ export default function PrintScreen() {
         hardware_margin_mm: 5,
         auto_snap_content: true,
         crop_marks: true,
+        double_sided: true,
         offset_x: 0.0,
         offset_y: 0.0,
+        ...savedSettings
     };
 
     const [isExporting, setIsExporting] = useState(false);
@@ -559,13 +562,28 @@ export default function PrintScreen() {
                 overflow: 'hidden',
                 position: 'relative',
             }}>
-                {/* Image fills canvas */}
-                <img 
-                    crossOrigin="anonymous"
-                    onLoad={e => handleImageLoad(pageIdx, e)}
-                    src={`http://127.0.0.1:14320/images/${imgFile}`}
-                    style={{ width: '100%', height: '100%', objectFit: 'contain' }}
-                />
+                {/* Image fills canvas with overflow handling */}
+                {(() => {
+                    const imgAdj = projectState?.image_adjustments?.[String(pageIdx)];
+                    const scale = imgAdj?.scale ?? 1;
+                    const offsetX = imgAdj?.offset_x ?? 0;
+                    const offsetY = imgAdj?.offset_y ?? 0;
+                    const bgColor = imgAdj?.bg_color || 'transparent';
+                    
+                    return (
+                        <div className="absolute inset-0 overflow-hidden flex items-center justify-center" style={{ backgroundColor: bgColor }}>
+                            <img 
+                                crossOrigin="anonymous"
+                                onLoad={e => handleImageLoad(pageIdx, e)}
+                                src={imgFile.startsWith('blank://') ? "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" : `http://127.0.0.1:14320/images/${imgFile}`}
+                                className={`w-full h-full object-contain ${imgFile.startsWith('blank://') ? 'bg-white' : ''}`}
+                                style={{ 
+                                    transform: `translate(${offsetX}%, ${offsetY}%) scale(${scale})`
+                                }}
+                            />
+                        </div>
+                    );
+                })()}
                 {/* Title text overlay */}
                 {text && renderTextOverlay(
                     text,
@@ -614,9 +632,9 @@ export default function PrintScreen() {
                             value={settings.binding_method}
                             onChange={(e) => updateSettings({ binding_method: e.target.value })}
                         >
-                            <option value="saddle">骑马钉 (Saddle Stitch)</option>
-                            <option value="perfect">无线胶装 (Perfect Binding)</option>
-                            <option value="butterfly">蝴蝶对裱 (Butterfly)</option>
+                            <option value="saddle">骑马钉</option>
+                            <option value="perfect">无线胶装</option>
+                            <option value="butterfly">蝴蝶对裱</option>
                         </select>
                     </div>
 
@@ -654,8 +672,8 @@ export default function PrintScreen() {
                                     onChange={(e) => updateSettings({ paper_orientation: e.target.value })}
                                     disabled={settings.binding_method === 'saddle' || settings.binding_method === 'butterfly'}
                                 >
-                                    <option value="portrait">纵向 (Portrait)</option>
-                                    <option value="landscape">横向 (Landscape)</option>
+                                    <option value="portrait">纵向</option>
+                                    <option value="landscape">横向</option>
                                 </select>
                                 {(settings.binding_method === 'saddle' || settings.binding_method === 'butterfly') && <p className="text-[9px] text-amber-500 mt-0.5">该装订仅支持横向</p>}
                             </div>
@@ -668,8 +686,8 @@ export default function PrintScreen() {
                                 onChange={(e) => updateSettings({ layout_mode: e.target.value })}
                                 disabled={settings.binding_method !== 'perfect'}
                             >
-                                <option value="1-up">1-up (单页)</option>
-                                <option value="2-up">2-up (双页拼版)</option>
+                                <option value="1-up">单页</option>
+                                <option value="2-up">双页拼版</option>
                             </select>
                             {settings.binding_method !== 'perfect' && <p className="text-[9px] text-amber-500 mt-0.5">该装订仅支持 2-up</p>}
                         </div>
@@ -753,7 +771,12 @@ export default function PrintScreen() {
 
                         <label className="flex items-center gap-2 cursor-pointer mt-1">
                             <input type="checkbox" checked={settings.crop_marks} onChange={e => updateSettings({ crop_marks: e.target.checked })} className="accent-primary w-4 h-4" />
-                            <span className="text-sm">生成印刷裁剪线 (Crop Marks)</span>
+                            <span className="text-sm">生成印刷裁剪线</span>
+                        </label>
+                        
+                        <label className="flex items-center gap-2 cursor-pointer">
+                            <input type="checkbox" checked={settings.double_sided} onChange={e => updateSettings({ double_sided: e.target.checked })} className="accent-primary w-4 h-4" />
+                            <span className="text-sm">双面打印 (背面隐藏裁剪线)</span>
                         </label>
                         
                         <label className="flex items-center gap-2 cursor-pointer">
@@ -1088,7 +1111,7 @@ export default function PrintScreen() {
                                         </div>
 
                                     {/* Crop/Trim Lines (paper level, high z-index) */}
-                                    {settings.crop_marks && (() => {
+                                    {settings.crop_marks && !settings.double_sided && (() => {
                                         const bbLeft = backLeft;
                                         const bbTopPos = backTop + settings.offset_y;
                                         const bbRight = bbLeft + scaledW;

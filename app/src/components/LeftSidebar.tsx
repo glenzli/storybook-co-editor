@@ -1,6 +1,6 @@
 import { DndContext, closestCenter, PointerSensor, KeyboardSensor, useSensor, useSensors } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy, sortableKeyboardCoordinates } from '@dnd-kit/sortable';
-import { LayoutTemplate, Trash2, Sun, Moon, ChevronLeft, ChevronRight, FilePlus } from 'lucide-react';
+import { LayoutTemplate, Archive, Sun, Moon, ChevronLeft, ChevronRight, FilePlus } from 'lucide-react';
 import { SortableImageItem } from './SortableImageItem';
 
 interface LeftSidebarProps {
@@ -15,6 +15,7 @@ interface LeftSidebarProps {
   handleOpenTrash: () => void;
   handleDragEnd: (event: any) => void;
   handleInsertBlank: () => void;
+  hasTitle?: boolean;
 }
 
 export function LeftSidebar({
@@ -28,7 +29,8 @@ export function LeftSidebar({
   handleDelete,
   handleOpenTrash,
   handleDragEnd,
-  handleInsertBlank
+  handleInsertBlank,
+  hasTitle
 }: LeftSidebarProps) {
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
@@ -47,8 +49,8 @@ export function LeftSidebar({
             <button onClick={handleInsertBlank} title="插入空白页" className="p-2 rounded-full hover:bg-muted text-muted-foreground transition-colors">
               <FilePlus size={16} />
             </button>
-            <button onClick={handleOpenTrash} title="回收站" className="p-2 rounded-full hover:bg-red-500/10 text-red-500 transition-colors">
-              <Trash2 size={16} />
+            <button onClick={handleOpenTrash} title="回收站" className="p-2 rounded-full hover:bg-muted text-muted-foreground transition-colors">
+              <Archive size={16} />
             </button>
             <button onClick={() => setIsDark(!isDark)} className="p-2 rounded-full hover:bg-muted text-muted-foreground transition-colors">
               {isDark ? <Sun size={16} /> : <Moon size={16} />}
@@ -75,6 +77,7 @@ export function LeftSidebar({
                     selectedIdx={selectedIdx}
                     setSelectedIdx={setSelectedIdx}
                     onDelete={handleDelete}
+                    hasTitle={hasTitle}
                   />
                 ))}
               </SortableContext>

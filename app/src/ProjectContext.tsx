@@ -7,12 +7,19 @@ import { open, save } from '@tauri-apps/plugin-dialog';
 import { useNavigate } from 'react-router-dom';
 
 export interface TextSettings {
-    font_family: string;
-    font_size: number;
-    text_color: string;
+    font_size?: number;
+    text_color?: string;
+    font_family?: string;
     has_shadow?: boolean;
     offset_x?: number;
     offset_y?: number;
+}
+
+export interface ImageAdjustments {
+    offset_x?: number;
+    offset_y?: number;
+    scale?: number;
+    bg_color?: string;
 }
 
 export interface PrintSettings {
@@ -41,6 +48,7 @@ export interface ProjectState {
     cover_text_settings?: TextSettings;
     title_text_settings?: TextSettings;
     inner_text_settings?: TextSettings;
+    image_adjustments?: Record<string, ImageAdjustments>;
     print_settings?: PrintSettings;
     canvas_width: number;
     canvas_height: number;

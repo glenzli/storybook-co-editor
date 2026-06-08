@@ -89,6 +89,19 @@ impl Default for PrintSettings {
 }
 
 fn default_canvas_size() -> u32 { 1024 }
+fn default_scale() -> f32 { 1.0 }
+
+#[derive(Serialize, Deserialize, Clone)]
+pub struct ImageAdjustments {
+    #[serde(default)]
+    pub offset_x: f32,
+    #[serde(default)]
+    pub offset_y: f32,
+    #[serde(default = "default_scale")]
+    pub scale: f32,
+    #[serde(default)]
+    pub bg_color: Option<String>,
+}
 
 #[derive(Serialize, Deserialize, Clone)]
 pub struct ProjectState {
@@ -100,7 +113,11 @@ pub struct ProjectState {
     #[serde(default)]
     pub cover_text_settings: TextSettings,
     #[serde(default)]
+    pub title_text_settings: TextSettings,
+    #[serde(default)]
     pub inner_text_settings: TextSettings,
+    #[serde(default)]
+    pub image_adjustments: HashMap<String, ImageAdjustments>,
     #[serde(default)]
     pub print_settings: PrintSettings,
     #[serde(default = "default_canvas_size")]
@@ -124,7 +141,9 @@ impl Default for ProjectState {
             trashed_images: vec![],
             global_script: "".to_string(),
             cover_text_settings: TextSettings { font_size: 40.0, ..TextSettings::default() },
+            title_text_settings: TextSettings { font_size: 32.0, ..TextSettings::default() },
             inner_text_settings: TextSettings::default(),
+            image_adjustments: HashMap::new(),
             print_settings: PrintSettings::default(),
             canvas_width: 1024,
             canvas_height: 1024,

@@ -23,7 +23,10 @@ function getShadowStyle(hexColor: string, hasShadow: boolean) {
     const g = parseInt(hex.substring(2, 4), 16) || 0;
     const b = parseInt(hex.substring(4, 6), 16) || 0;
     const yiq = ((r * 299) + (g * 587) + (b * 114)) / 1000;
-    return yiq >= 128 ? 'drop-shadow(0 2px 4px rgba(0,0,0,0.8))' : 'drop-shadow(0 2px 4px rgba(255,255,255,0.8))';
+    // 强化发光/阴影层叠，形成清晰的边缘保护层
+    return yiq >= 128 
+        ? 'drop-shadow(0 0 2px rgba(0,0,0,1)) drop-shadow(0 0 6px rgba(0,0,0,0.8)) drop-shadow(0 2px 10px rgba(0,0,0,0.4))' 
+        : 'drop-shadow(0 0 2px rgba(255,255,255,1)) drop-shadow(0 0 6px rgba(255,255,255,0.9)) drop-shadow(0 2px 10px rgba(255,255,255,0.6))';
 }
 
 interface SavedImageEvent {
@@ -103,8 +106,8 @@ export default function EditorScreen() {
 
   useEffect(() => {
     if (projectState) {
-        const urls = projectState.visible_images.map((f: string) => `http://127.0.0.1:14320/images/${f}`);
-        const trashUrls = projectState.trashed_images.map((f: string) => `http://127.0.0.1:14320/images/${f}`);
+        const urls = projectState.visible_images.map((f: string) => f.startsWith('blank://') ? f : `http://127.0.0.1:14320/images/${f}`);
+        const trashUrls = projectState.trashed_images.map((f: string) => f.startsWith('blank://') ? f : `http://127.0.0.1:14320/images/${f}`);
         setImages(urls);
         setTrashedImages(trashUrls);
         if (projectState.global_script) {
@@ -175,8 +178,8 @@ export default function EditorScreen() {
       if (!isLoaded) return;
       const tid = setTimeout(() => {
         updateProjectState({
-            visible_images: images.map(url => url.split('/').pop()!),
-            trashed_images: trashedImages.map(url => url.split('/').pop()!),
+            visible_images: images.map(url => url.startsWith('blank://') ? url : url.split('/').pop()!),
+            trashed_images: trashedImages.map(url => url.startsWith('blank://') ? url : url.split('/').pop()!),
             global_script: globalScript
         });
       }, 500);
@@ -363,6 +366,7 @@ export default function EditorScreen() {
 
   const handleDelete = (idToRemove: string) => {
       setTrashedImages(prev => {
+          if (idToRemove.startsWith('blank://')) return prev;
           if (!prev.includes(idToRemove)) return [...prev, idToRemove];
           return prev;
       });
@@ -409,29 +413,12 @@ export default function EditorScreen() {
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
   }, [isDirty, isSaving, saveProject, undo, redo]);
-  const handleInsertBlankPage = async () => {
-    try {
-      const canvas = document.createElement('canvas');
-      canvas.width = projectState?.canvas_width || 1024;
-      canvas.height = projectState?.canvas_height || 1024;
-      const ctx = canvas.getContext('2d');
-      if (ctx) {
-        ctx.fillStyle = '#ffffff';
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
-        // Add a virtually invisible timestamp to ensure a unique SHA256 hash
-        ctx.fillStyle = 'rgba(0,0,0,0.01)';
-        ctx.fillText(Date.now().toString(), 0, 0);
-        const base64 = canvas.toDataURL('image/png');
-        
-        await fetch('http://127.0.0.1:14320/api/save-image', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ base64_data: base64 })
-        });
-      }
-    } catch (e) {
-      console.error("Failed to insert blank page", e);
-    }
+  const handleInsertBlankPage = () => {
+    setImages(prev => {
+        const next = [...prev, `blank://${Date.now()}`];
+        setSelectedIdx(next.length - 1);
+        return next;
+    });
   };
 
 
@@ -472,6 +459,7 @@ export default function EditorScreen() {
             handleOpenTrash={handleOpenTrash}
             handleDragEnd={handleDragEnd}
             handleInsertBlank={handleInsertBlankPage}
+            hasTitle={/(?:\[(Title|扉页)\])/i.test(projectState?.global_script || '')}
           />
           {/* Center: Main Canvas */}
           <main ref={viewportRef} className="flex-1 bg-muted relative flex items-center justify-center p-8 overflow-hidden">
@@ -490,12 +478,34 @@ export default function EditorScreen() {
                     transformOrigin: 'top left',
                   }}
                 >
-                  <img 
-                    src={images[selectedIdx]} 
-                    className="rounded-sm"
-                    style={{ width: '100%', height: '100%', objectFit: 'contain' }}
-                    alt="Selected page" 
-                  />
+                  <div className="absolute inset-0 overflow-hidden rounded-sm flex items-center justify-center">
+                    {(() => {
+                      const imgAdj = projectState?.image_adjustments?.[String(selectedIdx)];
+                      const scale = imgAdj?.scale ?? 1;
+                      const offsetX = imgAdj?.offset_x ?? 0;
+                      const offsetY = imgAdj?.offset_y ?? 0;
+                      const bgColor = imgAdj?.bg_color || 'transparent';
+                      const isTransparent = bgColor === 'transparent';
+                      const transparentBgStyle = {
+                        backgroundImage: 'linear-gradient(45deg, #e5e5e5 25%, transparent 25%), linear-gradient(-45deg, #e5e5e5 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #e5e5e5 75%), linear-gradient(-45deg, transparent 75%, #e5e5e5 75%)',
+                        backgroundSize: '20px 20px',
+                        backgroundPosition: '0 0, 0 10px, 10px -10px, -10px 0px',
+                        backgroundColor: '#ffffff'
+                      };
+                      return (
+                        <div className="absolute inset-0 flex items-center justify-center transition-colors" style={isTransparent ? transparentBgStyle : { backgroundColor: bgColor }}>
+                          <img 
+                            src={images[selectedIdx].startsWith('blank://') ? "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" : images[selectedIdx]} 
+                            className={`w-full h-full object-contain ${images[selectedIdx].startsWith('blank://') ? 'bg-white' : ''}`}
+                            style={{ 
+                              transform: `translate(${offsetX}%, ${offsetY}%) scale(${scale})`
+                            }}
+                            alt="Selected page" 
+                          />
+                        </div>
+                      );
+                    })()}
+                  </div>
                   {currentText && (() => {
                     const isCover = selectedIdx === 0;
                     const hasTitle = /(?:\[(Title|扉页)\])/i.test(projectState?.global_script || '');
