@@ -1,5 +1,84 @@
-import { useState, useEffect } from 'react';
-import { PenTool, Type, Maximize2, ChevronDown, ChevronRight, ChevronLeft, LayoutTemplate } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
+import { PenTool, Type, Maximize2, ChevronDown, ChevronRight, ChevronLeft, LayoutTemplate, Pipette, Trash2 } from 'lucide-react';
+import { HexColorPicker } from 'react-colorful';
+
+const useEyedropper = () => {
+  const [isSupported] = useState(() => 'EyeDropper' in window);
+  
+  const open = async (): Promise<string | null> => {
+    if (isSupported) {
+      try {
+        const dropper = new (window as any).EyeDropper();
+        const result = await dropper.open();
+        return result.sRGBHex;
+      } catch (e) {
+        return null;
+      }
+    } else {
+      return new Promise((resolve) => {
+        import('html2canvas').then(({ default: html2canvas }) => {
+          html2canvas(document.body, { useCORS: true }).then((canvas) => {
+            const overlay = document.createElement('div');
+            const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><g stroke="white" stroke-width="4" fill="none"><path d="m2 22 1-1h3l9-9"/><path d="M3 21v-3l9-9"/><path d="m15 6 3.4-3.4a2.1 2.1 0 1 1 3 3L18 9l-3-3Z" fill="white"/></g><g stroke="black" stroke-width="2" fill="none"><path d="m2 22 1-1h3l9-9"/><path d="M3 21v-3l9-9"/><path d="m15 6 3.4-3.4a2.1 2.1 0 1 1 3 3L18 9l-3-3Z" fill="white"/></g></svg>`;
+            const cursorUrl = `url('data:image/svg+xml;utf8,${encodeURIComponent(svg)}') 0 24, crosshair`;
+            Object.assign(overlay.style, {
+              position: 'fixed', top: '0', left: '0', width: '100vw', height: '100vh',
+              cursor: cursorUrl, zIndex: '999999'
+            });
+            const cleanup = () => { if (document.body.contains(overlay)) document.body.removeChild(overlay); };
+            overlay.onclick = (e) => {
+              const ctx = canvas.getContext('2d');
+              if (ctx) {
+                const ratio = window.devicePixelRatio || 1;
+                const px = ctx.getImageData(e.clientX * ratio, e.clientY * ratio, 1, 1).data;
+                const hex = '#' + [px[0], px[1], px[2]].map(x => x.toString(16).padStart(2, '0')).join('');
+                resolve(hex);
+              } else resolve(null);
+              cleanup();
+            };
+            overlay.oncontextmenu = (e) => { e.preventDefault(); resolve(null); cleanup(); };
+            document.addEventListener('keydown', (e) => { if (e.key === 'Escape') { resolve(null); cleanup(); } }, { once: true });
+            document.body.appendChild(overlay);
+          }).catch(() => resolve(null));
+        });
+      });
+    }
+  };
+  return { open };
+};
+
+function hexToHue(hex: string): number {
+  if (hex.length !== 7) return 0;
+  const r = parseInt(hex.slice(1,3), 16) / 255;
+  const g = parseInt(hex.slice(3,5), 16) / 255;
+  const b = parseInt(hex.slice(5,7), 16) / 255;
+  const max = Math.max(r, g, b), min = Math.min(r, g, b);
+  if (max === min) return 0;
+  const d = max - min;
+  let h = 0;
+  if (max === r) h = (g - b) / d + (g < b ? 6 : 0);
+  else if (max === g) h = (b - r) / d + 2;
+  else h = (r - g) / d + 4;
+  return Math.round(h * 60); // 0 to 360
+}
+
+function hueToHex(hue: number): string {
+  const h = hue / 360;
+  const hue2rgb = (p: number, q: number, t: number) => {
+      if (t < 0) t += 1;
+      if (t > 1) t -= 1;
+      if (t < 1/6) return p + (q - p) * 6 * t;
+      if (t < 1/2) return q;
+      if (t < 2/3) return p + (q - p) * (2/3 - t) * 6;
+      return p;
+  };
+  const q = 0.5 * (1 + 1); // S=1, L=0.5 -> q=1
+  const p = 2 * 0.5 - q;   // p=0
+  const r = Math.round(hue2rgb(p, q, h + 1/3) * 255);
+  const g = Math.round(hue2rgb(p, q, h) * 255);
+  const b = Math.round(hue2rgb(p, q, h - 1/3) * 255);
+  return '#' + [r,g,b].map(x => x.toString(16).padStart(2, '0')).join('');
+}
 
 interface RightSidebarProps {
   isRightOpen: boolean;
@@ -133,6 +212,25 @@ function ColorPickerPanel({
   title?: React.ReactNode,
   className?: string
 }) {
+  const [isOpen, setIsOpen] = useState(false);
+  const popoverRef = useRef<HTMLDivElement>(null);
+  const { open: openEyedropper } = useEyedropper();
+
+  useEffect(() => {
+    const listener = (e: MouseEvent | TouchEvent) => {
+      if (!popoverRef.current || popoverRef.current.contains(e.target as Node)) return;
+      setIsOpen(false);
+    };
+    if (isOpen) document.addEventListener('mousedown', listener);
+    return () => document.removeEventListener('mousedown', listener);
+  }, [isOpen]);
+
+  const handlePickColor = async () => {
+    setIsOpen(false);
+    const hex = await openEyedropper();
+    if (hex) onChange(hex);
+  };
+
   return (
     <div className={`flex flex-col gap-1.5 ${className}`}>
       {title && <label className="text-xs text-muted-foreground">{title}</label>}
@@ -158,15 +256,32 @@ function ColorPickerPanel({
             title={c}
           />
         ))}
-        <label className="relative cursor-pointer" title="自定义颜色 (含屏幕取色)">
-          <input 
-            type="color" 
-            value={value === 'transparent' ? '#ffffff' : value}
-            onChange={(e) => onChange(e.target.value)}
-            className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-          />
-          <span className="w-5 h-5 rounded-full border-2 border-dashed border-muted-foreground flex items-center justify-center text-[10px] text-muted-foreground hover:bg-muted transition-colors">+</span>
-        </label>
+        <div className="relative" ref={popoverRef}>
+          <button
+            onClick={() => setIsOpen(!isOpen)}
+            className="w-5 h-5 rounded-full border-2 border-border cursor-pointer transition-transform hover:scale-125 flex items-center justify-center bg-[conic-gradient(red,yellow,lime,aqua,blue,magenta,red)] overflow-hidden"
+            title="自定义颜色"
+          >
+            <div className="w-3 h-3 rounded-full border border-black/10" style={{ backgroundColor: value === 'transparent' ? '#ffffff' : value }} />
+          </button>
+          
+          {isOpen && (
+            <div className="absolute top-full left-0 mt-2 z-50 p-3 bg-card border border-border shadow-2xl rounded-xl flex flex-col gap-3 animate-in fade-in zoom-in-95 duration-150">
+              <HexColorPicker color={value === 'transparent' ? '#ffffff' : value} onChange={onChange} />
+              <div className="flex items-center gap-2">
+                <input 
+                  type="text" 
+                  value={value === 'transparent' ? '#ffffff' : value} 
+                  onChange={e => onChange(e.target.value)}
+                  className="flex-1 bg-muted border border-border rounded px-2 py-1 text-xs font-mono uppercase focus:outline-none focus:ring-1 focus:ring-primary"
+                />
+              </div>
+            </div>
+          )}
+        </div>
+        <button onClick={handlePickColor} className="w-5 h-5 flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors hover:scale-110" title="屏幕取色 (Esc 取消)">
+          <Pipette size={14} />
+        </button>
       </div>
     </div>
   );
@@ -258,7 +373,47 @@ export function RightSidebar({
   const [rightTab, setRightTab] = useState<'script' | 'style'>('script');
   const [openSections, setOpenSections] = useState<Record<string, boolean>>({ canvas: false, author: true, text: true, image: true });
 
+  const { open: openGlobalEyedropper } = useEyedropper();
 
+  const handleAddSelectiveColor = async (pageKey: string) => {
+    const hex = await openGlobalEyedropper();
+    if (!hex) return;
+    const h = hexToHue(hex);
+    
+    const existing = projectState?.image_adjustments || {};
+    const current = existing[pageKey] || {};
+    const selective_colors = [...(current.selective_colors || [])];
+    selective_colors.push({
+      id: Math.random().toString(36).substr(2, 9),
+      target_hue: h,
+      d_hue: 0,
+      d_sat: 0,
+      d_lum: 0
+    });
+    updateProjectState({
+      image_adjustments: { ...existing, [pageKey]: { ...current, selective_colors } }
+    });
+  };
+
+  const handleUpdateSelectiveColor = (pageKey: string, id: string, updates: any) => {
+    const existing = projectState?.image_adjustments || {};
+    const current = existing[pageKey] || {};
+    if (!current.selective_colors) return;
+    const selective_colors = current.selective_colors.map((sc: any) => sc.id === id ? { ...sc, ...updates } : sc);
+    updateProjectState({
+      image_adjustments: { ...existing, [pageKey]: { ...current, selective_colors } }
+    });
+  };
+
+  const handleRemoveSelectiveColor = (pageKey: string, id: string) => {
+    const existing = projectState?.image_adjustments || {};
+    const current = existing[pageKey] || {};
+    if (!current.selective_colors) return;
+    const selective_colors = current.selective_colors.filter((sc: any) => sc.id !== id);
+    updateProjectState({
+      image_adjustments: { ...existing, [pageKey]: { ...current, selective_colors } }
+    });
+  };
 
   return (
     <>
@@ -380,14 +535,11 @@ export function RightSidebar({
                 </button>
                 {openSections.author && (
                 <div className="flex flex-col gap-3 pt-2">
-                <input 
-                  type="text"
-                  placeholder="输入作者名..."
-                  className="w-full bg-background border border-border rounded-md p-2 text-sm focus:ring-1 focus:ring-primary outline-none"
-                  value={projectState?.author_name || ''}
-                  onChange={(e) => updateProjectState({ author_name: e.target.value })}
-                />
-                {projectState?.author_name && (() => {
+                <div className="text-xs text-muted-foreground bg-muted/30 p-2 rounded border border-border/50">
+                  💡 提示：在左侧剧本中使用 <code>[Author]</code> 标签添加作者信息。<br/>
+                  例如：<code>[Author] 编绘：AI</code>
+                </div>
+                {(() => {
                   const ats = projectState?.author_text_settings || { font_size: 16, text_color: '#ffffff', font_family: 'serif', has_shadow: true, offset_x: 0, offset_y: 0 };
                   const updateAts = (updates: any) => updateProjectState({ author_text_settings: { ...ats, ...updates } });
                   return (
@@ -423,7 +575,7 @@ export function RightSidebar({
 
                       <div className="flex items-center justify-between mt-1 border-t border-border pt-2">
                         <ColorPickerPanel 
-                          colors={extractedColors.slice(0, 4)}
+                          colors={extractedColors}
                           value={ats.text_color || '#ffffff'}
                           onChange={(c) => updateAts({ text_color: c })}
                           className="flex-1 pr-4 border-r border-border"
@@ -655,6 +807,14 @@ export function RightSidebar({
                     const offsetX = adj.offset_x ?? 0;
                     const offsetY = adj.offset_y ?? 0;
                     const bgColor = adj.bg_color || 'transparent';
+                    const brightness = adj.brightness ?? 0;
+                    const exposure = adj.exposure ?? 0;
+                    const highlights = adj.highlights ?? 0;
+                    const shadows = adj.shadows ?? 0;
+                    const contrast = adj.contrast ?? 0;
+                    const saturate = adj.saturate ?? 0;
+                    const temperature = adj.temperature ?? 0;
+                    const tint = adj.tint ?? 0;
 
                     const updateAdj = (updates: Partial<typeof adj>) => {
                       const existing = projectState?.image_adjustments || {};
@@ -714,7 +874,154 @@ export function RightSidebar({
                           onChange={(val) => updateAdj({ offset_y: val })}
                           className="mt-2"
                         />
-                        {(scale !== 1 || offsetX !== 0 || offsetY !== 0) && (
+                        <div className="my-2 border-t border-border pt-3">
+                          <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 block">调色</label>
+                          <SliderControl
+                            label="亮度"
+                            value={brightness}
+                            min={-100}
+                            max={100}
+                            step={1}
+                            defaultValue={0}
+                            onChange={(val) => updateAdj({ brightness: val })}
+                          />
+                          <SliderControl
+                            label="曝光"
+                            value={exposure}
+                            min={-100}
+                            max={100}
+                            step={1}
+                            defaultValue={0}
+                            onChange={(val) => updateAdj({ exposure: val })}
+                            className="mt-2"
+                          />
+                          <SliderControl
+                            label="高光"
+                            value={highlights}
+                            min={-100}
+                            max={100}
+                            step={1}
+                            defaultValue={0}
+                            onChange={(val) => updateAdj({ highlights: val })}
+                            className="mt-2"
+                          />
+                          <SliderControl
+                            label="阴影"
+                            value={shadows}
+                            min={-100}
+                            max={100}
+                            step={1}
+                            defaultValue={0}
+                            onChange={(val) => updateAdj({ shadows: val })}
+                            className="mt-2"
+                          />
+                          <SliderControl
+                            label="对比度"
+                            value={contrast}
+                            min={-100}
+                            max={100}
+                            step={1}
+                            defaultValue={0}
+                            onChange={(val) => updateAdj({ contrast: val })}
+                            className="mt-2"
+                          />
+                          <SliderControl
+                            label="饱和度"
+                            value={saturate}
+                            min={-100}
+                            max={100}
+                            step={1}
+                            defaultValue={0}
+                            onChange={(val) => updateAdj({ saturate: val })}
+                            className="mt-2"
+                          />
+                          <SliderControl
+                            label="色温"
+                            value={temperature}
+                            min={-100}
+                            max={100}
+                            step={1}
+                            defaultValue={0}
+                            onChange={(val) => updateAdj({ temperature: val })}
+                            className="mt-2"
+                          />
+                          <SliderControl
+                            label="色调"
+                            value={tint}
+                            min={-100}
+                            max={100}
+                            step={1}
+                            defaultValue={0}
+                            onChange={(val) => updateAdj({ tint: val })}
+                            className="mt-2"
+                          />
+                        </div>
+
+                        <div className="my-2 border-t border-border pt-3">
+                            <div className="flex items-center justify-between mb-2">
+                              <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">局部色彩 (HSL)</label>
+                              <button 
+                                onClick={() => handleAddSelectiveColor(pageKey)}
+                                className="w-5 h-5 flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors hover:scale-110" 
+                                title="点击屏幕吸取颜色"
+                              >
+                                <Pipette size={14} />
+                              </button>
+                            </div>
+                            
+                            <div className="flex flex-col gap-2">
+                              {(() => {
+                                const scs = (projectState?.image_adjustments?.[pageKey]?.selective_colors || []) as any[];
+                                if (scs.length === 0) {
+                                  return <div className="text-xs text-muted-foreground text-center py-2 bg-muted/30 rounded border border-dashed border-border">未添加局部颜色</div>;
+                                }
+                                return scs.map(sc => (
+                                  <div key={sc.id} className="p-2 border border-border rounded bg-muted/10 relative group">
+                                    <button 
+                                      onClick={() => handleRemoveSelectiveColor(pageKey, sc.id)}
+                                      className="absolute right-2 top-2 text-muted-foreground hover:text-destructive transition-colors opacity-0 group-hover:opacity-100"
+                                    >
+                                      <Trash2 size={12} />
+                                    </button>
+                                    <div className="flex items-center gap-2 mb-2">
+                                      <div className="w-4 h-4 rounded-full border border-black/10" style={{ backgroundColor: hueToHex(sc.target_hue) }}></div>
+                                      <span className="text-[10px] text-muted-foreground font-mono bg-muted px-1 rounded">{sc.target_hue}°</span>
+                                    </div>
+                                    <SliderControl
+                                      label="色相偏移"
+                                      value={sc.d_hue}
+                                      min={-180}
+                                      max={180}
+                                      step={1}
+                                      defaultValue={0}
+                                      onChange={(val) => handleUpdateSelectiveColor(pageKey, sc.id, { d_hue: val })}
+                                    />
+                                    <SliderControl
+                                      label="局部饱和度"
+                                      value={sc.d_sat}
+                                      min={-100}
+                                      max={100}
+                                      step={1}
+                                      defaultValue={0}
+                                      onChange={(val) => handleUpdateSelectiveColor(pageKey, sc.id, { d_sat: val })}
+                                      className="mt-1"
+                                    />
+                                    <SliderControl
+                                      label="局部明度"
+                                      value={sc.d_lum}
+                                      min={-100}
+                                      max={100}
+                                      step={1}
+                                      defaultValue={0}
+                                      onChange={(val) => handleUpdateSelectiveColor(pageKey, sc.id, { d_lum: val })}
+                                      className="mt-1"
+                                    />
+                                  </div>
+                                ));
+                              })()}
+                            </div>
+                          </div>
+                        {(scale !== 1 || offsetX !== 0 || offsetY !== 0 || brightness !== 0 || exposure !== 0 || highlights !== 0 || shadows !== 0 || contrast !== 0 || saturate !== 0 || temperature !== 0 || tint !== 0 || bgColor !== 'transparent') && (
                           <button onClick={resetAdj} className="mt-2 text-xs text-red-400 hover:text-red-500 text-right w-full">
                             恢复默认设置
                           </button>

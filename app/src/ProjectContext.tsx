@@ -15,11 +15,27 @@ export interface TextSettings {
     offset_y?: number;
 }
 
+export interface SelectiveColor {
+    id: string;          // Unique ID for the color block
+    target_hue: number;  // 0 to 360
+    d_hue: number;       // -180 to 180
+    d_sat: number;       // -100 to 100
+    d_lum: number;       // -100 to 100
+}
 export interface ImageAdjustments {
     offset_x?: number;
     offset_y?: number;
     scale?: number;
     bg_color?: string;
+    brightness?: number;
+    exposure?: number;
+    highlights?: number;
+    shadows?: number;
+    contrast?: number;
+    saturate?: number;
+    temperature?: number;
+    tint?: number;
+    selective_colors?: SelectiveColor[];
 }
 
 export interface PrintSettings {
@@ -40,6 +56,7 @@ export interface PrintSettings {
 }
 
 export interface ProjectState {
+    schema_version?: number;
     project_name: string;
     last_modified: string;
     visible_images: string[];
@@ -52,7 +69,6 @@ export interface ProjectState {
     print_settings?: PrintSettings;
     canvas_width: number;
     canvas_height: number;
-    author_name?: string;
     author_text_settings?: TextSettings;
     page_text_overrides?: Record<string, { offset_x: number; offset_y: number; text_color?: string }>;
 }
@@ -91,6 +107,29 @@ interface ProjectContextType {
 
 const ProjectContext = createContext<ProjectContextType | undefined>(undefined);
 
+export function migrateProjectState(rawState: any): ProjectState {
+    if (!rawState) return rawState;
+    const state = { ...rawState };
+    
+    // Existing projects and v1 projects will get schema_version 1
+    if (typeof state.schema_version !== 'number') {
+        state.schema_version = 1;
+    }
+    
+    // Upgrade v1 -> v2: Migrate author_name into global_script
+    if (state.schema_version === 1) {
+        if (state.author_name && state.author_name.trim() !== '') {
+            // Prepend the author to the script. If the script already has content, add newlines.
+            const prefix = `[Author]\n${state.author_name}\n\n`;
+            state.global_script = state.global_script ? prefix + state.global_script : prefix.trim();
+        }
+        delete state.author_name;
+        state.schema_version = 2;
+    }
+
+    return state as ProjectState;
+}
+
 export const ProjectProvider = ({ children }: { children: ReactNode }) => {
     const [activeWorkspaceId, setActiveWorkspaceId] = useState<string | null>(null);
     const [projectState, setProjectState] = useState<ProjectState | null>(null);
@@ -124,7 +163,7 @@ export const ProjectProvider = ({ children }: { children: ReactNode }) => {
                 const data = await res.json();
                 if (data.success && data.state) {
                     setActiveWorkspaceId(event.payload.workspace_id);
-                    setProjectState(data.state);
+                    setProjectState(migrateProjectState(data.state));
                     setCurrentProjectPath(null);
                     navigate('/editor');
                 }
@@ -160,7 +199,7 @@ export const ProjectProvider = ({ children }: { children: ReactNode }) => {
         try {
             const info = await invoke<ProjectInfo>('create_project');
             setActiveWorkspaceId(info.workspace_id);
-            setProjectState(info.state);
+            setProjectState(migrateProjectState(info.state));
             setCurrentProjectPath(null);
             navigate('/editor');
         } catch (e) {
@@ -176,7 +215,7 @@ export const ProjectProvider = ({ children }: { children: ReactNode }) => {
             if (filePath && typeof filePath === 'string') {
                 const info = await invoke<ProjectInfo>('open_project', { archivePath: filePath });
                 setActiveWorkspaceId(info.workspace_id);
-                setProjectState(info.state);
+                setProjectState(migrateProjectState(info.state));
                 setCurrentProjectPath(filePath);
                 await addRecentProject(filePath, info.state.project_name);
                 navigate('/editor');
@@ -191,7 +230,7 @@ export const ProjectProvider = ({ children }: { children: ReactNode }) => {
         try {
             const info = await invoke<ProjectInfo>('open_project', { archivePath: filePath });
             setActiveWorkspaceId(info.workspace_id);
-            setProjectState(info.state);
+            setProjectState(migrateProjectState(info.state));
             setCurrentProjectPath(filePath);
             await addRecentProject(filePath, info.state.project_name);
             navigate('/editor');

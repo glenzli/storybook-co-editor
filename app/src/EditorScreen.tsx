@@ -4,6 +4,7 @@ import { invoke } from '@tauri-apps/api/core';
 import { Image as ImageIcon, Info, XOctagon, RefreshCw, Trash2, ArchiveRestore, ZoomIn } from 'lucide-react';
 import { getPaletteSync } from 'colorthief';
 import { useProject } from './ProjectContext';
+import { ProImage } from './components/ProImage';
 import { arrayMove } from '@dnd-kit/sortable';
 import { createLogger } from './utils/logger';
 import PrintScreen from './PrintScreen';
@@ -236,28 +237,34 @@ export default function EditorScreen() {
   }, [selectedIdx, images]);
 
   // Parse global script into a map
-  const parsedScript = useMemo(() => {
+  const { parsedScript, parsedAuthor } = useMemo(() => {
     const map = new Map<number, string>();
+    let author = "";
     const hasTitle = /(?:\[(Title|扉页)\])/i.test(globalScript);
-    const blocks = globalScript.split(/(?=\[(?:Cover|封面|Title|扉页|\d+)\])/i);
+    const blocks = globalScript.split(/(?=\[(?:Cover|封面|Title|扉页|Author|作者|\d+)\])/i);
     
     blocks.forEach(block => {
-      const match = block.match(/\[(Cover|封面|Title|扉页|\d+)\]\s*([\s\S]*)/i);
+      const match = block.match(/\[(Cover|封面|Title|扉页|Author|作者|\d+)\]\s*([\s\S]*)/i);
       if (match) {
         const key = match[1].toLowerCase();
         const text = match[2].trim();
-        let idx = 0;
-        if (key === 'cover' || key === '封面') {
-            idx = 0;
-        } else if (key === 'title' || key === '扉页') {
-            idx = 1;
+        
+        if (key === 'author' || key === '作者') {
+            author = text;
         } else {
-            idx = parseInt(key, 10) + (hasTitle ? 1 : 0);
+            let idx = 0;
+            if (key === 'cover' || key === '封面') {
+                idx = 0;
+            } else if (key === 'title' || key === '扉页') {
+                idx = 1;
+            } else {
+                idx = parseInt(key, 10) + (hasTitle ? 1 : 0);
+            }
+            map.set(idx, text);
         }
-        map.set(idx, text);
       }
     });
-    return map;
+    return { parsedScript: map, parsedAuthor: author };
   }, [globalScript]);
 
   const currentText = selectedIdx !== null ? parsedScript.get(selectedIdx) : "";
@@ -330,7 +337,7 @@ export default function EditorScreen() {
     }
     
     return () => ro.disconnect();
-  }, [selectedIdx, currentText, projectState?.author_name, canvasW, canvasH, projectState?.cover_text_settings?.font_size, projectState?.inner_text_settings?.font_size, projectState?.author_text_settings?.font_size]);
+  }, [selectedIdx, currentText, parsedAuthor, canvasW, canvasH, projectState?.cover_text_settings?.font_size, projectState?.inner_text_settings?.font_size, projectState?.author_text_settings?.font_size]);
 
 
   const cancelReceive = async () => {
@@ -485,6 +492,17 @@ export default function EditorScreen() {
                       const offsetX = imgAdj?.offset_x ?? 0;
                       const offsetY = imgAdj?.offset_y ?? 0;
                       const bgColor = imgAdj?.bg_color || 'transparent';
+                      const adjustments = {
+                        brightness: imgAdj?.brightness ?? 0,
+                        exposure: imgAdj?.exposure ?? 0,
+                        highlights: imgAdj?.highlights ?? 0,
+                        shadows: imgAdj?.shadows ?? 0,
+                        contrast: imgAdj?.contrast ?? 0,
+                        saturate: imgAdj?.saturate ?? 0,
+                        temperature: imgAdj?.temperature ?? 0,
+                        tint: imgAdj?.tint ?? 0,
+                        selective_colors: imgAdj?.selective_colors || []
+                      };
                       const isTransparent = bgColor === 'transparent';
                       const transparentBgStyle = {
                         backgroundImage: 'linear-gradient(45deg, #e5e5e5 25%, transparent 25%), linear-gradient(-45deg, #e5e5e5 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #e5e5e5 75%), linear-gradient(-45deg, transparent 75%, #e5e5e5 75%)',
@@ -494,14 +512,13 @@ export default function EditorScreen() {
                       };
                       return (
                         <div className="absolute inset-0 flex items-center justify-center transition-colors" style={isTransparent ? transparentBgStyle : { backgroundColor: bgColor }}>
-                          <img 
-                            src={images[selectedIdx].startsWith('blank://') ? "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" : images[selectedIdx]} 
-                            className={`w-full h-full object-contain ${images[selectedIdx].startsWith('blank://') ? 'bg-white' : ''}`}
-                            style={{ 
-                              transform: `translate(${offsetX}%, ${offsetY}%) scale(${scale})`
-                            }}
-                            alt="Selected page" 
-                          />
+                          <div className="relative w-full h-full" style={{ transform: `translate(${offsetX}%, ${offsetY}%) scale(${scale})` }}>
+                            <ProImage 
+                              src={images[selectedIdx]} 
+                              className={`w-full h-full object-contain ${images[selectedIdx].startsWith('blank://') ? 'bg-white' : ''}`}
+                              adjustments={adjustments}
+                            />
+                          </div>
                         </div>
                       );
                     })()}
@@ -539,7 +556,7 @@ export default function EditorScreen() {
                   );
                   })()}
                   {/* Author text overlay — cover only */}
-                  {selectedIdx === 0 && projectState?.author_name && (() => {
+                  {selectedIdx === 0 && parsedAuthor && (() => {
                     const ats = projectState?.author_text_settings;
                     const ff = ats?.font_family || 'serif';
                     const fontFamily = ff === 'sans' ? 'ui-sans-serif, system-ui, sans-serif' : ff === 'serif' ? 'ui-serif, Georgia, serif' : `'${ff}', sans-serif`;
@@ -557,7 +574,7 @@ export default function EditorScreen() {
                             transform: `translate(${ats?.offset_x || 0}px, ${ats?.offset_y || 0}px)`
                           }}
                         >
-                          {projectState.author_name}
+                          {parsedAuthor}
                         </div>
                       </div>
                     );

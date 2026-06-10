@@ -1,5 +1,6 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useProject } from './ProjectContext';
+import { ProImage } from './components/ProImage';
 import { Printer, Download, AlertTriangle, FileText, RefreshCw } from 'lucide-react';
 import { save } from '@tauri-apps/plugin-dialog';
 import { writeFile } from '@tauri-apps/plugin-fs';
@@ -444,28 +445,34 @@ export default function PrintScreen() {
     };
 
     // Parse global script for text overlays
-    const parsedScript = useMemo(() => {
+    const { parsedScript, parsedAuthor } = useMemo(() => {
         const map = new Map<number, string>();
+        let author = "";
         const script = projectState?.global_script || '';
         const hasTitle = /(?:\[(Title|扉页)\])/i.test(script);
-        const blocks = script.split(/(?=\[(?:Cover|封面|Title|扉页|\d+)\])/i);
+        const blocks = script.split(/(?=\[(?:Cover|封面|Title|扉页|Author|作者|\d+)\])/i);
         blocks.forEach(block => {
-            const match = block.match(/\[(Cover|封面|Title|扉页|\d+)\]\s*([\s\S]*)/i);
+            const match = block.match(/\[(Cover|封面|Title|扉页|Author|作者|\d+)\]\s*([\s\S]*)/i);
             if (match) {
                 const key = match[1].toLowerCase();
                 const text = match[2].trim();
-                let idx = 0;
-                if (key === 'cover' || key === '封面') {
-                    idx = 0;
-                } else if (key === 'title' || key === '扉页') {
-                    idx = 1;
+                
+                if (key === 'author' || key === '作者') {
+                    author = text;
                 } else {
-                    idx = parseInt(key, 10) + (hasTitle ? 1 : 0);
+                    let idx = 0;
+                    if (key === 'cover' || key === '封面') {
+                        idx = 0;
+                    } else if (key === 'title' || key === '扉页') {
+                        idx = 1;
+                    } else {
+                        idx = parseInt(key, 10) + (hasTitle ? 1 : 0);
+                    }
+                    map.set(idx, text);
                 }
-                map.set(idx, text);
             }
         });
-        return map;
+        return { parsedScript: map, parsedAuthor: author };
     }, [projectState?.global_script]);
 
     // Helper: render a complete page cell (image + text) inside a single canvas div.
@@ -569,17 +576,28 @@ export default function PrintScreen() {
                     const offsetX = imgAdj?.offset_x ?? 0;
                     const offsetY = imgAdj?.offset_y ?? 0;
                     const bgColor = imgAdj?.bg_color || 'transparent';
+                    const adjustments = {
+                        brightness: imgAdj?.brightness ?? 0,
+                        exposure: imgAdj?.exposure ?? 0,
+                        highlights: imgAdj?.highlights ?? 0,
+                        shadows: imgAdj?.shadows ?? 0,
+                        contrast: imgAdj?.contrast ?? 0,
+                        saturate: imgAdj?.saturate ?? 0,
+                        temperature: imgAdj?.temperature ?? 0,
+                        tint: imgAdj?.tint ?? 0,
+                        selective_colors: imgAdj?.selective_colors || []
+                    };
                     
                     return (
                         <div className="absolute inset-0 overflow-hidden flex items-center justify-center" style={{ backgroundColor: bgColor }}>
-                            <img 
-                                crossOrigin="anonymous"
-                                onLoad={e => handleImageLoad(pageIdx, e)}
+                            <ProImage 
+                                onLoad={() => handleImageLoad(pageIdx, null as any)}
                                 src={imgFile.startsWith('blank://') ? "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" : `http://127.0.0.1:14320/images/${imgFile}`}
                                 className={`w-full h-full object-contain ${imgFile.startsWith('blank://') ? 'bg-white' : ''}`}
                                 style={{ 
                                     transform: `translate(${offsetX}%, ${offsetY}%) scale(${scale})`
                                 }}
+                                adjustments={adjustments}
                             />
                         </div>
                     );
@@ -595,12 +613,12 @@ export default function PrintScreen() {
                     effectiveOffsetY,
                 )}
                 {/* Author overlay — cover only */}
-                {isCover && projectState?.author_name && (() => {
+                {isCover && parsedAuthor && (() => {
                     const ats = projectState?.author_text_settings;
                     const aff = ats?.font_family || 'serif';
                     const authorFont = aff === 'sans' ? 'ui-sans-serif, system-ui, sans-serif' : aff === 'serif' ? 'ui-serif, Georgia, serif' : `'${aff}', sans-serif`;
                     return renderTextOverlay(
-                        projectState.author_name,
+                        parsedAuthor,
                         authorFont,
                         ats?.font_size || 16,
                         ats?.text_color || '#ffffff',
