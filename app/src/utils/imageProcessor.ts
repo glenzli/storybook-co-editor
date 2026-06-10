@@ -42,13 +42,17 @@ export function applyProAdjustments(
 
     // Temperature (Blue <-> Amber)
     const tempK = adj.temperature / 100;
-    const rTemp = 1 + (tempK > 0 ? tempK * 0.25 : 0);
-    const bTemp = 1 + (tempK < 0 ? -tempK * 0.25 : 0);
+    // Positive = Warm (More Red, Less Blue)
+    // Negative = Cold (More Blue, Less Red)
+    const rTemp = tempK > 0 ? 1 + tempK * 0.4 : 1 + tempK * 0.15;
+    const bTemp = tempK < 0 ? 1 - tempK * 0.4 : 1 - tempK * 0.15;
     
     // Tint (Green <-> Magenta)
     const tintK = adj.tint / 100;
-    const gTint = 1 + (tintK < 0 ? -tintK * 0.25 : 0);
-    const rbTint = 1 + (tintK > 0 ? tintK * 0.15 : 0);
+    // Positive = Magenta (More R & B, Less G)
+    // Negative = Green (More G, Less R & B)
+    const gTint = tintK < 0 ? 1 - tintK * 0.4 : 1 - tintK * 0.15;
+    const rbTint = tintK > 0 ? 1 + tintK * 0.4 : 1 + tintK * 0.15;
 
     const hlFact = adj.highlights / 100; // -1 to 1
     const shFact = adj.shadows / 100;    // -1 to 1

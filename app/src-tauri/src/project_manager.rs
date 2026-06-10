@@ -92,6 +92,15 @@ fn default_canvas_size() -> u32 { 1024 }
 fn default_scale() -> f32 { 1.0 }
 
 #[derive(Serialize, Deserialize, Clone)]
+pub struct SelectiveColor {
+    pub id: String,
+    pub target_hue: f32,
+    pub d_hue: f32,
+    pub d_sat: f32,
+    pub d_lum: f32,
+}
+
+#[derive(Serialize, Deserialize, Clone)]
 pub struct ImageAdjustments {
     #[serde(default)]
     pub offset_x: f32,
@@ -101,10 +110,30 @@ pub struct ImageAdjustments {
     pub scale: f32,
     #[serde(default)]
     pub bg_color: Option<String>,
+    #[serde(default)]
+    pub brightness: f32,
+    #[serde(default)]
+    pub exposure: f32,
+    #[serde(default)]
+    pub highlights: f32,
+    #[serde(default)]
+    pub shadows: f32,
+    #[serde(default)]
+    pub contrast: f32,
+    #[serde(default)]
+    pub saturate: f32,
+    #[serde(default)]
+    pub temperature: f32,
+    #[serde(default)]
+    pub tint: f32,
+    #[serde(default)]
+    pub selective_colors: Option<Vec<SelectiveColor>>,
 }
 
 #[derive(Serialize, Deserialize, Clone)]
 pub struct ProjectState {
+    #[serde(default)]
+    pub schema_version: Option<u32>,
     pub project_name: String,
     pub last_modified: String,
     pub visible_images: Vec<String>,
@@ -125,8 +154,6 @@ pub struct ProjectState {
     #[serde(default = "default_canvas_size")]
     pub canvas_height: u32,
     #[serde(default)]
-    pub author_name: String,
-    #[serde(default)]
     pub author_text_settings: TextSettings,
     #[serde(default)]
     pub page_text_overrides: HashMap<String, PageTextOverride>,
@@ -135,6 +162,7 @@ pub struct ProjectState {
 impl Default for ProjectState {
     fn default() -> Self {
         Self {
+            schema_version: Some(2),
             project_name: "Untitled".to_string(),
             last_modified: chrono::Utc::now().to_rfc3339(),
             visible_images: vec![],
@@ -145,9 +173,8 @@ impl Default for ProjectState {
             inner_text_settings: TextSettings::default(),
             image_adjustments: HashMap::new(),
             print_settings: PrintSettings::default(),
-            canvas_width: 1024,
-            canvas_height: 1024,
-            author_name: "".to_string(),
+            canvas_width: default_canvas_size(),
+            canvas_height: default_canvas_size(),
             author_text_settings: TextSettings { font_size: 16.0, ..TextSettings::default() },
             page_text_overrides: HashMap::new(),
         }
