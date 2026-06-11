@@ -3,7 +3,8 @@ import { useProject } from './ProjectContext';
 import { ProImage } from './components/ProImage';
 import { Printer, Download, AlertTriangle, FileText, RefreshCw } from 'lucide-react';
 import { save } from '@tauri-apps/plugin-dialog';
-import { writeFile } from '@tauri-apps/plugin-fs';
+import { writeFile, remove } from '@tauri-apps/plugin-fs';
+import { invoke } from '@tauri-apps/api/core';
 import html2canvas from 'html2canvas';
 import { jsPDF } from 'jspdf';
 
@@ -142,6 +143,7 @@ export default function PrintScreen() {
 
     const [isExporting, setIsExporting] = useState(false);
     const [exportProgress, setExportProgress] = useState(0);
+    const [exportStatusText, setExportStatusText] = useState('导出中...');
 
     const [renderedSheetCount, setRenderedSheetCount] = useState(1);
 
@@ -410,8 +412,25 @@ export default function PrintScreen() {
 
             if (filePath) {
                 const arrayBuffer = pdf.output('arraybuffer');
-                await writeFile(filePath, new Uint8Array(arrayBuffer));
-                alert(`成功导出至：\n${filePath}`);
+                
+                setExportProgress(99);
+                setExportStatusText('正在调用 Ghostscript 引擎转换 CMYK...');
+                try {
+                    const res = await invoke<{ success: boolean; error_msg: string | null }>('convert_to_cmyk', {
+                        pdfData: Array.from(new Uint8Array(arrayBuffer)),
+                        outputPath: filePath
+                    });
+                    
+                    if (res.success) {
+                        alert(`成功导出印前专业 CMYK 版至：\n${filePath}`);
+                    } else {
+                        await writeFile(filePath, new Uint8Array(arrayBuffer));
+                        alert(`专业 CMYK 色彩转换失败，已回退保存为 RGB 版本。\n\n后端错误:\n${res.error_msg}`);
+                    }
+                } catch (invokeErr) {
+                    await writeFile(filePath, new Uint8Array(arrayBuffer));
+                    alert(`调用转换引擎失败，已回退保存为 RGB 版本。\n\n错误信息:\n${invokeErr}`);
+                }
             }
         } catch (err) {
             console.error('PDF export failed:', err);
@@ -420,6 +439,7 @@ export default function PrintScreen() {
             document.body.classList.remove('pdf-exporting');
             setIsExporting(false);
             setExportProgress(0);
+            setExportStatusText('导出中...');
         }
     };
 
@@ -437,9 +457,15 @@ export default function PrintScreen() {
         return calculateImposition(projectState.visible_images, settings);
     }, [projectState?.visible_images, settings]);
 
+    // Do not abruptly reset renderedSheetCount to 1 on setting changes (like crop marks),
+    // to prevent React from unmounting all ProImage canvases and causing a massive freeze.
     useEffect(() => {
-        setRenderedSheetCount(1);
-    }, [imposedSheets]);
+        if (renderedSheetCount > imposedSheets.length && imposedSheets.length > 0) {
+            setRenderedSheetCount(imposedSheets.length);
+        } else if (renderedSheetCount === 0 && imposedSheets.length > 0) {
+            setRenderedSheetCount(1);
+        }
+    }, [imposedSheets.length, renderedSheetCount]);
 
     useEffect(() => {
         if (renderedSheetCount < imposedSheets.length) {
@@ -453,6 +479,83 @@ export default function PrintScreen() {
     // Track loaded image natural dimensions for content-level crop lines
     type ImgDimMap = { [key: number]: { w: number; h: number } };
     const [imageDims, setImageDims] = useState({} as ImgDimMap);
+
+    const globalPageBounds = useMemo(() => {
+        if (!settings.crop_marks || !projectState?.visible_images) return null;
+        let minL = 0, maxR = 0, minT = 0, maxB = 0;
+        let hasDims = false;
+
+        const paperSizes: Record<string, [number, number]> = {
+            'A5': [148.5, 210],
+            'A4': [210, 297],
+            'A3': [297, 420],
+        };
+        const [pW_mm, pH_mm] = paperSizes[settings.paper_size] || paperSizes['A4'];
+        const pxPerMm = settings.paper_size === 'A3' ? 1.5 : (settings.paper_size === 'A5' ? 2.5 : 2.0);
+        const effectiveOrientation = (settings.binding_method === 'saddle' || settings.binding_method === 'butterfly')
+            ? 'landscape' : (settings.paper_orientation || 'landscape');
+        const isLandscape = effectiveOrientation === 'landscape';
+        let w_mm = isLandscape ? pH_mm : pW_mm;
+        let h_mm = isLandscape ? pW_mm : pH_mm;
+
+        const globalIs1up = settings.binding_method === 'perfect' && settings.layout_mode === '1-up';
+        const bW_mm = globalIs1up ? w_mm : w_mm / 2;
+        const bH_mm = h_mm;
+        const bookBlockWidthPx = Math.floor(bW_mm * pxPerMm);
+        const bookBlockHeightPx = Math.floor(bH_mm * pxPerMm);
+
+        const canvasW = projectState.canvas_width || 1024;
+        const canvasH = projectState.canvas_height || 1024;
+        const effectiveOffsetX = projectState.inner_text_settings?.offset_x ?? 0;
+
+        // unified cW/cH ignoring page-specific text overrides since they shouldn't affect global trim box
+        const padL = (settings.binding_method === 'perfect' && globalIs1up) ? (settings.binding_margin_mm + effectiveOffsetX) * pxPerMm : 0;
+        const padR = (settings.binding_method === 'perfect' && !globalIs1up) ? (settings.binding_margin_mm + effectiveOffsetX) * pxPerMm : 0;
+        const cW = bookBlockWidthPx * (globalIs1up ? 1 : 0.5) - padL - padR;
+        const cH = bookBlockHeightPx;
+
+        const S = Math.min(cW / canvasW, cH / canvasH);
+        const scaledW = canvasW * S;
+        const scaledH = canvasH * S;
+
+        Object.keys(imageDims).forEach(key => {
+            const pageIdx = parseInt(key, 10);
+            if (pageIdx === 0) return; // skip cover
+            
+            const dims = imageDims[pageIdx];
+            if (!dims) return;
+            
+            const imgAdj = projectState.image_adjustments?.[String(pageIdx)];
+            const scale = imgAdj?.scale ?? 1;
+            const offsetX = imgAdj?.offset_x ?? 0;
+            const offsetY = imgAdj?.offset_y ?? 0;
+
+            const s = Math.min(scaledW / dims.w, scaledH / dims.h);
+            const baseW = dims.w * s;
+            const baseH = dims.h * s;
+
+            const relCX = baseW * (offsetX / 100);
+            const relCY = baseH * (offsetY / 100);
+
+            const imgL = relCX - (baseW * scale) / 2;
+            const imgR = relCX + (baseW * scale) / 2;
+            const imgT = relCY - (baseH * scale) / 2;
+            const imgB = relCY + (baseH * scale) / 2;
+
+            if (!hasDims) {
+                minL = imgL; maxR = imgR;
+                minT = imgT; maxB = imgB;
+                hasDims = true;
+            } else {
+                minL = Math.min(minL, imgL);
+                maxR = Math.max(maxR, imgR);
+                minT = Math.min(minT, imgT);
+                maxB = Math.max(maxB, imgB);
+            }
+        });
+
+        return hasDims ? { minL, maxR, minT, maxB } : null;
+    }, [imageDims, projectState?.image_adjustments, projectState?.inner_text_settings?.offset_x, settings, projectState?.canvas_width, projectState?.canvas_height, projectState?.visible_images]);
     const handleImageLoad = (pageIndex: number, img: HTMLImageElement | null) => {
         if (!img) return;
         setImageDims((prev: ImgDimMap) => {
@@ -845,7 +948,7 @@ export default function PrintScreen() {
                         className="w-full py-3 bg-primary text-primary-foreground rounded-md font-bold flex items-center justify-center gap-2 hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-opacity shadow-md"
                     >
                         {isExporting ? <RefreshCw size={18} className="animate-spin" /> : <Download size={18} />}
-                        {isExporting ? `导出中... ${exportProgress}%` : (renderedSheetCount < imposedSheets.length ? `渲染中...` : '生成高清 PDF')}
+                        {isExporting ? `${exportStatusText} ${exportProgress}%` : (renderedSheetCount < imposedSheets.length ? `渲染中...` : '生成高清 PDF')}
                     </button>
                 </div>
             </aside>
@@ -1051,33 +1154,60 @@ export default function PrintScreen() {
                                         const bbBottom = bbTopY + scaledH;
                                         const lines: React.ReactNode[] = [];
                                         // Book block edge lines
+                                        const hideLeftSpine = settings.binding_method === 'perfect' && is1up; // Front side, left is spine
+                                        
                                         if (bbRight + 2 < w) lines.push(<div key="r" className="absolute top-0 bottom-0 pointer-events-none z-50" style={{ left: `${bbRight}px`, width: 0, borderLeft: '1px dashed rgba(0,0,0,0.4)' }} />);
                                         if (bbTopY > 2) lines.push(<div key="t" className="absolute left-0 right-0 pointer-events-none z-50" style={{ top: `${bbTopY}px`, height: 0, borderTop: '1px dashed rgba(0,0,0,0.4)' }} />);
                                         if (bbBottom + 2 < h) lines.push(<div key="b" className="absolute left-0 right-0 pointer-events-none z-50" style={{ top: `${bbBottom}px`, height: 0, borderTop: '1px dashed rgba(0,0,0,0.4)' }} />);
-                                        if (frontLeft > 2) lines.push(<div key="l" className="absolute top-0 bottom-0 pointer-events-none z-50" style={{ left: `${frontLeft}px`, width: 0, borderLeft: '1px dashed rgba(0,0,0,0.4)' }} />);
+                                        if (!hideLeftSpine && frontLeft > 2) lines.push(<div key="l" className="absolute top-0 bottom-0 pointer-events-none z-50" style={{ left: `${frontLeft}px`, width: 0, borderLeft: '1px dashed rgba(0,0,0,0.4)' }} />);
 
-                                        // Content-level crop lines based on actual image dimensions
-                                        const leftPageIdx = sheet.front.left;
-                                        if (leftPageIdx !== null && imageDims[leftPageIdx] && !sheet.isCover) {
-                                            const dims = imageDims[leftPageIdx];
-                                            const imgAspect = dims.w / dims.h;
-                                            const padL = (settings.binding_method === 'perfect' && is1up) ? (settings.binding_margin_mm + effectiveOffsetX) * pxPerMm : 0;
-                                            const padR = (settings.binding_method === 'perfect' && !is1up) ? (settings.binding_margin_mm + effectiveOffsetX) * pxPerMm : 0;
-                                            const cW = bookBlockWidthPx * (is1up ? 1 : 0.5) - padL - padR;
+                                        // Content-level crop lines based on global image boundaries
+                                        if (globalPageBounds && !sheet.isCover) {
+                                            const padL_l = (settings.binding_method === 'perfect' && is1up) ? (settings.binding_margin_mm + effectiveOffsetX) * pxPerMm : 0;
+                                            const padR_l = (settings.binding_method === 'perfect' && !is1up) ? (settings.binding_margin_mm + effectiveOffsetX) * pxPerMm : 0;
+                                            const cW_l = bookBlockWidthPx * (is1up ? 1 : 0.5) - padL_l - padR_l;
                                             const cH = bookBlockHeightPx;
-                                            const containerAspect = cW / cH;
-                                            if (containerAspect > imgAspect) {
-                                                const imgW = cH * imgAspect;
-                                                const cropX = frontLeft + (padL + imgW) * fitScale;
-                                                if (cropX + 2 < w) lines.push(<div key="cr" className="absolute top-0 bottom-0 pointer-events-none z-50" style={{ left: `${cropX}px`, width: 0, borderLeft: '1px dashed rgba(0,0,0,0.5)' }} />);
-                                            } else if (containerAspect < imgAspect) {
-                                                const imgH = cW / imgAspect;
-                                                const topOffset = (frontTop + settings.offset_y);
-                                                const cropYTop = topOffset + ((cH - imgH) / 2) * fitScale;
-                                                const cropYBot = topOffset + ((cH + imgH) / 2) * fitScale;
-                                                if (cropYTop > 2) lines.push(<div key="crt" className="absolute left-0 right-0 pointer-events-none z-50" style={{ top: `${cropYTop}px`, height: 0, borderTop: '1px dashed rgba(0,0,0,0.5)' }} />);
-                                                if (cropYBot + 2 < h) lines.push(<div key="crb" className="absolute left-0 right-0 pointer-events-none z-50" style={{ top: `${cropYBot}px`, height: 0, borderTop: '1px dashed rgba(0,0,0,0.5)' }} />);
+
+                                            const objPos_l = (settings.binding_method === 'perfect') ? 'left center' : 'center center';
+                                            const S = Math.min(cW_l / canvasW, cH / canvasH);
+                                            const scaledW = canvasW * S;
+                                            const scaledH = canvasH * S;
+
+                                            let wrapperLeft_l = (cW_l - scaledW) / 2;
+                                            if (objPos_l === 'left center') wrapperLeft_l = 0;
+                                            else if (objPos_l === 'right center') wrapperLeft_l = cW_l - scaledW;
+
+                                            const wrapperTop = (cH - scaledH) / 2;
+                                            const wrapperCX_l = wrapperLeft_l + scaledW / 2;
+                                            const wrapperCY = wrapperTop + scaledH / 2;
+
+                                            const globalLeft_l = frontLeft + padL_l * fitScale;
+                                            const topOffset = frontTop + settings.offset_y;
+
+                                            const cropL = globalLeft_l + (wrapperCX_l + globalPageBounds.minL) * fitScale;
+                                            const cropT = topOffset + (wrapperCY + globalPageBounds.minT) * fitScale;
+                                            const cropB = topOffset + (wrapperCY + globalPageBounds.maxB) * fitScale;
+
+                                            let cropR;
+                                            if (is1up) {
+                                                cropR = globalLeft_l + (wrapperCX_l + globalPageBounds.maxR) * fitScale;
+                                            } else {
+                                                const padL_r = (settings.binding_method === 'perfect') ? (settings.binding_margin_mm + effectiveOffsetX) * pxPerMm : 0;
+                                                const cW_r = bookBlockWidthPx * 0.5 - padL_r;
+                                                const objPos_r = (settings.binding_method === 'perfect') ? 'right center' : 'center center';
+                                                let wrapperLeft_r = (cW_r - scaledW) / 2;
+                                                if (objPos_r === 'left center') wrapperLeft_r = 0;
+                                                else if (objPos_r === 'right center') wrapperLeft_r = cW_r - scaledW;
+                                                const wrapperCX_r = wrapperLeft_r + scaledW / 2;
+                                                
+                                                const globalLeft_r = frontLeft + (bookBlockWidthPx * 0.5 + padL_r) * fitScale;
+                                                cropR = globalLeft_r + (wrapperCX_r + globalPageBounds.maxR) * fitScale;
                                             }
+
+                                            if (!hideLeftSpine && cropL > frontLeft + 2 && cropL < frontLeft + w - 2) lines.push(<div key="cl" className="absolute top-0 bottom-0 pointer-events-none z-50" style={{ left: `${cropL}px`, width: 0, borderLeft: '1px dashed rgba(0,0,0,0.5)' }} />);
+                                            if (cropR > frontLeft + 2 && cropR < frontLeft + w - 2) lines.push(<div key="cr" className="absolute top-0 bottom-0 pointer-events-none z-50" style={{ left: `${cropR}px`, width: 0, borderLeft: '1px dashed rgba(0,0,0,0.5)' }} />);
+                                            if (cropT > topOffset + 2 && cropT < topOffset + h - 2) lines.push(<div key="ct" className="absolute left-0 right-0 pointer-events-none z-50" style={{ top: `${cropT}px`, height: 0, borderTop: '1px dashed rgba(0,0,0,0.5)' }} />);
+                                            if (cropB > topOffset + 2 && cropB < topOffset + h - 2) lines.push(<div key="cb" className="absolute left-0 right-0 pointer-events-none z-50" style={{ top: `${cropB}px`, height: 0, borderTop: '1px dashed rgba(0,0,0,0.5)' }} />);
                                         }
                                         return <>{lines}</>;
                                     })()}
@@ -1188,33 +1318,60 @@ export default function PrintScreen() {
                                         const bbRight = bbLeft + scaledW;
                                         const bbBottom = bbTopPos + scaledH;
                                         const lines: React.ReactNode[] = [];
-                                        if (bbRight + 2 < w) lines.push(<div key="r" className="absolute top-0 bottom-0 pointer-events-none z-50" style={{ left: `${bbRight}px`, width: 0, borderLeft: '1px dashed rgba(0,0,0,0.4)' }} />);
+                                        const hideRightSpine = settings.binding_method === 'perfect' && is1up; // Back side, right is spine
+
+                                        if (!hideRightSpine && bbRight + 2 < w) lines.push(<div key="r" className="absolute top-0 bottom-0 pointer-events-none z-50" style={{ left: `${bbRight}px`, width: 0, borderLeft: '1px dashed rgba(0,0,0,0.4)' }} />);
                                         if (bbTopPos > 2) lines.push(<div key="t" className="absolute left-0 right-0 pointer-events-none z-50" style={{ top: `${bbTopPos}px`, height: 0, borderTop: '1px dashed rgba(0,0,0,0.4)' }} />);
                                         if (bbBottom + 2 < h) lines.push(<div key="b" className="absolute left-0 right-0 pointer-events-none z-50" style={{ top: `${bbBottom}px`, height: 0, borderTop: '1px dashed rgba(0,0,0,0.4)' }} />);
                                         if (bbLeft > 2) lines.push(<div key="l" className="absolute top-0 bottom-0 pointer-events-none z-50" style={{ left: `${bbLeft}px`, width: 0, borderLeft: '1px dashed rgba(0,0,0,0.4)' }} />);
 
-                                        // Content-level crop lines (back side)
-                                        const backPageIdx = is1up ? sheet.back!.left : sheet.back!.left;
-                                        if (backPageIdx !== null && imageDims[backPageIdx] && !sheet.isCover) {
-                                            const dims = imageDims[backPageIdx];
-                                            const imgAspect = dims.w / dims.h;
-                                            const padR = (settings.binding_method === 'perfect' && is1up) ? (settings.binding_margin_mm + effectiveOffsetX) * pxPerMm : 0;
-                                            const padL = (settings.binding_method === 'perfect' && !is1up) ? (settings.binding_margin_mm + effectiveOffsetX) * pxPerMm : 0;
-                                            const cW = bookBlockWidthPx * (is1up ? 1 : 0.5) - padL - padR;
+                                        // Content-level crop lines (back side) based on global image boundaries
+                                        if (globalPageBounds && !sheet.isCover) {
+                                            const padR_l = (settings.binding_method === 'perfect' && is1up) ? (settings.binding_margin_mm + effectiveOffsetX) * pxPerMm : 0;
+                                            const padL_l = (settings.binding_method === 'perfect' && !is1up) ? (settings.binding_margin_mm + effectiveOffsetX) * pxPerMm : 0;
+                                            const cW_l = bookBlockWidthPx * (is1up ? 1 : 0.5) - padL_l - padR_l;
                                             const cH = bookBlockHeightPx;
-                                            const containerAspect = cW / cH;
-                                            if (containerAspect > imgAspect) {
-                                                const imgW = cH * imgAspect;
-                                                // Back side is mirrored: for 1-up, glue is right, content goes left, so crop on left side
-                                                const cropX = bbLeft + (is1up ? (cW - imgW) : (padL + imgW)) * fitScale;
-                                                if (cropX > 2 && cropX + 2 < w) lines.push(<div key="cr" className="absolute top-0 bottom-0 pointer-events-none z-50" style={{ left: `${cropX}px`, width: 0, borderLeft: '1px dashed rgba(0,0,0,0.5)' }} />);
-                                            } else if (containerAspect < imgAspect) {
-                                                const imgH = cW / imgAspect;
-                                                const cropYTop = bbTopPos + ((cH - imgH) / 2) * fitScale;
-                                                const cropYBot = bbTopPos + ((cH + imgH) / 2) * fitScale;
-                                                if (cropYTop > 2) lines.push(<div key="crt" className="absolute left-0 right-0 pointer-events-none z-50" style={{ top: `${cropYTop}px`, height: 0, borderTop: '1px dashed rgba(0,0,0,0.5)' }} />);
-                                                if (cropYBot + 2 < h) lines.push(<div key="crb" className="absolute left-0 right-0 pointer-events-none z-50" style={{ top: `${cropYBot}px`, height: 0, borderTop: '1px dashed rgba(0,0,0,0.5)' }} />);
+
+                                            const objPos_l = (settings.binding_method === 'perfect') ? (is1up ? 'right center' : 'left center') : 'center center';
+                                            const S = Math.min(cW_l / canvasW, cH / canvasH);
+                                            const scaledW = canvasW * S;
+                                            const scaledH = canvasH * S;
+
+                                            let wrapperLeft_l = (cW_l - scaledW) / 2;
+                                            if (objPos_l === 'left center') wrapperLeft_l = 0;
+                                            else if (objPos_l === 'right center') wrapperLeft_l = cW_l - scaledW;
+
+                                            const wrapperTop = (cH - scaledH) / 2;
+                                            const wrapperCX_l = wrapperLeft_l + scaledW / 2;
+                                            const wrapperCY = wrapperTop + scaledH / 2;
+
+                                            const globalLeft_l = backLeft + padL_l * fitScale;
+                                            const topOffset = backTop + settings.offset_y;
+
+                                            const cropL = globalLeft_l + (wrapperCX_l + globalPageBounds.minL) * fitScale;
+                                            const cropT = topOffset + (wrapperCY + globalPageBounds.minT) * fitScale;
+                                            const cropB = topOffset + (wrapperCY + globalPageBounds.maxB) * fitScale;
+
+                                            let cropR;
+                                            if (is1up) {
+                                                cropR = globalLeft_l + (wrapperCX_l + globalPageBounds.maxR) * fitScale;
+                                            } else {
+                                                const padR_r = (settings.binding_method === 'perfect') ? (settings.binding_margin_mm + effectiveOffsetX) * pxPerMm : 0;
+                                                const cW_r = bookBlockWidthPx * 0.5 - padR_r;
+                                                const objPos_r = (settings.binding_method === 'perfect') ? 'right center' : 'center center';
+                                                let wrapperLeft_r = (cW_r - scaledW) / 2;
+                                                if (objPos_r === 'left center') wrapperLeft_r = 0;
+                                                else if (objPos_r === 'right center') wrapperLeft_r = cW_r - scaledW;
+                                                const wrapperCX_r = wrapperLeft_r + scaledW / 2;
+                                                
+                                                const globalLeft_r = backLeft + (bookBlockWidthPx * 0.5) * fitScale; // back side right page has 0 left padding internally
+                                                cropR = globalLeft_r + (wrapperCX_r + globalPageBounds.maxR) * fitScale;
                                             }
+
+                                            if (cropL > backLeft + 2 && cropL < backLeft + w - 2) lines.push(<div key="cl" className="absolute top-0 bottom-0 pointer-events-none z-50" style={{ left: `${cropL}px`, width: 0, borderLeft: '1px dashed rgba(0,0,0,0.5)' }} />);
+                                            if (!hideRightSpine && cropR > backLeft + 2 && cropR < backLeft + w - 2) lines.push(<div key="cr" className="absolute top-0 bottom-0 pointer-events-none z-50" style={{ left: `${cropR}px`, width: 0, borderLeft: '1px dashed rgba(0,0,0,0.5)' }} />);
+                                            if (cropT > topOffset + 2 && cropT < topOffset + h - 2) lines.push(<div key="ct" className="absolute left-0 right-0 pointer-events-none z-50" style={{ top: `${cropT}px`, height: 0, borderTop: '1px dashed rgba(0,0,0,0.5)' }} />);
+                                            if (cropB > topOffset + 2 && cropB < topOffset + h - 2) lines.push(<div key="cb" className="absolute left-0 right-0 pointer-events-none z-50" style={{ top: `${cropB}px`, height: 0, borderTop: '1px dashed rgba(0,0,0,0.5)' }} />);
                                         }
                                         return <>{lines}</>;
                                     })()}

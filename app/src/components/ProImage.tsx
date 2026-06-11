@@ -61,6 +61,7 @@ export const ProImage: React.FC<ProImageProps> = ({
         };
     }, [src]);
 
+    const adjString = JSON.stringify(adjustments || {});
     useEffect(() => {
         if (imgRef.current) {
             if (renderTimeoutRef.current) cancelAnimationFrame(renderTimeoutRef.current);
@@ -70,7 +71,7 @@ export const ProImage: React.FC<ProImageProps> = ({
                 }
             });
         }
-    }, [adjustments]);
+    }, [adjString]);
 
     return (
         <canvas 
