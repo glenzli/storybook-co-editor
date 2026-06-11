@@ -4,7 +4,7 @@ import { applyProAdjustments, ProAdjustments } from '../utils/imageProcessor';
 export interface ProImageProps extends React.ImgHTMLAttributes<HTMLCanvasElement> {
     src: string;
     adjustments?: ProAdjustments;
-    onLoad?: () => void;
+    onLoad?: (img: HTMLImageElement) => void;
 }
 
 export const ProImage: React.FC<ProImageProps> = ({
@@ -46,10 +46,10 @@ export const ProImage: React.FC<ProImageProps> = ({
         img.onload = () => {
             imgRef.current = img;
             renderNow(img);
-            if (onLoad) onLoad();
+            if (onLoad) onLoad(img);
         };
         img.onerror = () => {
-            if (onLoad) onLoad();
+            if (onLoad) onLoad(img);
         };
         
         img.src = src.startsWith('blank://') 

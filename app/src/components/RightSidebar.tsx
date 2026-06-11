@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { PenTool, Type, Maximize2, ChevronDown, ChevronRight, ChevronLeft, LayoutTemplate, Pipette, Trash2 } from 'lucide-react';
 import { HexColorPicker } from 'react-colorful';
 
-function DebouncedTextarea({ value, onChange, className }: { value: string, onChange: (v: string) => void, className?: string }) {
+function DebouncedTextarea({ value, onChange, onCursorChange, className }: { value: string, onChange: (v: string) => void, onCursorChange?: (idx: number | null) => void, className?: string }) {
   const [localValue, setLocalValue] = useState(value);
   const timeoutRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -28,13 +28,93 @@ function DebouncedTextarea({ value, onChange, className }: { value: string, onCh
     }
   };
 
+  const handleSelect = (e: React.SyntheticEvent<HTMLTextAreaElement>) => {
+    if (!onCursorChange) return;
+    const pos = e.currentTarget.selectionStart;
+    const textBeforeCursor = localValue.slice(0, pos);
+    
+    // Find all valid tags before the cursor
+    const validTagRegex = /\[(Cover|封面|Title|扉页|Author|作者|\d+)\]/gi;
+    const matches = [...textBeforeCursor.matchAll(validTagRegex)];
+    
+    if (matches.length > 0) {
+      const lastMatch = matches[matches.length - 1][1].toLowerCase();
+      let idx: number | null = null;
+      if (lastMatch === 'cover' || lastMatch === '封面') {
+          idx = 0;
+      } else if (lastMatch === 'title' || lastMatch === '扉页') {
+          idx = 1;
+      } else if (lastMatch === 'author' || lastMatch === '作者') {
+          idx = null; 
+      } else {
+          const hasTitle = /(?:\[(Title|扉页)\])/i.test(localValue);
+          idx = parseInt(lastMatch, 10) + (hasTitle ? 1 : 0);
+      }
+      onCursorChange(idx);
+    }
+  };
+
+  const validateScript = (script: string) => {
+    const lines = script.split('\n');
+    const errors: { line: number, tag: string }[] = [];
+    const validTagRegex = /^\[(Cover|封面|Title|扉页|Author|作者|\d+)\]$/i;
+    const startTagRegex = /^\[(.*?)\]/;
+    
+    lines.forEach((line, i) => {
+        const match = startTagRegex.exec(line.trim());
+        if (match) {
+            const tag = match[0];
+            if (!validTagRegex.test(tag)) {
+                errors.push({ line: i + 1, tag });
+            }
+        }
+    });
+    return errors;
+  };
+
+  const errors = validateScript(localValue);
+  const lineCount = localValue.split('\n').length;
+  const gutterRef = useRef<HTMLDivElement>(null);
+
   return (
-    <textarea 
-      className={className}
-      value={localValue}
-      onChange={handleChange}
-      onBlur={handleBlur}
-    />
+    <div className="flex-1 flex flex-col gap-2 min-h-0">
+      <div className="flex-1 flex min-h-0 bg-background border border-border rounded-md focus-within:ring-1 focus-within:ring-primary overflow-hidden transition-all">
+        {/* Line Numbers */}
+        <div 
+          ref={gutterRef}
+          className="w-10 py-3 pl-2 pr-2 text-right text-xs text-muted-foreground/50 bg-muted/10 font-mono select-none overflow-hidden shrink-0 border-r border-border/50"
+        >
+          {Array.from({ length: lineCount }).map((_, i) => (
+            <div key={i} className="leading-[1.5rem]">{i + 1}</div>
+          ))}
+        </div>
+        
+        {/* Textarea */}
+        <textarea 
+          className="flex-1 w-full bg-transparent py-3 px-3 text-sm text-foreground focus:outline-none resize-none font-mono whitespace-pre overflow-auto leading-[1.5rem]"
+          value={localValue}
+          onChange={handleChange}
+          onBlur={handleBlur}
+          onSelect={handleSelect}
+          onScroll={(e) => {
+              if (gutterRef.current) gutterRef.current.scrollTop = e.currentTarget.scrollTop;
+          }}
+          wrap="off"
+        />
+      </div>
+
+      {/* Validation Errors */}
+      {errors.length > 0 && (
+        <div className="bg-red-500/10 border border-red-500/30 rounded-md p-2 max-h-32 overflow-y-auto shrink-0 flex flex-col gap-1">
+          <span className="text-xs font-bold text-red-500 mb-0.5">⚠️ 标签格式有误</span>
+          <ul className="text-xs text-red-500/80 space-y-0.5">
+            {errors.map((err, idx) => (
+              <li key={idx}>第 {err.line} 行：无法识别的标签 <code className="bg-red-500/20 px-1 rounded">{err.tag}</code></li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -127,6 +207,7 @@ interface RightSidebarProps {
   canvasW: number;
   canvasH: number;
   selectedIdx: number | null;
+  setSelectedIdx: (idx: number | null) => void;
 
   systemFonts: string[];
   extractedColors: string[];
@@ -400,7 +481,7 @@ export function RightSidebar({
   canvasW,
   canvasH,
   selectedIdx,
-
+  setSelectedIdx,
   systemFonts,
   extractedColors,
   xyBounds,
@@ -408,6 +489,44 @@ export function RightSidebar({
 }: RightSidebarProps) {
   const [rightTab, setRightTab] = useState<'script' | 'style'>('script');
   const [openSections, setOpenSections] = useState<Record<string, boolean>>({ canvas: false, author: true, text: true, image: true });
+
+  const [sidebarWidth, setSidebarWidth] = useState(() => parseInt(localStorage.getItem('rightSidebarWidth') || '380', 10));
+  const [isDraggingState, setIsDraggingState] = useState(false);
+  const isDragging = useRef(false);
+
+  useEffect(() => {
+    localStorage.setItem('rightSidebarWidth', String(sidebarWidth));
+  }, [sidebarWidth]);
+
+  useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!isDragging.current) return;
+      let newWidth = window.innerWidth - e.clientX;
+      if (newWidth < 240) newWidth = 240;
+      if (newWidth > 800) newWidth = 800;
+      setSidebarWidth(newWidth);
+    };
+    const handleMouseUp = () => {
+      if (isDragging.current) {
+        isDragging.current = false;
+        setIsDraggingState(false);
+        document.body.style.cursor = '';
+      }
+    };
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, []);
+
+  const handleMouseDown = (e: React.MouseEvent) => {
+    e.preventDefault();
+    isDragging.current = true;
+    setIsDraggingState(true);
+    document.body.style.cursor = 'col-resize';
+  };
 
   const { open: openGlobalEyedropper } = useEyedropper();
 
@@ -456,15 +575,24 @@ export function RightSidebar({
           {/* Right Sidebar Toggle Button */}
           <button 
             onClick={() => setIsRightOpen(!isRightOpen)}
-            className={`absolute top-1/2 -translate-y-1/2 z-30 bg-card border border-border rounded-l-md shadow-md p-1 hover:bg-muted transition-all duration-300 ${isRightOpen ? 'right-80' : 'right-0'}`}
+            style={{ right: isRightOpen ? sidebarWidth : 0 }}
+            className={`absolute top-1/2 -translate-y-1/2 z-30 bg-card border border-border rounded-l-md shadow-md p-1 hover:bg-muted ${!isDraggingState ? 'transition-all duration-300' : ''}`}
           >
             {isRightOpen ? <ChevronRight size={20} className="text-muted-foreground" /> : <ChevronLeft size={20} className="text-muted-foreground" />}
           </button>
 
           {/* Right Sidebar */}
-          <aside className={`overflow-hidden border-l border-border bg-card flex flex-col z-20 shadow-xl transition-all duration-300 ease-in-out ${isRightOpen ? 'w-80 min-w-[320px]' : 'w-0'}`}>
+          <aside 
+            className={`relative overflow-hidden border-l border-border bg-card flex flex-col z-20 shadow-xl ${!isDraggingState ? 'transition-all duration-300 ease-in-out' : ''}`}
+            style={{ width: isRightOpen ? sidebarWidth : 0 }}
+          >
+            {/* Resizer Handle */}
+            <div 
+              className="absolute top-0 left-0 w-1.5 h-full cursor-col-resize hover:bg-primary/50 active:bg-primary z-50 transition-colors"
+              onMouseDown={handleMouseDown}
+            />
             {/* Tab Header */}
-            <div className="flex w-80 flex-shrink-0 relative">
+            <div className="flex w-full flex-shrink-0 relative">
               <button
                 onClick={() => setRightTab('script')}
                 className={`flex-1 py-2.5 text-sm font-medium flex items-center justify-center gap-1.5 transition-colors border-b-2 ${
@@ -492,21 +620,22 @@ export function RightSidebar({
 
             {/* Script Tab */}
             {rightTab === 'script' && (
-            <div className="p-4 flex-1 flex flex-col gap-3 w-80 overflow-hidden">
+            <div className="p-4 flex-1 flex flex-col gap-3 w-full overflow-hidden">
               <p className="text-xs text-muted-foreground flex-shrink-0">
                 使用 [Cover] 和 [1], [2] 标记将剧本与图片关联。第一张图默认为封面。
               </p>
               <DebouncedTextarea 
-                className="flex-1 w-full bg-background border border-border rounded-md p-3 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary resize-none transition-all font-mono"
+                className="flex-1 w-full bg-background border border-border rounded-md p-3 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary resize-none transition-all font-mono min-h-0"
                 value={globalScript}
                 onChange={setGlobalScript}
+                onCursorChange={setSelectedIdx}
               />
             </div>
             )}
 
             {/* Style Tab */}
             {rightTab === 'style' && (
-            <div className="p-4 flex-1 flex flex-col gap-4 w-80 overflow-y-auto">
+            <div className="p-4 flex-1 flex flex-col gap-4 w-full overflow-y-auto">
               
               {/* Canvas Settings */}
               <div className="border-b border-border pb-2">

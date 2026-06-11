@@ -1,3 +1,4 @@
+import { memo } from 'react';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { Trash2 } from 'lucide-react';
@@ -5,13 +6,13 @@ import { Trash2 } from 'lucide-react';
 interface SortableImageItemProps {
   id: string;
   idx: number;
-  selectedIdx: number | null;
-  setSelectedIdx: (idx: number | null) => void;
+  isSelected: boolean;
+  onSelect: (idx: number) => void;
   onDelete: (id: string) => void;
   hasTitle?: boolean;
 }
 
-export function SortableImageItem({ id, idx, selectedIdx, setSelectedIdx, onDelete, hasTitle }: SortableImageItemProps) {
+export const SortableImageItem = memo(function SortableImageItem({ id, idx, isSelected, onSelect, onDelete, hasTitle }: SortableImageItemProps) {
   const {
     attributes,
     listeners,
@@ -32,9 +33,9 @@ export function SortableImageItem({ id, idx, selectedIdx, setSelectedIdx, onDele
       style={style} 
       {...attributes} 
       {...listeners}
-      onClick={() => setSelectedIdx(idx)}
+      onClick={() => onSelect(idx)}
       className={`relative group rounded-md border-2 overflow-hidden cursor-pointer transition-colors transition-shadow ${
-        selectedIdx === idx ? 'border-primary ring-2 ring-primary/20 shadow-md scale-[1.02]' : 'border-border/50 shadow-sm hover:border-border hover:shadow-md bg-card'
+        isSelected ? 'border-primary ring-2 ring-primary/20 shadow-md scale-[1.02]' : 'border-border/50 shadow-sm hover:border-border hover:shadow-md bg-card'
       }`}
     >
       <div className="absolute top-1 left-1 bg-black/60 text-white text-[10px] font-bold px-1.5 py-0.5 rounded backdrop-blur-sm z-10">
@@ -56,4 +57,4 @@ export function SortableImageItem({ id, idx, selectedIdx, setSelectedIdx, onDele
       </button>
     </div>
   );
-}
+});

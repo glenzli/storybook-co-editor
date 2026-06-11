@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo, useRef } from 'react';
+import { useEffect, useState, useMemo, useRef, useCallback } from 'react';
 import { listen } from '@tauri-apps/api/event';
 import { invoke } from '@tauri-apps/api/core';
 import { Image as ImageIcon, Info, XOctagon, RefreshCw, Trash2, ArchiveRestore, ZoomIn } from 'lucide-react';
@@ -59,8 +59,16 @@ export default function EditorScreen() {
   const [receivingState, setReceivingState] = useState<{ active: boolean, current: number, total: number }>({ active: false, current: 0, total: 0 });
 
   // Sidebar States
-  const [isLeftOpen, setIsLeftOpen] = useState(true);
-  const [isRightOpen, setIsRightOpen] = useState(true);
+  const [isLeftOpen, setIsLeftOpen] = useState(() => localStorage.getItem('isLeftOpen') !== 'false');
+  const [isRightOpen, setIsRightOpen] = useState(() => localStorage.getItem('isRightOpen') !== 'false');
+
+  useEffect(() => {
+    localStorage.setItem('isLeftOpen', String(isLeftOpen));
+  }, [isLeftOpen]);
+
+  useEffect(() => {
+    localStorage.setItem('isRightOpen', String(isRightOpen));
+  }, [isRightOpen]);
 
 
   // Tabs
@@ -354,6 +362,29 @@ export default function EditorScreen() {
       }
   };
 
+  const shiftProjectDictionaries = useCallback((mapping: (oldIdx: number) => number | null, numItems: number) => {
+    if (!projectState) return;
+    const newImageAdjustments: Record<string, any> = {};
+    const newPageTextOverrides: Record<string, any> = {};
+    for (let i = 0; i < numItems; i++) {
+        const oldKey = String(i);
+        const newIdx = mapping(i);
+        if (newIdx !== null) {
+            const newKey = String(newIdx);
+            if (projectState.image_adjustments?.[oldKey]) {
+                newImageAdjustments[newKey] = projectState.image_adjustments[oldKey];
+            }
+            if (projectState.page_text_overrides?.[oldKey]) {
+                newPageTextOverrides[newKey] = projectState.page_text_overrides[oldKey];
+            }
+        }
+    }
+    updateProjectState({
+        image_adjustments: newImageAdjustments,
+        page_text_overrides: newPageTextOverrides
+    });
+  }, [projectState, updateProjectState]);
+
   const handleDragEnd = (event: any) => {
     const { active, over } = event;
 
@@ -371,12 +402,20 @@ export default function EditorScreen() {
                 setSelectedIdx(selectedIdx + 1);
             }
         }
+
+        shiftProjectDictionaries((i) => {
+            if (i === oldIndex) return newIndex;
+            if (oldIndex < newIndex && i > oldIndex && i <= newIndex) return i - 1;
+            if (oldIndex > newIndex && i >= newIndex && i < oldIndex) return i + 1;
+            return i;
+        }, items.length);
+
         return arrayMove(items, oldIndex, newIndex);
       });
     }
   };
 
-  const handleDelete = (idToRemove: string) => {
+  const handleDelete = useCallback((idToRemove: string) => {
       setTrashedImages(prev => {
           if (idToRemove.startsWith('blank://')) return prev;
           if (!prev.includes(idToRemove)) return [...prev, idToRemove];
@@ -386,14 +425,25 @@ export default function EditorScreen() {
       setImages(prev => {
           const idx = prev.indexOf(idToRemove);
           const next = prev.filter(url => url !== idToRemove);
-          if (selectedIdx === idx) {
-              setSelectedIdx(next.length > 0 ? 0 : null);
-          } else if (selectedIdx !== null && selectedIdx > idx) {
-              setSelectedIdx(selectedIdx - 1);
-          }
+          
+          setSelectedIdx(currentSelectedIdx => {
+              if (currentSelectedIdx === idx) {
+                  return next.length > 0 ? 0 : null;
+              } else if (currentSelectedIdx !== null && currentSelectedIdx > idx) {
+                  return currentSelectedIdx - 1;
+              }
+              return currentSelectedIdx;
+          });
+
+          shiftProjectDictionaries((i) => {
+              if (i === idx) return null; // deleted
+              if (i > idx) return i - 1; // shifted left
+              return i;
+          }, prev.length);
+          
           return next;
       });
-  };
+  }, [shiftProjectDictionaries]);
 
   const handleOpenTrash = () => {
       setShowTrashModal(true);
@@ -638,6 +688,7 @@ export default function EditorScreen() {
             canvasW={canvasW}
             canvasH={canvasH}
             selectedIdx={selectedIdx}
+            setSelectedIdx={setSelectedIdx}
             systemFonts={systemFonts}
             extractedColors={extractedColors}
             xyBounds={xyBounds}

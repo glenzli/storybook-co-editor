@@ -1,3 +1,4 @@
+import { useState, useRef, useEffect } from 'react';
 import { DndContext, closestCenter, PointerSensor, KeyboardSensor, useSensor, useSensors } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy, sortableKeyboardCoordinates } from '@dnd-kit/sortable';
 import { LayoutTemplate, Archive, Sun, Moon, ChevronLeft, ChevronRight, FilePlus } from 'lucide-react';
@@ -37,10 +38,51 @@ export function LeftSidebar({
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
   );
 
+  const [sidebarWidth, setSidebarWidth] = useState(() => parseInt(localStorage.getItem('leftSidebarWidth') || '256', 10));
+  const [isDraggingState, setIsDraggingState] = useState(false);
+  const isDragging = useRef(false);
+
+  useEffect(() => {
+    localStorage.setItem('leftSidebarWidth', String(sidebarWidth));
+  }, [sidebarWidth]);
+
+  useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!isDragging.current) return;
+      let newWidth = e.clientX;
+      if (newWidth < 160) newWidth = 160;
+      if (newWidth > 600) newWidth = 600;
+      setSidebarWidth(newWidth);
+    };
+    const handleMouseUp = () => {
+      if (isDragging.current) {
+        isDragging.current = false;
+        setIsDraggingState(false);
+        document.body.style.cursor = '';
+      }
+    };
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, []);
+
+  const handleMouseDown = (e: React.MouseEvent) => {
+    e.preventDefault();
+    isDragging.current = true;
+    setIsDraggingState(true);
+    document.body.style.cursor = 'col-resize';
+  };
+
   return (
     <>
-      <aside className={`overflow-hidden border-r border-border bg-card flex flex-col z-20 shadow-xl transition-all duration-300 ease-in-out ${isLeftOpen ? 'w-64 min-w-[256px]' : 'w-0'}`}>
-        <div className="p-4 border-b border-border flex items-center justify-between w-64">
+      <aside 
+        className={`relative overflow-hidden border-r border-border bg-card flex flex-col z-20 shadow-xl ${!isDraggingState ? 'transition-all duration-300 ease-in-out' : ''}`}
+        style={{ width: isLeftOpen ? sidebarWidth : 0 }}
+      >
+        <div className="p-4 border-b border-border flex items-center justify-between w-full shrink-0">
           <div className="flex items-center gap-2">
             <LayoutTemplate size={20} className="text-primary" />
             <h2 className="font-bold whitespace-nowrap">绘本分页</h2>
@@ -57,7 +99,7 @@ export function LeftSidebar({
             </button>
           </div>
         </div>
-        <div className="flex-1 overflow-y-auto p-4 space-y-4 w-64">
+        <div className="flex-1 overflow-y-auto p-4 space-y-4 w-full">
           {images.length === 0 ? (
             <div className="text-muted-foreground text-sm text-center mt-10">
               暂无页面。<br/>请在浏览器插件中发送图片。
@@ -74,8 +116,8 @@ export function LeftSidebar({
                     key={url}
                     id={url}
                     idx={idx}
-                    selectedIdx={selectedIdx}
-                    setSelectedIdx={setSelectedIdx}
+                    isSelected={selectedIdx === idx}
+                    onSelect={setSelectedIdx}
                     onDelete={handleDelete}
                     hasTitle={hasTitle}
                   />
@@ -84,12 +126,19 @@ export function LeftSidebar({
             </DndContext>
           )}
         </div>
+
+        {/* Resizer Handle */}
+        <div 
+          className="absolute top-0 right-0 w-1.5 h-full cursor-col-resize hover:bg-primary/50 active:bg-primary z-50 transition-colors"
+          onMouseDown={handleMouseDown}
+        />
       </aside>
 
       {/* Left Sidebar Toggle Button */}
       <button 
         onClick={() => setIsLeftOpen(!isLeftOpen)}
-        className={`absolute top-1/2 -translate-y-1/2 z-30 bg-card border border-border rounded-r-md shadow-md p-1 hover:bg-muted transition-all duration-300 ${isLeftOpen ? 'left-64' : 'left-0'}`}
+        style={{ left: isLeftOpen ? sidebarWidth : 0 }}
+        className={`absolute top-1/2 -translate-y-1/2 z-30 bg-card border border-border rounded-r-md shadow-md p-1 hover:bg-muted ${!isDraggingState ? 'transition-all duration-300' : ''}`}
       >
         {isLeftOpen ? <ChevronLeft size={20} className="text-muted-foreground" /> : <ChevronRight size={20} className="text-muted-foreground" />}
       </button>

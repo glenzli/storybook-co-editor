@@ -120,26 +120,30 @@ function calculateImposition(images: string[], settings: any): ImposedSheet[] {
 export default function PrintScreen() {
     const { projectState, updateProjectState } = useProject();
 
-    const savedSettings = projectState?.print_settings || {};
-    const settings = {
-        paper_size: 'A4',
-        paper_orientation: 'landscape',
-        layout_mode: '2-up',
-        binding_method: 'saddle',
-        has_back_cover: true,
-        spine_mm: 5,
-        binding_margin_mm: 15,
-        hardware_margin_mm: 5,
-        auto_snap_content: true,
-        crop_marks: true,
-        double_sided: true,
-        offset_x: 0.0,
-        offset_y: 0.0,
-        ...savedSettings
-    };
+    const settings = useMemo(() => {
+        const s = projectState?.print_settings || {};
+        return {
+            paper_size: 'A4',
+            paper_orientation: 'landscape',
+            layout_mode: '2-up',
+            binding_method: 'saddle',
+            has_back_cover: true,
+            spine_mm: 5,
+            binding_margin_mm: 15,
+            hardware_margin_mm: 5,
+            auto_snap_content: true,
+            crop_marks: true,
+            double_sided: true,
+            offset_x: 0.0,
+            offset_y: 0.0,
+            ...s
+        };
+    }, [projectState?.print_settings]);
 
     const [isExporting, setIsExporting] = useState(false);
     const [exportProgress, setExportProgress] = useState(0);
+
+    const [renderedSheetCount, setRenderedSheetCount] = useState(1);
 
     // Force landscape for saddle/butterfly
     const effectiveOrientation = (settings.binding_method === 'saddle' || settings.binding_method === 'butterfly')
@@ -433,11 +437,24 @@ export default function PrintScreen() {
         return calculateImposition(projectState.visible_images, settings);
     }, [projectState?.visible_images, settings]);
 
+    useEffect(() => {
+        setRenderedSheetCount(1);
+    }, [imposedSheets]);
+
+    useEffect(() => {
+        if (renderedSheetCount < imposedSheets.length) {
+            const timer = setTimeout(() => {
+                setRenderedSheetCount(prev => Math.min(prev + 4, imposedSheets.length));
+            }, 50);
+            return () => clearTimeout(timer);
+        }
+    }, [renderedSheetCount, imposedSheets.length]);
+
     // Track loaded image natural dimensions for content-level crop lines
     type ImgDimMap = { [key: number]: { w: number; h: number } };
     const [imageDims, setImageDims] = useState({} as ImgDimMap);
-    const handleImageLoad = (pageIndex: number, e: React.SyntheticEvent<HTMLImageElement>) => {
-        const img = e.currentTarget;
+    const handleImageLoad = (pageIndex: number, img: HTMLImageElement | null) => {
+        if (!img) return;
         setImageDims((prev: ImgDimMap) => {
             if (prev[pageIndex]?.w === img.naturalWidth && prev[pageIndex]?.h === img.naturalHeight) return prev;
             return { ...prev, [pageIndex]: { w: img.naturalWidth, h: img.naturalHeight } };
@@ -588,14 +605,31 @@ export default function PrintScreen() {
                         selective_colors: imgAdj?.selective_colors || []
                     };
                     
+                    let cw: string | undefined = undefined;
+                    let ch: string | undefined = undefined;
+                    let effectiveOffsetX = offsetX;
+                    let effectiveOffsetY = offsetY;
+                    const dim = imageDims[pageIdx];
+                    if (dim) {
+                        const s = Math.min(scaledW / dim.w, scaledH / dim.h);
+                        // Bake scale into explicit width/height to bypass html2canvas transform bugs
+                        cw = `${dim.w * s * scale}px`;
+                        ch = `${dim.h * s * scale}px`;
+                        // Adjust translation percentage since the element's base width/height has changed
+                        effectiveOffsetX = offsetX / scale;
+                        effectiveOffsetY = offsetY / scale;
+                    }
+                    
                     return (
                         <div className="absolute inset-0 overflow-hidden flex items-center justify-center" style={{ backgroundColor: bgColor }}>
                             <ProImage 
-                                onLoad={() => handleImageLoad(pageIdx, null as any)}
+                                onLoad={(img) => handleImageLoad(pageIdx, img)}
                                 src={imgFile.startsWith('blank://') ? "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" : `http://127.0.0.1:14320/images/${imgFile}`}
-                                className={`w-full h-full object-contain ${imgFile.startsWith('blank://') ? 'bg-white' : ''}`}
+                                className={`${!dim ? 'w-full h-full object-contain' : ''} ${imgFile.startsWith('blank://') ? 'bg-white' : ''}`}
                                 style={{ 
-                                    transform: `translate(${offsetX}%, ${offsetY}%) scale(${scale})`
+                                    width: cw,
+                                    height: ch,
+                                    transform: `translate(${effectiveOffsetX}%, ${effectiveOffsetY}%)` // scale is baked
                                 }}
                                 adjustments={adjustments}
                             />
@@ -807,11 +841,11 @@ export default function PrintScreen() {
                 <div className="p-4 border-t border-border">
                     <button 
                         onClick={generatePDF}
-                        disabled={isExporting}
+                        disabled={isExporting || renderedSheetCount < imposedSheets.length}
                         className="w-full py-3 bg-primary text-primary-foreground rounded-md font-bold flex items-center justify-center gap-2 hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-opacity shadow-md"
                     >
                         {isExporting ? <RefreshCw size={18} className="animate-spin" /> : <Download size={18} />}
-                        {isExporting ? `导出中... ${exportProgress}%` : '生成高清 PDF'}
+                        {isExporting ? `导出中... ${exportProgress}%` : (renderedSheetCount < imposedSheets.length ? `渲染中...` : '生成高清 PDF')}
                     </button>
                 </div>
             </aside>
@@ -823,7 +857,26 @@ export default function PrintScreen() {
                     <p className="text-sm text-muted-foreground">此处模拟 {settings.paper_size} 纸张物理打印排版。蓝色虚线为折叠线或裁剪辅助线。</p>
                 </div>
 
-                {imposedSheets.map((sheet, index) => {
+                {renderedSheetCount < imposedSheets.length && (
+                    <div className="w-full max-w-xl mx-auto flex flex-col gap-2 p-6 bg-card border border-border shadow-md rounded-xl">
+                        <div className="flex justify-between items-center text-sm font-medium">
+                            <span className="flex items-center gap-2">
+                                <div className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin"></div>
+                                正在进行渐进式渲染...
+                            </span>
+                            <span className="text-primary">{renderedSheetCount} / {imposedSheets.length} 页</span>
+                        </div>
+                        <div className="w-full bg-muted overflow-hidden rounded-full h-2.5">
+                            <div 
+                                className="bg-primary h-full transition-all duration-200 ease-out" 
+                                style={{ width: `${Math.round((renderedSheetCount / imposedSheets.length) * 100)}%` }}
+                            />
+                        </div>
+                        <p className="text-xs text-muted-foreground text-center mt-1">为防止主线程卡死，正在分批加载大尺寸排版视图</p>
+                    </div>
+                )}
+
+                {imposedSheets.slice(0, renderedSheetCount).map((sheet, index) => {
                     const paperSizes: Record<string, [number, number]> = {
                         'A5': [148.5, 210],
                         'A4': [210, 297],
@@ -1172,6 +1225,13 @@ export default function PrintScreen() {
                     </div>
                     );
                 })}
+                
+                {renderedSheetCount < imposedSheets.length && (
+                    <div className="flex flex-col items-center justify-center p-12 text-muted-foreground gap-4">
+                        <RefreshCw size={32} className="animate-spin text-primary" />
+                        <p>正在拼版渲染第 {renderedSheetCount + 1} / {imposedSheets.length} 张纸张...</p>
+                    </div>
+                )}
             </main>
         </div>
     );
