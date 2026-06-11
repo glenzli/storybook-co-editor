@@ -2,6 +2,42 @@ import { useState, useEffect, useRef } from 'react';
 import { PenTool, Type, Maximize2, ChevronDown, ChevronRight, ChevronLeft, LayoutTemplate, Pipette, Trash2 } from 'lucide-react';
 import { HexColorPicker } from 'react-colorful';
 
+function DebouncedTextarea({ value, onChange, className }: { value: string, onChange: (v: string) => void, className?: string }) {
+  const [localValue, setLocalValue] = useState(value);
+  const timeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  useEffect(() => {
+    setLocalValue(value);
+  }, [value]);
+
+  const handleChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    const newVal = e.target.value;
+    setLocalValue(newVal);
+    
+    // Auto-save after 1.5 seconds of inactivity
+    if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    timeoutRef.current = setTimeout(() => {
+      onChange(newVal);
+    }, 1500);
+  };
+
+  const handleBlur = () => {
+    if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    if (localValue !== value) {
+      onChange(localValue);
+    }
+  };
+
+  return (
+    <textarea 
+      className={className}
+      value={localValue}
+      onChange={handleChange}
+      onBlur={handleBlur}
+    />
+  );
+}
+
 const useEyedropper = () => {
   const [isSupported] = useState(() => 'EyeDropper' in window);
   
@@ -453,16 +489,17 @@ export function RightSidebar({
               </button>
             </div>
 
+
             {/* Script Tab */}
             {rightTab === 'script' && (
             <div className="p-4 flex-1 flex flex-col gap-3 w-80 overflow-hidden">
               <p className="text-xs text-muted-foreground flex-shrink-0">
                 使用 [Cover] 和 [1], [2] 标记将剧本与图片关联。第一张图默认为封面。
               </p>
-              <textarea 
+              <DebouncedTextarea 
                 className="flex-1 w-full bg-background border border-border rounded-md p-3 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary resize-none transition-all font-mono"
                 value={globalScript}
-                onChange={(e) => setGlobalScript(e.target.value)}
+                onChange={setGlobalScript}
               />
             </div>
             )}
