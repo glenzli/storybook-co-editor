@@ -32,6 +32,7 @@ function getShadowStyle(hexColor: string, hasShadow: boolean) {
 
 interface SavedImageEvent {
   filepath: string;
+  stable_id?: string;
   page?: number;
   status: string;
 }
@@ -41,7 +42,7 @@ interface BatchEvent {
 }
 
 export default function EditorScreen() {
-  const { activeWorkspaceId, projectState, updateProjectState, saveProject, saveProjectAs, closeProject, currentProjectPath, isDirty, undo, redo, canUndo, canRedo, isSaving, saveProgress } = useProject();
+  const { activeWorkspaceId, projectState, updateProjectState, appendSourceUrlMap, saveProject, saveProjectAs, closeProject, currentProjectPath, isDirty, undo, redo, canUndo, canRedo, isSaving, saveProgress } = useProject();
   const [images, setImages] = useState<string[]>([]);
   const [selectedIdx, setSelectedIdx] = useState<number | null>(null);
   
@@ -133,8 +134,12 @@ export default function EditorScreen() {
   useEffect(() => {
     const u1 = listen<SavedImageEvent>('image-saved', (event) => {
       logger.info("UI received image-saved", event.payload);
-      const { filepath } = event.payload;
+      const { filepath, stable_id } = event.payload;
       const url = `http://127.0.0.1:14320/images/${filepath}`;
+      
+      if (stable_id) {
+          appendSourceUrlMap(stable_id, filepath);
+      }
       
       setTrashedImages(currentTrash => {
           if (currentTrash.includes(url)) {
@@ -401,9 +406,24 @@ export default function EditorScreen() {
 
 
 
-  // Keyboard shortcuts: Cmd+S, Cmd+Z, Cmd+Shift+Z
+  const imagesLengthRef = useRef(0);
+  useEffect(() => {
+      imagesLengthRef.current = images.length;
+  }, [images.length]);
+
+  // Keyboard shortcuts: Cmd+S, Cmd+Z, Cmd+Shift+Z, Arrow keys
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
+      // Ignore if typing in input fields
+      const activeElement = document.activeElement as HTMLElement;
+      if (
+          activeElement?.tagName === 'INPUT' || 
+          activeElement?.tagName === 'TEXTAREA' || 
+          activeElement?.isContentEditable
+      ) {
+          return;
+      }
+
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 's') {
         e.preventDefault();
         if (isDirty && !isSaving) {
@@ -415,10 +435,28 @@ export default function EditorScreen() {
       } else if ((e.metaKey || e.ctrlKey) && e.key === 'z') {
         e.preventDefault();
         undo();
+      } else if (e.key === 'ArrowUp' || e.key === 'ArrowLeft') {
+        e.preventDefault();
+        setSelectedIdx(prev => {
+            const next = (prev !== null && prev > 0) ? prev - 1 : prev;
+            if (next !== null) {
+                setTimeout(() => document.getElementById(`sidebar-item-${next}`)?.scrollIntoView({ block: 'nearest', behavior: 'smooth' }), 10);
+            }
+            return next;
+        });
+      } else if (e.key === 'ArrowDown' || e.key === 'ArrowRight') {
+        e.preventDefault();
+        setSelectedIdx(prev => {
+            const next = (prev !== null && prev < imagesLengthRef.current - 1) ? prev + 1 : prev;
+            if (next !== null) {
+                setTimeout(() => document.getElementById(`sidebar-item-${next}`)?.scrollIntoView({ block: 'nearest', behavior: 'smooth' }), 10);
+            }
+            return next;
+        });
       }
     };
-    window.addEventListener('keydown', handler);
-    return () => window.removeEventListener('keydown', handler);
+    window.addEventListener('keydown', handler, { capture: true });
+    return () => window.removeEventListener('keydown', handler, { capture: true });
   }, [isDirty, isSaving, saveProject, undo, redo]);
   const handleInsertBlankPage = () => {
     setImages(prev => {

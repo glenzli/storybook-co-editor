@@ -20,7 +20,7 @@ const useEyedropper = () => {
           html2canvas(document.body, { useCORS: true }).then((canvas) => {
             const overlay = document.createElement('div');
             const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><g stroke="white" stroke-width="4" fill="none"><path d="m2 22 1-1h3l9-9"/><path d="M3 21v-3l9-9"/><path d="m15 6 3.4-3.4a2.1 2.1 0 1 1 3 3L18 9l-3-3Z" fill="white"/></g><g stroke="black" stroke-width="2" fill="none"><path d="m2 22 1-1h3l9-9"/><path d="M3 21v-3l9-9"/><path d="m15 6 3.4-3.4a2.1 2.1 0 1 1 3 3L18 9l-3-3Z" fill="white"/></g></svg>`;
-            const cursorUrl = `url('data:image/svg+xml;utf8,${encodeURIComponent(svg)}') 0 24, crosshair`;
+            const cursorUrl = `url('data:image/svg+xml;utf8,${encodeURIComponent(svg)}') 2 22, crosshair`;
             Object.assign(overlay.style, {
               position: 'fixed', top: '0', left: '0', width: '100vw', height: '100vh',
               cursor: cursorUrl, zIndex: '999999'
@@ -1014,6 +1014,16 @@ export function RightSidebar({
                                       step={1}
                                       defaultValue={0}
                                       onChange={(val) => handleUpdateSelectiveColor(pageKey, sc.id, { d_lum: val })}
+                                      className="mt-1"
+                                    />
+                                    <SliderControl
+                                      label="影响范围"
+                                      value={sc.range ?? 25}
+                                      min={5}
+                                      max={90}
+                                      step={1}
+                                      defaultValue={25}
+                                      onChange={(val) => handleUpdateSelectiveColor(pageKey, sc.id, { range: val })}
                                       className="mt-1"
                                     />
                                   </div>

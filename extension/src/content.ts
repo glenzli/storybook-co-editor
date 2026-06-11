@@ -49,7 +49,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
                 // For ChatGPT, the img src is usually the 1024x1024 WebP. If there's a download button or anchor, we could try to find it.
                 // But generally, the src itself is the highest resolution served to the DOM.
                 
-                return { thumb, original };
+                return { thumb, original, stable_id: getStableId(original) };
             })
             .filter(item => {
                 // Ignore base64 images (usually avatars/placeholders)
@@ -102,10 +102,47 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     }
 });
 
-// We will add a "Capture for Storybook" button overlay when hovering over images.
+const SUPPORTED_DOMAINS = [
+  'openai.com',
+  'chatgpt.com',
+  'oaiusercontent.com',
+  'discord.com',
+  'discordapp.com',
+  'midjourney.com',
+  'gemini.google.com'
+];
 
-const overlay = document.createElement('div');
-overlay.style.position = 'absolute';
+function isSupportedUrl(url: string) {
+  if (!url) return false;
+  try {
+    const urlObj = new URL(url);
+    return SUPPORTED_DOMAINS.some(domain => urlObj.hostname.endsWith(domain));
+  } catch (e) {
+    return false;
+  }
+}
+
+export function getStableId(urlStr: string): string {
+    try {
+        const url = new URL(urlStr);
+        if (url.hostname.includes('oaiusercontent.com')) {
+            const match = url.pathname.match(/\/file-([a-zA-Z0-9]+)/);
+            if (match) return match[0];
+        }
+        if (url.hostname.includes('discordapp.com')) {
+            return url.pathname; 
+        }
+        return url.origin + url.pathname;
+    } catch(e) {
+        return urlStr;
+    }
+}
+
+// We will add a "Capture for Storybook" button overlay when hovering over images, only on supported domains.
+
+if (isSupportedUrl(window.location.href)) {
+    const overlay = document.createElement('div');
+    overlay.style.position = 'absolute';
 overlay.style.zIndex = '999999';
 overlay.style.display = 'none';
 overlay.style.padding = '8px 12px';
@@ -152,24 +189,69 @@ overlay.addEventListener('click', async () => {
     if (!currentTargetImage) return;
     
     const imageUrl = currentTargetImage.src;
-    overlay.innerText = '发送中...';
+    overlay.innerText = '提取中...';
     
-    chrome.runtime.sendMessage(
-        { action: 'saveImage', payload: { url: imageUrl, page: 1 } },
-        (response) => {
-            if (response && response.success) {
-                overlay.innerText = '✅ 发送成功';
-            } else {
-                console.error('Error from background:', response?.error);
-                overlay.innerText = '❌ 连接本地 App 失败';
+    try {
+        const getBase64 = async (url: string) => {
+            try {
+                const r = await fetch(url);
+                const blob = await r.blob();
+                return await new Promise<string>((resolve, reject) => {
+                    const reader = new FileReader();
+                    reader.onloadend = () => resolve(reader.result as string);
+                    reader.onerror = reject;
+                    reader.readAsDataURL(blob);
+                });
+            } catch (e) {
+                return await new Promise<string>((resolve, reject) => {
+                    const img = new Image();
+                    img.crossOrigin = "anonymous";
+                    img.onload = () => {
+                        const canvas = document.createElement('canvas');
+                        canvas.width = img.width;
+                        canvas.height = img.height;
+                        const ctx = canvas.getContext('2d');
+                        ctx?.drawImage(img, 0, 0);
+                        resolve(canvas.toDataURL('image/png'));
+                    };
+                    img.onerror = () => reject(new Error('Canvas fallback failed'));
+                    img.src = url;
+                });
             }
-            
-            setTimeout(() => {
-                if (overlay.innerText.includes('成功') || overlay.innerText.includes('失败')) {
-                    overlay.style.display = 'none';
-                    overlay.innerText = '📸 发送至绘本';
+        };
+
+        const base64_data = await getBase64(imageUrl);
+        overlay.innerText = '发送中...';
+
+        await new Promise((resolve) => {
+            chrome.runtime.sendMessage({ action: 'startBatch', payload: { total: 1 } }, resolve);
+        });
+
+        chrome.runtime.sendMessage(
+            { action: 'saveImage', payload: { url: imageUrl, stable_id: getStableId(imageUrl), page: 1, base64_data } },
+            (response) => {
+                if (response && response.success) {
+                    overlay.innerText = '✅ 发送成功';
+                } else {
+                    console.error('Error from background:', response?.error);
+                    overlay.innerText = '❌ 发送失败';
                 }
-            }, 2000);
-        }
-    );
+                
+                setTimeout(() => {
+                    if (overlay.innerText.includes('成功') || overlay.innerText.includes('失败')) {
+                        overlay.style.display = 'none';
+                        overlay.innerText = '📸 发送至绘本';
+                    }
+                }, 2000);
+            }
+        );
+    } catch (e) {
+        console.error("Failed to extract image:", e);
+        overlay.innerText = '❌ 提取失败';
+        setTimeout(() => {
+            overlay.style.display = 'none';
+            overlay.innerText = '📸 发送至绘本';
+        }, 2000);
+    }
 });
+}

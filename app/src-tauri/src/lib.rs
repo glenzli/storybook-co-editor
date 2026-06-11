@@ -26,6 +26,7 @@ fn greet(name: &str) -> String {
 #[derive(Deserialize)]
 struct SaveImageRequest {
     url: Option<String>,
+    stable_id: Option<String>,
     page: Option<u32>,
     base64_data: Option<String>,
 }
@@ -408,6 +409,7 @@ async fn save_image(
                 if trashpath.exists() {
                     let _ = state.app_handle.emit("image-saved", serde_json::json!({
                         "filepath": filename,
+                        "stable_id": payload.stable_id.clone(),
                         "page": payload.page,
                         "status": "trashed"
                     }));
@@ -422,6 +424,7 @@ async fn save_image(
                 if filepath.exists() {
                     let _ = state.app_handle.emit("image-saved", serde_json::json!({
                         "filepath": filename,
+                        "stable_id": payload.stable_id.clone(),
                         "page": payload.page,
                         "status": "duplicate"
                     }));
@@ -444,6 +447,7 @@ async fn save_image(
 
                 let _ = state.app_handle.emit("image-saved", serde_json::json!({
                     "filepath": filename,
+                    "stable_id": payload.stable_id.clone(),
                     "page": payload.page,
                 }));
                 

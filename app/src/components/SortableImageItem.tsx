@@ -27,6 +27,7 @@ export function SortableImageItem({ id, idx, selectedIdx, setSelectedIdx, onDele
 
   return (
     <div 
+      id={`sidebar-item-${idx}`}
       ref={setNodeRef} 
       style={style} 
       {...attributes} 

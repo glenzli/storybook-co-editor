@@ -138,10 +138,11 @@ export function applyProAdjustments(
                 let diff = Math.abs(hueDeg - sc.target_hue);
                 if (diff > 180) diff = 360 - diff;
                 
-                // Falloff range of 25 degrees
-                if (diff < 25) {
-                    // Smooth feathering: 1 at center, 0 at 25
-                    const weight = 0.5 * (1 + Math.cos(Math.PI * (diff / 25)));
+                // Falloff range
+                const falloffDeg = sc.range ?? 25;
+                if (diff < falloffDeg) {
+                    // Smooth feathering: 1 at center, 0 at falloff edge
+                    const weight = 0.5 * (1 + Math.cos(Math.PI * (diff / falloffDeg)));
                     
                     if (weight > 0) {
                         h += (sc.d_hue / 360) * weight;

@@ -98,6 +98,8 @@ pub struct SelectiveColor {
     pub d_hue: f32,
     pub d_sat: f32,
     pub d_lum: f32,
+    #[serde(default)]
+    pub range: Option<f32>,
 }
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -138,6 +140,8 @@ pub struct ProjectState {
     pub last_modified: String,
     pub visible_images: Vec<String>,
     pub trashed_images: Vec<String>,
+    #[serde(default)]
+    pub source_url_map: HashMap<String, String>,
     pub global_script: String,
     #[serde(default)]
     pub cover_text_settings: TextSettings,
@@ -167,6 +171,7 @@ impl Default for ProjectState {
             last_modified: chrono::Utc::now().to_rfc3339(),
             visible_images: vec![],
             trashed_images: vec![],
+            source_url_map: HashMap::new(),
             global_script: "".to_string(),
             cover_text_settings: TextSettings { font_size: 40.0, ..TextSettings::default() },
             title_text_settings: TextSettings { font_size: 32.0, ..TextSettings::default() },

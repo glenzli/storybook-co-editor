@@ -21,6 +21,7 @@ export interface SelectiveColor {
     d_hue: number;       // -180 to 180
     d_sat: number;       // -100 to 100
     d_lum: number;       // -100 to 100
+    range?: number;      // 5 to 90 degrees falloff, default 25
 }
 export interface ImageAdjustments {
     offset_x?: number;
@@ -61,6 +62,7 @@ export interface ProjectState {
     last_modified: string;
     visible_images: string[];
     trashed_images: string[];
+    source_url_map?: Record<string, string>;
     global_script: string;
     cover_text_settings?: TextSettings;
     title_text_settings?: TextSettings;
@@ -103,6 +105,7 @@ interface ProjectContextType {
     canRedo: boolean;
     isSaving: boolean;
     saveProgress: { current: number, total: number } | null;
+    appendSourceUrlMap: (stableId: string, filename: string) => void;
 }
 
 const ProjectContext = createContext<ProjectContextType | undefined>(undefined);
@@ -338,6 +341,16 @@ export const ProjectProvider = ({ children }: { children: ReactNode }) => {
         setIsDirty(true);
     }, []);
 
+    const appendSourceUrlMap = useCallback((stableId: string, filename: string) => {
+        setProjectState(prev => {
+            if (!prev) return null;
+            const newMap = { ...(prev.source_url_map || {}) };
+            newMap[stableId] = filename;
+            return { ...prev, source_url_map: newMap, last_modified: new Date().toISOString() };
+        });
+        setIsDirty(true);
+    }, []);
+
     // Push to undo history when projectState changes (skip undo/redo-triggered changes)
     useEffect(() => {
         if (!projectState) return;
@@ -402,6 +415,7 @@ export const ProjectProvider = ({ children }: { children: ReactNode }) => {
             saveProject,
             closeProject,
             updateProjectState,
+            appendSourceUrlMap,
             currentProjectPath,
             isDirty,
             undo,
