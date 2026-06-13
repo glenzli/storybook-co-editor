@@ -1,3 +1,4 @@
+use font_kit::source::SystemSource;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs::File;
@@ -9,7 +10,6 @@ use uuid::Uuid;
 use walkdir::WalkDir;
 use zip::write::FileOptions;
 use zip::{ZipArchive, ZipWriter};
-use font_kit::source::SystemSource;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(default)]
@@ -88,8 +88,12 @@ impl Default for PrintSettings {
     }
 }
 
-fn default_canvas_size() -> u32 { 1024 }
-fn default_scale() -> f32 { 1.0 }
+fn default_canvas_size() -> u32 {
+    1024
+}
+fn default_scale() -> f32 {
+    1.0
+}
 
 #[derive(Serialize, Deserialize, Clone)]
 pub struct SelectiveColor {
@@ -173,14 +177,23 @@ impl Default for ProjectState {
             trashed_images: vec![],
             source_url_map: HashMap::new(),
             global_script: "".to_string(),
-            cover_text_settings: TextSettings { font_size: 40.0, ..TextSettings::default() },
-            title_text_settings: TextSettings { font_size: 32.0, ..TextSettings::default() },
+            cover_text_settings: TextSettings {
+                font_size: 40.0,
+                ..TextSettings::default()
+            },
+            title_text_settings: TextSettings {
+                font_size: 32.0,
+                ..TextSettings::default()
+            },
             inner_text_settings: TextSettings::default(),
             image_adjustments: HashMap::new(),
             print_settings: PrintSettings::default(),
             canvas_width: default_canvas_size(),
             canvas_height: default_canvas_size(),
-            author_text_settings: TextSettings { font_size: 16.0, ..TextSettings::default() },
+            author_text_settings: TextSettings {
+                font_size: 16.0,
+                ..TextSettings::default()
+            },
             page_text_overrides: HashMap::new(),
         }
     }
@@ -197,7 +210,10 @@ pub struct ProjectInfo {
 }
 
 #[tauri::command]
-pub fn create_project(app: AppHandle, manager: State<ProjectManager>) -> Result<ProjectInfo, String> {
+pub fn create_project(
+    app: AppHandle,
+    manager: State<ProjectManager>,
+) -> Result<ProjectInfo, String> {
     let workspace_id = Uuid::new_v4().to_string();
     let workspace_dir = get_workspace_dir(&app, &workspace_id)?;
 
@@ -217,7 +233,11 @@ pub fn create_project(app: AppHandle, manager: State<ProjectManager>) -> Result<
 }
 
 #[tauri::command]
-pub async fn open_project(app: AppHandle, manager: State<'_, ProjectManager>, archive_path: String) -> Result<ProjectInfo, String> {
+pub async fn open_project(
+    app: AppHandle,
+    manager: State<'_, ProjectManager>,
+    archive_path: String,
+) -> Result<ProjectInfo, String> {
     let workspace_id = Uuid::new_v4().to_string();
     let workspace_dir = get_workspace_dir(&app, &workspace_id)?;
 
@@ -225,7 +245,8 @@ pub async fn open_project(app: AppHandle, manager: State<'_, ProjectManager>, ar
 
     // Unzip the archive
     let file = File::open(&archive_path).map_err(|e| format!("Failed to open archive: {}", e))?;
-    let mut archive = ZipArchive::new(file).map_err(|e| format!("Failed to read archive: {}", e))?;
+    let mut archive =
+        ZipArchive::new(file).map_err(|e| format!("Failed to read archive: {}", e))?;
 
     for i in 0..archive.len() {
         let mut file = archive.by_index(i).unwrap();
@@ -257,13 +278,18 @@ pub async fn open_project(app: AppHandle, manager: State<'_, ProjectManager>, ar
 }
 
 #[tauri::command]
-pub async fn save_project(app: AppHandle, manager: State<'_, ProjectManager>, target_path: String) -> Result<(), String> {
+pub async fn save_project(
+    app: AppHandle,
+    manager: State<'_, ProjectManager>,
+    target_path: String,
+) -> Result<(), String> {
     let active = manager.active_workspace.lock().unwrap().clone();
     if let Some(workspace_id) = active {
         let workspace_dir = get_workspace_dir(&app, &workspace_id)?;
-        
+
         let temp_path = format!("{}.{}.tmp", target_path, Uuid::new_v4());
-        let file = File::create(&temp_path).map_err(|e| format!("Failed to create temp file: {}", e))?;
+        let file =
+            File::create(&temp_path).map_err(|e| format!("Failed to create temp file: {}", e))?;
         let mut zip = ZipWriter::new(file);
         let options = FileOptions::<()>::default()
             .compression_method(zip::CompressionMethod::Stored)
@@ -277,7 +303,7 @@ pub async fn save_project(app: AppHandle, manager: State<'_, ProjectManager>, ta
             let path = entry.path();
             let name = path.strip_prefix(&workspace_dir).unwrap();
             let name_str = name.to_str().unwrap().replace("\\", "/");
-            
+
             // Skip macOS .DS_Store files just in case
             if name_str.contains(".DS_Store") {
                 continue;
@@ -306,19 +332,23 @@ pub async fn save_project(app: AppHandle, manager: State<'_, ProjectManager>, ta
                     return Err(format!("Failed to add directory {}: {}", name_str, e));
                 }
             }
-            
+
             if i % 10 == 0 || i == total - 1 {
                 use tauri::Emitter;
-                let _ = app.emit("save-progress", serde_json::json!({ "current": i + 1, "total": total }));
+                let _ = app.emit(
+                    "save-progress",
+                    serde_json::json!({ "current": i + 1, "total": total }),
+                );
             }
         }
-        
+
         if let Err(e) = zip.finish() {
             let _ = std::fs::remove_file(&temp_path);
             return Err(format!("Failed to finish zip: {}", e));
         }
-        
-        std::fs::rename(&temp_path, &target_path).map_err(|e| format!("Failed to atomic rename project file: {}", e))?;
+
+        std::fs::rename(&temp_path, &target_path)
+            .map_err(|e| format!("Failed to atomic rename project file: {}", e))?;
         Ok(())
     } else {
         Err("No active project".to_string())
@@ -332,7 +362,11 @@ pub fn close_project(manager: State<ProjectManager>) -> Result<(), String> {
 }
 
 #[tauri::command]
-pub fn update_project_state(app: AppHandle, manager: State<ProjectManager>, state: ProjectState) -> Result<(), String> {
+pub fn update_project_state(
+    app: AppHandle,
+    manager: State<ProjectManager>,
+    state: ProjectState,
+) -> Result<(), String> {
     let active = manager.active_workspace.lock().unwrap().clone();
     if let Some(workspace_id) = active {
         let workspace_dir = get_workspace_dir(&app, &workspace_id)?;

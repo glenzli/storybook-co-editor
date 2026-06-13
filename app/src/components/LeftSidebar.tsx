@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { DndContext, closestCenter, PointerSensor, KeyboardSensor, useSensor, useSensors } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy, sortableKeyboardCoordinates } from '@dnd-kit/sortable';
-import { LayoutTemplate, Archive, Sun, Moon, ChevronLeft, ChevronRight, FilePlus } from 'lucide-react';
+import { LayoutTemplate, Archive, Sun, Moon, ChevronLeft, ChevronRight, FilePlus, ArrowUpToLine, ArrowDownToLine, Trash2, Download, Copy } from 'lucide-react';
 import { SortableImageItem } from './SortableImageItem';
 
 interface LeftSidebarProps {
@@ -13,6 +13,10 @@ interface LeftSidebarProps {
   isDark: boolean;
   setIsDark: (dark: boolean) => void;
   handleDelete: (id: string) => void;
+  handleMoveToTop?: (idx: number) => void;
+  handleMoveToBottom?: (idx: number) => void;
+  handleExportImage?: (id: string, idx: number) => void;
+  handleCopyToClipboard?: (id: string, idx: number) => void;
   handleOpenTrash: () => void;
   handleDragEnd: (event: any) => void;
   handleInsertBlank: () => void;
@@ -28,6 +32,10 @@ export function LeftSidebar({
   isDark,
   setIsDark,
   handleDelete,
+  handleMoveToTop,
+  handleMoveToBottom,
+  handleExportImage,
+  handleCopyToClipboard,
   handleOpenTrash,
   handleDragEnd,
   handleInsertBlank,
@@ -41,10 +49,17 @@ export function LeftSidebar({
   const [sidebarWidth, setSidebarWidth] = useState(() => parseInt(localStorage.getItem('leftSidebarWidth') || '256', 10));
   const [isDraggingState, setIsDraggingState] = useState(false);
   const isDragging = useRef(false);
+  const [contextMenu, setContextMenu] = useState<{ x: number, y: number, id: string, idx: number } | null>(null);
 
   useEffect(() => {
     localStorage.setItem('leftSidebarWidth', String(sidebarWidth));
   }, [sidebarWidth]);
+
+  useEffect(() => {
+    const handleClickOutside = () => setContextMenu(null);
+    document.addEventListener('click', handleClickOutside);
+    return () => document.removeEventListener('click', handleClickOutside);
+  }, []);
 
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
@@ -76,6 +91,11 @@ export function LeftSidebar({
     document.body.style.cursor = 'col-resize';
   };
 
+  const onContextMenu = (e: React.MouseEvent, id: string, idx: number) => {
+    e.preventDefault();
+    setContextMenu({ x: e.clientX, y: e.clientY, id, idx });
+  };
+
   return (
     <>
       <aside 
@@ -99,7 +119,7 @@ export function LeftSidebar({
             </button>
           </div>
         </div>
-        <div className="flex-1 overflow-y-auto p-4 space-y-4 w-full">
+        <div className="flex-1 overflow-y-auto p-4 space-y-4 w-full relative">
           {images.length === 0 ? (
             <div className="text-muted-foreground text-sm text-center mt-10">
               暂无页面。<br/>请在浏览器插件中发送图片。
@@ -119,6 +139,7 @@ export function LeftSidebar({
                     isSelected={selectedIdx === idx}
                     onSelect={setSelectedIdx}
                     onDelete={handleDelete}
+                    onContextMenu={onContextMenu}
                     hasTitle={hasTitle}
                   />
                 ))}
@@ -133,6 +154,68 @@ export function LeftSidebar({
           onMouseDown={handleMouseDown}
         />
       </aside>
+
+      {/* Context Menu */}
+      {contextMenu && (
+        <div 
+          className="fixed z-[100] bg-popover border border-border shadow-lg rounded-md py-1 min-w-[140px] text-sm text-popover-foreground"
+          style={{ left: contextMenu.x, top: contextMenu.y }}
+        >
+          <button 
+            className="w-full px-3 py-1.5 text-left flex items-center gap-2 hover:bg-muted transition-colors disabled:opacity-50"
+            disabled={contextMenu.idx === 0}
+            onClick={() => {
+              handleMoveToTop && handleMoveToTop(contextMenu.idx);
+              setContextMenu(null);
+            }}
+          >
+            <ArrowUpToLine size={14} />
+            移动到顶部
+          </button>
+          <button 
+            className="w-full px-3 py-1.5 text-left flex items-center gap-2 hover:bg-muted transition-colors disabled:opacity-50"
+            disabled={contextMenu.idx === images.length - 1}
+            onClick={() => {
+              handleMoveToBottom && handleMoveToBottom(contextMenu.idx);
+              setContextMenu(null);
+            }}
+          >
+            <ArrowDownToLine size={14} />
+            移动到底部
+          </button>
+          <button 
+            className="w-full px-3 py-1.5 text-left flex items-center gap-2 hover:bg-muted transition-colors"
+            onClick={() => {
+              handleCopyToClipboard && handleCopyToClipboard(contextMenu.id, contextMenu.idx);
+              setContextMenu(null);
+            }}
+          >
+            <Copy size={14} />
+            复制图片
+          </button>
+          <div className="h-px bg-border my-1" />
+          <button 
+            className="w-full px-3 py-1.5 text-left flex items-center gap-2 hover:bg-muted transition-colors"
+            onClick={() => {
+              handleExportImage && handleExportImage(contextMenu.id, contextMenu.idx);
+              setContextMenu(null);
+            }}
+          >
+            <Download size={14} />
+            导出原图
+          </button>
+          <button 
+            className="w-full px-3 py-1.5 text-left flex items-center gap-2 hover:bg-red-500/10 text-red-500 transition-colors"
+            onClick={() => {
+              handleDelete(contextMenu.id);
+              setContextMenu(null);
+            }}
+          >
+            <Trash2 size={14} />
+            删除
+          </button>
+        </div>
+      )}
 
       {/* Left Sidebar Toggle Button */}
       <button 

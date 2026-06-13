@@ -143,115 +143,130 @@ export function getStableId(urlStr: string): string {
 if (isSupportedUrl(window.location.href)) {
     const overlay = document.createElement('div');
     overlay.style.position = 'absolute';
-overlay.style.zIndex = '999999';
-overlay.style.display = 'none';
-overlay.style.padding = '8px 12px';
-overlay.style.backgroundColor = '#18181b'; // zinc-900
-overlay.style.color = '#fafafa'; // zinc-50
-overlay.style.borderRadius = '6px';
-overlay.style.cursor = 'pointer';
-overlay.style.fontWeight = 'bold';
-overlay.style.fontSize = '14px';
-overlay.style.boxShadow = '0 4px 6px -1px rgb(0 0 0 / 0.1)';
-overlay.innerText = '📸 发送至绘本';
-document.body.appendChild(overlay);
+    overlay.style.zIndex = '999999';
+    overlay.style.display = 'none';
+    overlay.style.flexDirection = 'column';
+    overlay.style.gap = '4px';
 
-let currentTargetImage: HTMLImageElement | null = null;
+    const btnStyle = `
+        padding: 8px 12px;
+        background-color: #18181b;
+        color: #fafafa;
+        border-radius: 6px;
+        cursor: pointer;
+        font-weight: bold;
+        font-size: 14px;
+        box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);
+        border: 1px solid #3f3f46;
+        text-align: center;
+    `;
 
-document.addEventListener('mouseover', (e) => {
-  const target = e.target as HTMLElement;
-  if (target.tagName.toLowerCase() === 'img') {
-    const img = target as HTMLImageElement;
-    // Basic filter: ignore tiny icons
-    if (img.width < 200 || img.height < 200) return;
+    const btnAppend = document.createElement('div');
+    btnAppend.style.cssText = btnStyle;
+    btnAppend.innerText = '📸 发送至末尾';
 
-    currentTargetImage = img;
-    const rect = img.getBoundingClientRect();
-    
-    // Position the overlay at the top right of the image
-    overlay.style.top = `${window.scrollY + rect.top + 10}px`;
-    overlay.style.left = `${window.scrollX + rect.right - 130}px`;
-    overlay.style.display = 'block';
-  }
-});
+    const btnInsert = document.createElement('div');
+    btnInsert.style.cssText = btnStyle;
+    btnInsert.innerText = '⬇️ 插到选中页后';
 
-// Hide overlay when moving mouse away from the image and the overlay itself
-document.addEventListener('mousemove', (e) => {
-    if (!currentTargetImage) return;
-    const target = e.target as HTMLElement;
-    if (target !== currentTargetImage && target !== overlay) {
-        overlay.style.display = 'none';
-        currentTargetImage = null;
-    }
-});
+    overlay.appendChild(btnAppend);
+    overlay.appendChild(btnInsert);
+    document.body.appendChild(overlay);
 
-overlay.addEventListener('click', async () => {
-    if (!currentTargetImage) return;
-    
-    const imageUrl = currentTargetImage.src;
-    overlay.innerText = '提取中...';
-    
-    try {
-        const getBase64 = async (url: string) => {
-            try {
-                const r = await fetch(url);
-                const blob = await r.blob();
-                return await new Promise<string>((resolve, reject) => {
-                    const reader = new FileReader();
-                    reader.onloadend = () => resolve(reader.result as string);
-                    reader.onerror = reject;
-                    reader.readAsDataURL(blob);
-                });
-            } catch (e) {
-                return await new Promise<string>((resolve, reject) => {
-                    const img = new Image();
-                    img.crossOrigin = "anonymous";
-                    img.onload = () => {
-                        const canvas = document.createElement('canvas');
-                        canvas.width = img.width;
-                        canvas.height = img.height;
-                        const ctx = canvas.getContext('2d');
-                        ctx?.drawImage(img, 0, 0);
-                        resolve(canvas.toDataURL('image/png'));
-                    };
-                    img.onerror = () => reject(new Error('Canvas fallback failed'));
-                    img.src = url;
-                });
-            }
-        };
+    let currentTargetImage: HTMLImageElement | null = null;
 
-        const base64_data = await getBase64(imageUrl);
-        overlay.innerText = '发送中...';
+    document.addEventListener('mouseover', (e) => {
+      const target = e.target as HTMLElement;
+      if (target.tagName.toLowerCase() === 'img') {
+        const img = target as HTMLImageElement;
+        if (img.width < 200 || img.height < 200) return;
 
-        await new Promise((resolve) => {
-            chrome.runtime.sendMessage({ action: 'startBatch', payload: { total: 1 } }, resolve);
-        });
+        currentTargetImage = img;
+        const rect = img.getBoundingClientRect();
+        
+        overlay.style.top = `${window.scrollY + rect.top + 10}px`;
+        overlay.style.left = `${window.scrollX + rect.right - 140}px`;
+        overlay.style.display = 'flex';
+      }
+    });
 
-        chrome.runtime.sendMessage(
-            { action: 'saveImage', payload: { url: imageUrl, stable_id: getStableId(imageUrl), page: 1, base64_data } },
-            (response) => {
-                if (response && response.success) {
-                    overlay.innerText = '✅ 发送成功';
-                } else {
-                    console.error('Error from background:', response?.error);
-                    overlay.innerText = '❌ 发送失败';
-                }
-                
-                setTimeout(() => {
-                    if (overlay.innerText.includes('成功') || overlay.innerText.includes('失败')) {
-                        overlay.style.display = 'none';
-                        overlay.innerText = '📸 发送至绘本';
-                    }
-                }, 2000);
-            }
-        );
-    } catch (e) {
-        console.error("Failed to extract image:", e);
-        overlay.innerText = '❌ 提取失败';
-        setTimeout(() => {
+    document.addEventListener('mousemove', (e) => {
+        if (!currentTargetImage) return;
+        const target = e.target as HTMLElement;
+        if (target !== currentTargetImage && !overlay.contains(target)) {
             overlay.style.display = 'none';
-            overlay.innerText = '📸 发送至绘本';
-        }, 2000);
-    }
-});
+            currentTargetImage = null;
+        }
+    });
+
+    const handleSend = async (insert_after_current: boolean, btn: HTMLElement) => {
+        if (!currentTargetImage) return;
+        
+        const imageUrl = currentTargetImage.src;
+        const originalText = btn.innerText;
+        btn.innerText = '提取中...';
+        
+        try {
+            const getBase64 = async (url: string) => {
+                try {
+                    const r = await fetch(url);
+                    const blob = await r.blob();
+                    return await new Promise<string>((resolve, reject) => {
+                        const reader = new FileReader();
+                        reader.onloadend = () => resolve(reader.result as string);
+                        reader.onerror = reject;
+                        reader.readAsDataURL(blob);
+                    });
+                } catch (e) {
+                    return await new Promise<string>((resolve, reject) => {
+                        const img = new Image();
+                        img.crossOrigin = "anonymous";
+                        img.onload = () => {
+                            const canvas = document.createElement('canvas');
+                            canvas.width = img.width;
+                            canvas.height = img.height;
+                            const ctx = canvas.getContext('2d');
+                            ctx?.drawImage(img, 0, 0);
+                            resolve(canvas.toDataURL('image/png'));
+                        };
+                        img.onerror = () => reject(new Error('Canvas fallback failed'));
+                        img.src = url;
+                    });
+                }
+            };
+
+            const base64_data = await getBase64(imageUrl);
+            btn.innerText = '发送中...';
+
+            await new Promise((resolve) => {
+                chrome.runtime.sendMessage({ action: 'startBatch', payload: { total: 1 } }, resolve);
+            });
+
+            chrome.runtime.sendMessage(
+                { action: 'saveImage', payload: { url: imageUrl, stable_id: getStableId(imageUrl), page: 1, base64_data, insert_after_current } },
+                (response) => {
+                    if (response && response.success) {
+                        btn.innerText = '✅ 成功';
+                    } else {
+                        console.error('Error from background:', response?.error);
+                        btn.innerText = '❌ 失败';
+                    }
+                    
+                    setTimeout(() => {
+                        btn.innerText = originalText;
+                        overlay.style.display = 'none';
+                    }, 2000);
+                }
+            );
+        } catch (e) {
+            console.error("Failed to extract image:", e);
+            btn.innerText = '❌ 提取失败';
+            setTimeout(() => {
+                btn.innerText = originalText;
+            }, 2000);
+        }
+    };
+
+    btnAppend.addEventListener('click', () => handleSend(false, btnAppend));
+    btnInsert.addEventListener('click', () => handleSend(true, btnInsert));
 }

@@ -1,6 +1,10 @@
 import { useEffect, useState, useMemo, useRef, useCallback } from 'react';
 import { listen } from '@tauri-apps/api/event';
 import { invoke } from '@tauri-apps/api/core';
+import { save } from '@tauri-apps/plugin-dialog';
+import { writeFile } from '@tauri-apps/plugin-fs';
+import { writeImage } from '@tauri-apps/plugin-clipboard-manager';
+import { Image as TauriImage } from '@tauri-apps/api/image';
 import { Image as ImageIcon, Info, XOctagon, RefreshCw, Trash2, ArchiveRestore, ZoomIn } from 'lucide-react';
 import { getPaletteSync } from 'colorthief';
 import { useProject } from './ProjectContext';
@@ -34,6 +38,7 @@ interface SavedImageEvent {
   filepath: string;
   stable_id?: string;
   page?: number;
+  insert_after_current?: boolean;
   status: string;
 }
 
@@ -157,9 +162,35 @@ export default function EditorScreen() {
           
           setImages(prev => {
               if (prev.includes(url)) return prev;
+              
+              if (event.payload.insert_after_current && selectedIdxRef.current !== null) {
+                  const targetIdx = selectedIdxRef.current + 1;
+                  const newImages = [...prev];
+                  newImages.splice(targetIdx, 0, url);
+                  
+                  // Trigger shift
+                  setTimeout(() => {
+                      if (shiftProjectDictionariesRef.current) {
+                          shiftProjectDictionariesRef.current((oldIdx) => {
+                              if (oldIdx >= targetIdx) return oldIdx + 1;
+                              return oldIdx;
+                          }, prev.length);
+                      }
+                  }, 0);
+                  
+                  return newImages;
+              }
+              
               return [...prev, url];
           });
-          setSelectedIdx(prevIdx => prevIdx === null ? 0 : prevIdx);
+          
+          setSelectedIdx(prevIdx => {
+              if (prevIdx === null) return 0;
+              if (event.payload.insert_after_current && selectedIdxRef.current !== null) {
+                  return selectedIdxRef.current + 1;
+              }
+              return prevIdx;
+          });
           
           return currentTrash;
       });
@@ -415,6 +446,120 @@ export default function EditorScreen() {
     }
   };
 
+  const handleMoveToTop = useCallback((idx: number) => {
+      setImages((items) => {
+        if (idx <= 0) return items;
+        const newIndex = 0;
+        const next = arrayMove(items, idx, newIndex);
+        
+        setSelectedIdx(prev => {
+            if (prev === idx) return newIndex;
+            if (prev !== null) {
+                if (idx < prev && newIndex >= prev) return prev - 1;
+                if (idx > prev && newIndex <= prev) return prev + 1;
+            }
+            return prev;
+        });
+
+        shiftProjectDictionaries((i) => {
+            if (i === idx) return newIndex;
+            if (idx < i && i <= newIndex) return i - 1;
+            if (newIndex <= i && i < idx) return i + 1;
+            return i;
+        }, items.length);
+
+        return next;
+      });
+  }, [shiftProjectDictionaries]);
+
+  const handleMoveToBottom = useCallback((idx: number) => {
+      setImages((items) => {
+        if (idx < 0 || idx >= items.length - 1) return items;
+        const newIndex = items.length - 1;
+        const next = arrayMove(items, idx, newIndex);
+        
+        setSelectedIdx(prev => {
+            if (prev === idx) return newIndex;
+            if (prev !== null) {
+                if (idx < prev && newIndex >= prev) return prev - 1;
+                if (idx > prev && newIndex <= prev) return prev + 1;
+            }
+            return prev;
+        });
+
+        shiftProjectDictionaries((i) => {
+            if (i === idx) return newIndex;
+            if (idx < i && i <= newIndex) return i - 1;
+            if (newIndex <= i && i < idx) return i + 1;
+            return i;
+        }, items.length);
+
+        return next;
+      });
+  }, [shiftProjectDictionaries]);
+
+  const handleExportImage = useCallback(async (id: string, idx: number) => {
+      if (id.startsWith('blank://')) {
+          alert('空白页不能直接导出，请在右侧先添加内容或直接删除。');
+          return;
+      }
+      try {
+          const ext = id.split('.').pop()?.toLowerCase() || 'jpg';
+          const defaultPath = `page_${idx}.${ext}`;
+          const filePath = await save({
+              filters: [{ name: 'Image', extensions: ['jpg', 'jpeg', 'png', 'webp'] }],
+              defaultPath
+          });
+          if (filePath) {
+              const res = await fetch(id.startsWith('http') ? id : `http://127.0.0.1:14320/images/${id}`);
+              const blob = await res.blob();
+              const arrayBuffer = await blob.arrayBuffer();
+              await writeFile(filePath, new Uint8Array(arrayBuffer));
+          }
+      } catch(e) {
+          console.error("Failed to export image", e);
+          alert('导出失败: ' + (typeof e === 'string' ? e : (e as Error)?.message || String(e)));
+      }
+  }, []);
+
+  const handleCopyToClipboard = useCallback(async (id: string, idx: number) => {
+      if (id.startsWith('blank://')) {
+          alert('空白页不能复制。');
+          return;
+      }
+      try {
+          const imgUrl = id.startsWith('http') ? id : `http://127.0.0.1:14320/images/${id}`;
+          const img = new Image();
+          img.crossOrigin = 'anonymous';
+          img.src = imgUrl;
+          await new Promise((resolve, reject) => {
+              img.onload = resolve;
+              img.onerror = reject;
+          });
+          const canvas = document.createElement('canvas');
+          canvas.width = img.naturalWidth;
+          canvas.height = img.naturalHeight;
+          const ctx = canvas.getContext('2d');
+          if (!ctx) throw new Error("No 2d context");
+          ctx.drawImage(img, 0, 0);
+          
+          const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+          // Convert Uint8ClampedArray to Uint8Array for Tauri API compatibility
+          const rgba = new Uint8Array(imgData.data.buffer);
+          
+          try {
+              const tauriImg = await TauriImage.new(rgba, canvas.width, canvas.height);
+              await writeImage(tauriImg);
+          } catch (err) {
+              console.error("Tauri clipboard write failed:", err);
+              alert('复制到剪切板失败，请检查桌面端权限。');
+          }
+      } catch(e) {
+          console.error("Failed to copy image", e);
+          alert('复制失败: ' + (typeof e === 'string' ? e : (e as Error)?.message || String(e)));
+      }
+  }, []);
+
   const handleDelete = useCallback((idToRemove: string) => {
       setTrashedImages(prev => {
           if (idToRemove.startsWith('blank://')) return prev;
@@ -460,6 +605,16 @@ export default function EditorScreen() {
   useEffect(() => {
       imagesLengthRef.current = images.length;
   }, [images.length]);
+
+  const selectedIdxRef = useRef<number | null>(selectedIdx);
+  useEffect(() => {
+    selectedIdxRef.current = selectedIdx;
+  }, [selectedIdx]);
+
+  const shiftProjectDictionariesRef = useRef(shiftProjectDictionaries);
+  useEffect(() => {
+    shiftProjectDictionariesRef.current = shiftProjectDictionaries;
+  }, [shiftProjectDictionaries]);
 
   // Keyboard shortcuts: Cmd+S, Cmd+Z, Cmd+Shift+Z, Arrow keys
   useEffect(() => {
@@ -551,6 +706,10 @@ export default function EditorScreen() {
             isDark={isDark}
             setIsDark={setIsDark}
             handleDelete={handleDelete}
+            handleMoveToTop={handleMoveToTop}
+            handleMoveToBottom={handleMoveToBottom}
+            handleExportImage={handleExportImage}
+            handleCopyToClipboard={handleCopyToClipboard}
             handleOpenTrash={handleOpenTrash}
             handleDragEnd={handleDragEnd}
             handleInsertBlank={handleInsertBlankPage}
@@ -603,7 +762,7 @@ export default function EditorScreen() {
                           <div className="relative w-full h-full" style={{ transform: `translate(${offsetX}%, ${offsetY}%) scale(${scale})` }}>
                             <ProImage 
                               src={images[selectedIdx]} 
-                              className={`w-full h-full object-contain ${images[selectedIdx].startsWith('blank://') ? 'bg-white' : ''}`}
+                              className={`w-full h-full object-contain ${images[selectedIdx].startsWith('blank://') ? 'bg-white' : ''} ${projectState?.soft_proof_cmyk ? 'cmyk-soft-proof' : ''}`}
                               adjustments={adjustments}
                             />
                           </div>

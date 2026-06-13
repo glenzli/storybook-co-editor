@@ -9,10 +9,11 @@ interface SortableImageItemProps {
   isSelected: boolean;
   onSelect: (idx: number) => void;
   onDelete: (id: string) => void;
+  onContextMenu?: (e: React.MouseEvent, id: string, idx: number) => void;
   hasTitle?: boolean;
 }
 
-export const SortableImageItem = memo(function SortableImageItem({ id, idx, isSelected, onSelect, onDelete, hasTitle }: SortableImageItemProps) {
+export const SortableImageItem = memo(function SortableImageItem({ id, idx, isSelected, onSelect, onDelete, onContextMenu, hasTitle }: SortableImageItemProps) {
   const {
     attributes,
     listeners,
@@ -34,6 +35,7 @@ export const SortableImageItem = memo(function SortableImageItem({ id, idx, isSe
       {...attributes} 
       {...listeners}
       onClick={() => onSelect(idx)}
+      onContextMenu={(e) => onContextMenu?.(e, id, idx)}
       className={`relative group rounded-md border-2 overflow-hidden cursor-pointer transition-colors transition-shadow ${
         isSelected ? 'border-primary ring-2 ring-primary/20 shadow-md scale-[1.02]' : 'border-border/50 shadow-sm hover:border-border hover:shadow-md bg-card'
       }`}

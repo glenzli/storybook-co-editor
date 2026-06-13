@@ -1,23 +1,22 @@
-mod project_manager;
 mod pdf_exporter;
+mod project_manager;
 
 use axum::{
-    routing::{get, post},
-    Router,
-    Json,
-    extract::{State, DefaultBodyLimit, Path as AxumPath},
     body::Body,
+    extract::{DefaultBodyLimit, Path as AxumPath, State},
+    http::{header, StatusCode},
     response::IntoResponse,
-    http::{StatusCode, header},
+    routing::{get, post},
+    Json, Router,
 };
 use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 use std::sync::{Arc, Mutex};
-use tauri::{AppHandle, Manager, Emitter};
+use tauri::{AppHandle, Emitter, Manager};
 use tower_http::cors::{Any, CorsLayer};
-use sha2::{Sha256, Digest};
 use uuid::Uuid;
 
-use project_manager::{ProjectManager, ProjectState, ProjectInfo};
+use project_manager::{ProjectInfo, ProjectManager, ProjectState};
 
 #[tauri::command]
 fn greet(name: &str) -> String {
@@ -30,6 +29,7 @@ struct SaveImageRequest {
     stable_id: Option<String>,
     page: Option<u32>,
     base64_data: Option<String>,
+    insert_after_current: Option<bool>,
 }
 
 #[derive(Deserialize)]
@@ -84,18 +84,22 @@ struct AppState {
 fn get_or_create_active_workspace(app_handle: &AppHandle) -> Result<std::path::PathBuf, String> {
     let manager = app_handle.state::<ProjectManager>();
     let active_id = manager.active_workspace.lock().unwrap().clone();
-    
+
     if let Some(ws_id) = active_id {
         project_manager::get_workspace_dir(app_handle, &ws_id)
     } else {
         // Auto-create an Untitled project if none is active
-        let info = project_manager::create_project(app_handle.clone(), manager).map_err(|e| e.to_string())?;
-        
+        let info = project_manager::create_project(app_handle.clone(), manager)
+            .map_err(|e| e.to_string())?;
+
         // Notify frontend that a new project was auto-created
-        let _ = app_handle.emit("project-auto-created", serde_json::json!({
-            "workspace_id": info.workspace_id.clone()
-        }));
-        
+        let _ = app_handle.emit(
+            "project-auto-created",
+            serde_json::json!({
+                "workspace_id": info.workspace_id.clone()
+            }),
+        );
+
         project_manager::get_workspace_dir(app_handle, &info.workspace_id)
     }
 }
@@ -106,7 +110,7 @@ async fn start_server(app_handle: AppHandle) {
         .allow_methods(Any)
         .allow_headers(Any);
 
-    let state = Arc::new(AppState { 
+    let state = Arc::new(AppState {
         app_handle,
         is_cancelled: Mutex::new(false),
     });
@@ -127,8 +131,13 @@ async fn start_server(app_handle: AppHandle) {
         .layer(DefaultBodyLimit::max(50 * 1024 * 1024))
         .with_state(state);
 
-    let listener = tokio::net::TcpListener::bind("0.0.0.0:14320").await.unwrap();
-    println!("Local server listening on {}", listener.local_addr().unwrap());
+    let listener = tokio::net::TcpListener::bind("0.0.0.0:14320")
+        .await
+        .unwrap();
+    println!(
+        "Local server listening on {}",
+        listener.local_addr().unwrap()
+    );
     axum::serve(listener, app).await.unwrap();
 }
 
@@ -138,32 +147,43 @@ async fn serve_image(
 ) -> impl IntoResponse {
     let ws_dir = match get_or_create_active_workspace(&state.app_handle) {
         Ok(dir) => dir,
-        Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, "No workspace".to_string()).into_response(),
+        Err(_) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "No workspace".to_string(),
+            )
+                .into_response()
+        }
     };
-    
+
     let path = ws_dir.join(&filename);
     if !path.exists() {
         return (StatusCode::NOT_FOUND, "Not found".to_string()).into_response();
     }
-    
+
     let bytes = match tokio::fs::read(&path).await {
         Ok(b) => b,
-        Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, "Failed to read".to_string()).into_response(),
+        Err(_) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Failed to read".to_string(),
+            )
+                .into_response()
+        }
     };
-    
-    let ext = std::path::Path::new(&filename).extension().and_then(|e| e.to_str()).unwrap_or("jpg");
+
+    let ext = std::path::Path::new(&filename)
+        .extension()
+        .and_then(|e| e.to_str())
+        .unwrap_or("jpg");
     let mime_type = match ext {
         "png" => "image/png",
         "webp" => "image/webp",
         "gif" => "image/gif",
         _ => "image/jpeg",
     };
-    
-    (
-        StatusCode::OK,
-        [(header::CONTENT_TYPE, mime_type)],
-        bytes,
-    ).into_response()
+
+    (StatusCode::OK, [(header::CONTENT_TYPE, mime_type)], bytes).into_response()
 }
 
 async fn start_batch(
@@ -172,25 +192,38 @@ async fn start_batch(
 ) -> Json<GenericResponse> {
     println!("API CALLED: /api/start-batch with total={}", payload.total);
     *state.is_cancelled.lock().unwrap() = false;
-    let _ = state.app_handle.emit("batch-started", serde_json::json!({
-        "total": payload.total
-    }));
-    Json(GenericResponse { success: true, error: None })
+    let _ = state.app_handle.emit(
+        "batch-started",
+        serde_json::json!({
+            "total": payload.total
+        }),
+    );
+    Json(GenericResponse {
+        success: true,
+        error: None,
+    })
 }
 
-async fn cancel_batch(
-    State(state): State<Arc<AppState>>,
-) -> Json<GenericResponse> {
+async fn cancel_batch(State(state): State<Arc<AppState>>) -> Json<GenericResponse> {
     *state.is_cancelled.lock().unwrap() = true;
-    let _ = state.app_handle.emit("batch-cancelled", serde_json::json!({}));
-    Json(GenericResponse { success: true, error: None })
+    let _ = state
+        .app_handle
+        .emit("batch-cancelled", serde_json::json!({}));
+    Json(GenericResponse {
+        success: true,
+        error: None,
+    })
 }
 
-async fn receive_log(
-    Json(payload): Json<LogRequest>,
-) -> Json<GenericResponse> {
-    println!("API CALLED: /api/log: [{}] {}", payload.level, payload.message);
-    Json(GenericResponse { success: true, error: None })
+async fn receive_log(Json(payload): Json<LogRequest>) -> Json<GenericResponse> {
+    println!(
+        "API CALLED: /api/log: [{}] {}",
+        payload.level, payload.message
+    );
+    Json(GenericResponse {
+        success: true,
+        error: None,
+    })
 }
 
 async fn trash_image(
@@ -199,23 +232,34 @@ async fn trash_image(
 ) -> Json<GenericResponse> {
     let ws_dir = match get_or_create_active_workspace(&state.app_handle) {
         Ok(dir) => dir,
-        Err(e) => return Json(GenericResponse { success: false, error: Some(e) }),
+        Err(e) => {
+            return Json(GenericResponse {
+                success: false,
+                error: Some(e),
+            })
+        }
     };
     let trash_dir = ws_dir.join("trash");
     tokio::fs::create_dir_all(&trash_dir).await.ok();
-    
+
     let path = std::path::Path::new(&payload.filepath);
     let filename = path.file_name().unwrap_or_default();
-    
+
     let src = ws_dir.join(filename);
     let dest = trash_dir.join(filename);
-    
+
     if src.exists() {
         if let Err(e) = tokio::fs::rename(src, dest).await {
-            return Json(GenericResponse { success: false, error: Some(e.to_string()) });
+            return Json(GenericResponse {
+                success: false,
+                error: Some(e.to_string()),
+            });
         }
     }
-    Json(GenericResponse { success: true, error: None })
+    Json(GenericResponse {
+        success: true,
+        error: None,
+    })
 }
 
 async fn restore_trash(
@@ -224,22 +268,33 @@ async fn restore_trash(
 ) -> Json<GenericResponse> {
     let ws_dir = match get_or_create_active_workspace(&state.app_handle) {
         Ok(dir) => dir,
-        Err(e) => return Json(GenericResponse { success: false, error: Some(e) }),
+        Err(e) => {
+            return Json(GenericResponse {
+                success: false,
+                error: Some(e),
+            })
+        }
     };
     let trash_dir = ws_dir.join("trash");
-    
+
     let path = std::path::Path::new(&payload.filepath);
     let filename = path.file_name().unwrap_or_default();
-    
+
     let src = trash_dir.join(filename);
     let dest = ws_dir.join(filename);
-    
+
     if src.exists() {
         if let Err(e) = tokio::fs::rename(src, dest).await {
-            return Json(GenericResponse { success: false, error: Some(e.to_string()) });
+            return Json(GenericResponse {
+                success: false,
+                error: Some(e.to_string()),
+            });
         }
     }
-    Json(GenericResponse { success: true, error: None })
+    Json(GenericResponse {
+        success: true,
+        error: None,
+    })
 }
 
 #[derive(Serialize)]
@@ -249,12 +304,16 @@ struct ListImagesResponse {
     error: Option<String>,
 }
 
-async fn list_trash(
-    State(state): State<Arc<AppState>>,
-) -> Json<ListImagesResponse> {
+async fn list_trash(State(state): State<Arc<AppState>>) -> Json<ListImagesResponse> {
     let ws_dir = match get_or_create_active_workspace(&state.app_handle) {
         Ok(dir) => dir,
-        Err(e) => return Json(ListImagesResponse { success: false, images: vec![], error: Some(e) }),
+        Err(e) => {
+            return Json(ListImagesResponse {
+                success: false,
+                images: vec![],
+                error: Some(e),
+            })
+        }
     };
     let trash_dir = ws_dir.join("trash");
     let mut files = Vec::new();
@@ -278,12 +337,16 @@ async fn list_trash(
     })
 }
 
-async fn list_images(
-    State(state): State<Arc<AppState>>,
-) -> Json<ListImagesResponse> {
+async fn list_images(State(state): State<Arc<AppState>>) -> Json<ListImagesResponse> {
     let ws_dir = match get_or_create_active_workspace(&state.app_handle) {
         Ok(dir) => dir,
-        Err(e) => return Json(ListImagesResponse { success: false, images: vec![], error: Some(e) }),
+        Err(e) => {
+            return Json(ListImagesResponse {
+                success: false,
+                images: vec![],
+                error: Some(e),
+            })
+        }
     };
     let mut files = Vec::new();
     if let Ok(entries) = std::fs::read_dir(ws_dir) {
@@ -306,15 +369,19 @@ async fn list_images(
     })
 }
 
-async fn get_project_state(
-    State(state): State<Arc<AppState>>,
-) -> Json<ProjectStateResponse> {
+async fn get_project_state(State(state): State<Arc<AppState>>) -> Json<ProjectStateResponse> {
     let ws_dir = match get_or_create_active_workspace(&state.app_handle) {
         Ok(dir) => dir,
-        Err(e) => return Json(ProjectStateResponse { success: false, state: None, error: Some(e) }),
+        Err(e) => {
+            return Json(ProjectStateResponse {
+                success: false,
+                state: None,
+                error: Some(e),
+            })
+        }
     };
     let project_file = ws_dir.join("project.json");
-    
+
     let p_state = if project_file.exists() {
         if let Ok(content) = std::fs::read_to_string(&project_file) {
             serde_json::from_str(&content).unwrap_or_else(|_| ProjectState::default())
@@ -338,10 +405,15 @@ async fn update_project_state(
 ) -> Json<GenericResponse> {
     let ws_dir = match get_or_create_active_workspace(&state.app_handle) {
         Ok(dir) => dir,
-        Err(e) => return Json(GenericResponse { success: false, error: Some(e) }),
+        Err(e) => {
+            return Json(GenericResponse {
+                success: false,
+                error: Some(e),
+            })
+        }
     };
     let project_file = ws_dir.join("project.json");
-    
+
     if let Ok(content) = serde_json::to_string_pretty(&payload.state) {
         if let Err(e) = std::fs::write(&project_file, content) {
             return Json(GenericResponse {
@@ -366,7 +438,10 @@ async fn save_image(
     State(state): State<Arc<AppState>>,
     Json(payload): Json<SaveImageRequest>,
 ) -> Json<SaveImageResponse> {
-    println!("API CALLED: /api/save-image (page: {:?}, url: {:?})", payload.page, payload.url);
+    println!(
+        "API CALLED: /api/save-image (page: {:?}, url: {:?})",
+        payload.page, payload.url
+    );
     if *state.is_cancelled.lock().unwrap() {
         return Json(SaveImageResponse {
             success: false,
@@ -378,9 +453,16 @@ async fn save_image(
 
     let save_dir = match get_or_create_active_workspace(&state.app_handle) {
         Ok(dir) => dir,
-        Err(e) => return Json(SaveImageResponse { success: false, status: Some("failed".to_string()), filepath: None, error: Some(e) }),
+        Err(e) => {
+            return Json(SaveImageResponse {
+                success: false,
+                status: Some("failed".to_string()),
+                filepath: None,
+                error: Some(e),
+            })
+        }
     };
-    
+
     if let Err(e) = tokio::fs::create_dir_all(&save_dir).await {
         return Json(SaveImageResponse {
             success: false,
@@ -394,7 +476,7 @@ async fn save_image(
     if let Some(b64) = &payload.base64_data {
         let parts: Vec<&str> = b64.splitn(2, ",").collect();
         let base64_str = if parts.len() == 2 { parts[1] } else { parts[0] };
-        use base64::{Engine as _, engine::general_purpose};
+        use base64::{engine::general_purpose, Engine as _};
         match general_purpose::STANDARD.decode(base64_str) {
             Ok(b) => {
                 let bytes = axum::body::Bytes::from(b);
@@ -402,18 +484,26 @@ async fn save_image(
                 hasher.update(&bytes);
                 let hash_result = hasher.finalize();
                 let hash_hex = hex::encode(hash_result);
-                let ext = if payload.base64_data.as_ref().unwrap().contains("image/png") { "png" } else { "jpg" };
+                let ext = if payload.base64_data.as_ref().unwrap().contains("image/png") {
+                    "png"
+                } else {
+                    "jpg"
+                };
                 let filename = format!("{}.{}", hash_hex, ext);
                 let filepath = save_dir.join(&filename);
                 let trashpath = save_dir.join("trash").join(&filename);
 
                 if trashpath.exists() {
-                    let _ = state.app_handle.emit("image-saved", serde_json::json!({
-                        "filepath": filename,
-                        "stable_id": payload.stable_id.clone(),
-                        "page": payload.page,
-                        "status": "trashed"
-                    }));
+                    let _ = state.app_handle.emit(
+                        "image-saved",
+                        serde_json::json!({
+                            "filepath": filename,
+                            "stable_id": payload.stable_id.clone(),
+                            "page": payload.page,
+                            "insert_after_current": payload.insert_after_current.unwrap_or(false),
+                            "status": "trashed"
+                        }),
+                    );
                     return Json(SaveImageResponse {
                         success: true,
                         status: Some("trashed".to_string()),
@@ -423,12 +513,16 @@ async fn save_image(
                 }
 
                 if filepath.exists() {
-                    let _ = state.app_handle.emit("image-saved", serde_json::json!({
-                        "filepath": filename,
-                        "stable_id": payload.stable_id.clone(),
-                        "page": payload.page,
-                        "status": "duplicate"
-                    }));
+                    let _ = state.app_handle.emit(
+                        "image-saved",
+                        serde_json::json!({
+                            "filepath": filename,
+                            "stable_id": payload.stable_id.clone(),
+                            "page": payload.page,
+                            "insert_after_current": payload.insert_after_current.unwrap_or(false),
+                            "status": "duplicate"
+                        }),
+                    );
                     return Json(SaveImageResponse {
                         success: true,
                         status: Some("duplicate".to_string()),
@@ -446,19 +540,23 @@ async fn save_image(
                     });
                 }
 
-                let _ = state.app_handle.emit("image-saved", serde_json::json!({
-                    "filepath": filename,
-                    "stable_id": payload.stable_id.clone(),
-                    "page": payload.page,
-                }));
-                
+                let _ = state.app_handle.emit(
+                    "image-saved",
+                    serde_json::json!({
+                        "filepath": filename,
+                        "stable_id": payload.stable_id.clone(),
+                        "page": payload.page,
+                        "insert_after_current": payload.insert_after_current.unwrap_or(false),
+                    }),
+                );
+
                 Json(SaveImageResponse {
                     success: true,
                     status: Some("new".to_string()),
                     filepath: Some(filename),
                     error: None,
                 })
-            },
+            }
             Err(e) => {
                 return Json(SaveImageResponse {
                     success: false,
@@ -473,7 +571,7 @@ async fn save_image(
             .user_agent("Mozilla/5.0")
             .build()
             .unwrap_or_default();
-        
+
         match client.get(url).send().await {
             Ok(resp) => match resp.bytes().await {
                 Ok(b) => {
@@ -481,20 +579,24 @@ async fn save_image(
                     hasher.update(&b);
                     let hash_result = hasher.finalize();
                     let hash_hex = hex::encode(hash_result);
-                    
+
                     let path = std::path::Path::new(url);
                     let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("jpg");
                     let filename = format!("{}.{}", hash_hex, ext);
-                    
+
                     let filepath = save_dir.join(&filename);
                     let trashpath = save_dir.join("trash").join(&filename);
 
                     if trashpath.exists() {
-                        let _ = state.app_handle.emit("image-saved", serde_json::json!({
-                            "filepath": filename,
-                            "page": payload.page,
-                            "status": "trashed"
-                        }));
+                        let _ = state.app_handle.emit(
+                            "image-saved",
+                            serde_json::json!({
+                                "filepath": filename,
+                                "page": payload.page,
+                                "insert_after_current": payload.insert_after_current.unwrap_or(false),
+                                "status": "trashed"
+                            }),
+                        );
                         return Json(SaveImageResponse {
                             success: true,
                             status: Some("trashed".to_string()),
@@ -504,11 +606,15 @@ async fn save_image(
                     }
 
                     if filepath.exists() {
-                        let _ = state.app_handle.emit("image-saved", serde_json::json!({
-                            "filepath": filename,
-                            "page": payload.page,
-                            "status": "duplicate"
-                        }));
+                        let _ = state.app_handle.emit(
+                            "image-saved",
+                            serde_json::json!({
+                                "filepath": filename,
+                                "page": payload.page,
+                                "insert_after_current": payload.insert_after_current.unwrap_or(false),
+                                "status": "duplicate"
+                            }),
+                        );
                         return Json(SaveImageResponse {
                             success: true,
                             status: Some("duplicate".to_string()),
@@ -526,11 +632,15 @@ async fn save_image(
                         });
                     }
 
-                    let _ = state.app_handle.emit("image-saved", serde_json::json!({
-                        "filepath": filename,
-                        "page": payload.page,
-                        "status": "new"
-                    }));
+                    let _ = state.app_handle.emit(
+                        "image-saved",
+                        serde_json::json!({
+                            "filepath": filename,
+                            "page": payload.page,
+                            "insert_after_current": payload.insert_after_current.unwrap_or(false),
+                            "status": "new"
+                        }),
+                    );
 
                     Json(SaveImageResponse {
                         success: true,
@@ -538,10 +648,24 @@ async fn save_image(
                         filepath: Some(filename),
                         error: None,
                     })
-                },
-                Err(e) => return Json(SaveImageResponse { success: false, status: Some("failed".to_string()), filepath: None, error: Some(e.to_string()) })
+                }
+                Err(e) => {
+                    return Json(SaveImageResponse {
+                        success: false,
+                        status: Some("failed".to_string()),
+                        filepath: None,
+                        error: Some(e.to_string()),
+                    })
+                }
             },
-            Err(e) => return Json(SaveImageResponse { success: false, status: Some("failed".to_string()), filepath: None, error: Some(e.to_string()) })
+            Err(e) => {
+                return Json(SaveImageResponse {
+                    success: false,
+                    status: Some("failed".to_string()),
+                    filepath: None,
+                    error: Some(e.to_string()),
+                })
+            }
         }
     } else {
         return Json(SaveImageResponse {
@@ -556,6 +680,7 @@ async fn save_image(
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(tauri_plugin_store::Builder::new().build())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
@@ -563,7 +688,7 @@ pub fn run() {
             app.manage(ProjectManager {
                 active_workspace: Mutex::new(None),
             });
-            
+
             let handle = app.handle().clone();
             tauri::async_runtime::spawn(async move {
                 start_server(handle).await;

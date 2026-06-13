@@ -1,6 +1,6 @@
 use serde::Serialize;
-use std::process::Command;
 use std::fs;
+use std::process::Command;
 
 #[derive(Serialize)]
 pub struct ConvertResponse {
@@ -38,7 +38,10 @@ pub async fn convert_to_cmyk(pdf_data: Vec<u8>, output_path: String) -> ConvertR
     };
 
     use std::time::{SystemTime, UNIX_EPOCH};
-    let timestamp = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_millis();
+    let timestamp = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_millis();
     let temp_dir = std::env::temp_dir();
     let temp_path = temp_dir.join(format!("temp_rgb_{}.pdf", timestamp));
 

@@ -73,3 +73,9 @@ body.pdf-exporting .sheet-export-target {
 body.pdf-exporting .hide-on-export {
   display: none !important;
 }
+
+/* CMYK Soft Proofing Simulation */
+.cmyk-soft-proof {
+  filter: contrast(0.9) saturate(0.85) sepia(0.1) brightness(0.98);
+}
+

@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { PenTool, Type, Maximize2, ChevronDown, ChevronRight, ChevronLeft, LayoutTemplate, Pipette, Trash2 } from 'lucide-react';
+import { PenTool, Type, Maximize2, ChevronDown, ChevronRight, ChevronLeft, LayoutTemplate, Pipette, Trash2, Copy, ClipboardPaste } from 'lucide-react';
 import { HexColorPicker } from 'react-colorful';
 
 function DebouncedTextarea({ value, onChange, onCursorChange, className }: { value: string, onChange: (v: string) => void, onCursorChange?: (idx: number | null) => void, className?: string }) {
@@ -470,6 +470,8 @@ function SyncTextSettingsDialog({
   );
 }
 
+let clipboardAdjustments: any = null;
+
 export function RightSidebar({
   isRightOpen,
   setIsRightOpen,
@@ -493,6 +495,7 @@ export function RightSidebar({
   const [sidebarWidth, setSidebarWidth] = useState(() => parseInt(localStorage.getItem('rightSidebarWidth') || '380', 10));
   const [isDraggingState, setIsDraggingState] = useState(false);
   const isDragging = useRef(false);
+  const [hasCopiedAdj, setHasCopiedAdj] = useState(!!clipboardAdjustments);
 
   useEffect(() => {
     localStorage.setItem('rightSidebarWidth', String(sidebarWidth));
@@ -636,6 +639,21 @@ export function RightSidebar({
             {/* Style Tab */}
             {rightTab === 'style' && (
             <div className="p-4 flex-1 flex flex-col gap-4 w-full overflow-y-auto">
+
+              {/* CMYK Soft Proofing */}
+              <div className="flex items-center justify-between bg-amber-500/10 border border-amber-500/30 rounded-md p-3">
+                <div className="flex flex-col gap-1">
+                  <span className="text-xs font-bold text-amber-600 dark:text-amber-400">CMYK 软打样预览</span>
+                  <span className="text-[10px] text-muted-foreground leading-tight">降低饱和度模拟印厂出墨效果</span>
+                </div>
+                <label className="relative inline-flex items-center cursor-pointer">
+                  <input type="checkbox" className="sr-only peer" 
+                    checked={projectState?.soft_proof_cmyk || false}
+                    onChange={(e) => updateProjectState({ soft_proof_cmyk: e.target.checked })}
+                  />
+                  <div className="w-8 h-4 bg-muted peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-amber-500"></div>
+                </label>
+              </div>
               
               {/* Canvas Settings */}
               <div className="border-b border-border pb-2">
@@ -997,8 +1015,40 @@ export function RightSidebar({
                       updateProjectState({ image_adjustments: newAdjs });
                     };
 
+                    const handleCopyAdj = () => {
+                      clipboardAdjustments = { ...adj };
+                      setHasCopiedAdj(true);
+                    };
+
+                    const handlePasteAdj = () => {
+                      if (clipboardAdjustments) {
+                        const existing = projectState?.image_adjustments || {};
+                        const current = existing[pageKey] || {};
+                        updateProjectState({
+                          image_adjustments: { ...existing, [pageKey]: { ...current, ...clipboardAdjustments } }
+                        });
+                      }
+                    };
+
                     return (
                       <>
+                        <div className="flex items-center gap-2 mb-2 pb-2 border-b border-border">
+                          <button 
+                            onClick={handleCopyAdj} 
+                            className="flex-1 flex items-center justify-center gap-1.5 py-1 text-xs border border-border rounded bg-muted/50 hover:bg-muted hover:text-foreground transition-colors"
+                          >
+                            <Copy size={12} />
+                            复制微调参数
+                          </button>
+                          <button 
+                            onClick={handlePasteAdj} 
+                            disabled={!hasCopiedAdj}
+                            className="flex-1 flex items-center justify-center gap-1.5 py-1 text-xs border border-border rounded bg-muted/50 hover:bg-muted hover:text-foreground transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                          >
+                            <ClipboardPaste size={12} />
+                            粘贴
+                          </button>
+                        </div>
                         <ColorPickerPanel 
                           colors={extractedColors}
                           value={bgColor}

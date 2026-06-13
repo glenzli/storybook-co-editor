@@ -166,11 +166,8 @@ export default function PrintScreen() {
                 throw new Error("No sheets to export");
             }
 
-            const pdf = new jsPDF({
-                orientation: effectiveOrientation as 'portrait' | 'landscape',
-                unit: 'mm',
-                format: settings.paper_size.toLowerCase()
-            });
+            let pdf: jsPDF | null = null;
+            const pxPerMm = settings.paper_size === 'A3' ? 1.5 : (settings.paper_size === 'A5' ? 2.5 : 2.0);
 
             const total = targets.length;
             const canvasArray: HTMLCanvasElement[] = new Array(total);
@@ -366,22 +363,33 @@ export default function PrintScreen() {
                 });
             }
 
-            let firstPage = true;
             for (let i = 0; i < total; i++) {
                 // Skip blank sheets (no image content)
                 const pageEls = targets[i].querySelectorAll('[data-page-idx]');
                 if (pageEls.length === 0) continue;
 
-                if (!firstPage) {
-                    pdf.addPage();
-                }
-                firstPage = false;
+                const cWidth = canvasArray[i].width / 5;
+                const cHeight = canvasArray[i].height / 5;
+                const w_mm = cWidth / pxPerMm;
+                const h_mm = cHeight / pxPerMm;
+                const orientation = w_mm > h_mm ? 'landscape' : 'portrait';
 
-                const pdfWidth = pdf.internal.pageSize.getWidth();
-                const pdfHeight = pdf.internal.pageSize.getHeight();
+                if (!pdf) {
+                    pdf = new jsPDF({
+                        orientation: orientation,
+                        unit: 'mm',
+                        format: [w_mm, h_mm]
+                    });
+                } else {
+                    pdf.addPage([w_mm, h_mm], orientation);
+                }
                 
                 const imgData = canvasArray[i].toDataURL('image/jpeg', 0.95);
-                pdf.addImage(imgData, 'JPEG', 0, 0, pdfWidth, pdfHeight);
+                pdf.addImage(imgData, 'JPEG', 0, 0, w_mm, h_mm);
+            }
+
+            if (!pdf) {
+                throw new Error("No valid pages were exported.");
             }
 
             setExportProgress(95);
@@ -728,7 +736,7 @@ export default function PrintScreen() {
                             <ProImage 
                                 onLoad={(img) => handleImageLoad(pageIdx, img)}
                                 src={imgFile.startsWith('blank://') ? "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" : `http://127.0.0.1:14320/images/${imgFile}`}
-                                className={`${!dim ? 'w-full h-full object-contain' : ''} ${imgFile.startsWith('blank://') ? 'bg-white' : ''}`}
+                                className={`${!dim ? 'w-full h-full object-contain' : ''} ${imgFile.startsWith('blank://') ? 'bg-white' : ''} ${projectState?.soft_proof_cmyk && !isExporting ? 'cmyk-soft-proof' : ''}`}
                                 style={{ 
                                     width: cw,
                                     height: ch,

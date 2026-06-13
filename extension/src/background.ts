@@ -2,9 +2,6 @@ import { createLogger } from './utils/logger';
 
 const logger = createLogger('Background');
 
-// Allow clicking the extension icon to open the side panel
-chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true }).catch((e) => logger.error("SidePanel behavior setup failed:", e));
-
 const remoteLog = (level: string, message: string) => {
     fetch('http://127.0.0.1:14320/api/log', {
         method: 'POST',
