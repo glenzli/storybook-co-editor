@@ -18,20 +18,17 @@ import { RightSidebar } from './components/RightSidebar';
 
 const logger = createLogger('App');
 
-function getShadowStyle(hexColor: string, hasShadow: boolean) {
-    if (!hasShadow) return 'none';
+
+
+
+function getStrokeColor(hexColor: string): string {
     let hex = hexColor.replace('#', '');
-    if (hex.length === 3) {
-        hex = hex.split('').map(c => c + c).join('');
-    }
+    if (hex.length === 3) hex = hex.split('').map(c => c + c).join('');
     const r = parseInt(hex.substring(0, 2), 16) || 0;
     const g = parseInt(hex.substring(2, 4), 16) || 0;
     const b = parseInt(hex.substring(4, 6), 16) || 0;
     const yiq = ((r * 299) + (g * 587) + (b * 114)) / 1000;
-    // 强化发光/阴影层叠，形成清晰的边缘保护层
-    return yiq >= 128 
-        ? 'drop-shadow(0 0 2px rgba(0,0,0,1)) drop-shadow(0 0 6px rgba(0,0,0,0.8)) drop-shadow(0 2px 10px rgba(0,0,0,0.4))' 
-        : 'drop-shadow(0 0 2px rgba(255,255,255,1)) drop-shadow(0 0 6px rgba(255,255,255,0.9)) drop-shadow(0 2px 10px rgba(255,255,255,0.6))';
+    return yiq >= 128 ? 'rgba(0,0,0,0.8)' : 'rgba(255,255,255,0.8)';
 }
 
 interface SavedImageEvent {
@@ -762,7 +759,7 @@ export default function EditorScreen() {
                           <div className="relative w-full h-full" style={{ transform: `translate(${offsetX}%, ${offsetY}%) scale(${scale})` }}>
                             <ProImage 
                               src={images[selectedIdx]} 
-                              className={`w-full h-full object-contain ${images[selectedIdx].startsWith('blank://') ? 'bg-white' : ''} ${projectState?.soft_proof_cmyk ? 'cmyk-soft-proof' : ''}`}
+                              className={`w-full h-full object-contain ${images[selectedIdx].startsWith('blank://') ? 'bg-white' : ''}`}
                               adjustments={adjustments}
                             />
                           </div>
@@ -783,6 +780,7 @@ export default function EditorScreen() {
                     const offsetX = pageOverride?.offset_x ?? baseSettings?.offset_x ?? 0;
                     const offsetY = pageOverride?.offset_y ?? baseSettings?.offset_y ?? 0;
                     const hasShadow = baseSettings?.has_shadow ?? true;
+                    const hasBackdrop = baseSettings?.has_backdrop ?? false;
                     return (
                     <div className="absolute bottom-10 left-0 w-full px-12 pointer-events-none flex justify-center">
                       <div 
@@ -793,7 +791,15 @@ export default function EditorScreen() {
                           fontSize: `${fontSize}px`,
                           lineHeight: 1.5,
                           color: textColor,
-                          filter: getShadowStyle(textColor, hasShadow),
+                          ...(hasBackdrop ? {
+                            background: getStrokeColor(textColor).replace('0.8)', '0.35)'),
+                            padding: `${fontSize * 0.2}px ${fontSize * 0.5}px`,
+                            borderRadius: `${fontSize * 0.3}px`,
+                          } : {}),
+                          ...(hasShadow ? {
+                            WebkitTextStroke: `${fontSize * 0.04}px ${getStrokeColor(textColor)}`,
+                            paintOrder: 'stroke fill',
+                          } : {}),
                           transform: `translate(${offsetX}px, ${offsetY}px)`
                         }}
                       >
@@ -817,7 +823,15 @@ export default function EditorScreen() {
                             fontSize: `${ats?.font_size || 16}px`,
                             lineHeight: 1.5,
                             color: ats?.text_color || '#ffffff',
-                            filter: getShadowStyle(ats?.text_color || '#ffffff', ats?.has_shadow ?? true),
+                            ...((ats?.has_backdrop ?? false) ? {
+                              background: getStrokeColor(ats?.text_color || '#ffffff').replace('0.8)', '0.35)'),
+                              padding: `${(ats?.font_size || 16) * 0.2}px ${(ats?.font_size || 16) * 0.5}px`,
+                              borderRadius: `${(ats?.font_size || 16) * 0.3}px`,
+                            } : {}),
+                            ...((ats?.has_shadow ?? true) ? {
+                              WebkitTextStroke: `${(ats?.font_size || 16) * 0.04}px ${getStrokeColor(ats?.text_color || '#ffffff')}`,
+                              paintOrder: 'stroke fill',
+                            } : {}),
                             transform: `translate(${ats?.offset_x || 0}px, ${ats?.offset_y || 0}px)`
                           }}
                         >

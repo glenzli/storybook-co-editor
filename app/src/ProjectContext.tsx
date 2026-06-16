@@ -11,6 +11,7 @@ export interface TextSettings {
     text_color?: string;
     font_family?: string;
     has_shadow?: boolean;
+    has_backdrop?: boolean;
     offset_x?: number;
     offset_y?: number;
 }
@@ -73,7 +74,6 @@ export interface ProjectState {
     canvas_height: number;
     author_text_settings?: TextSettings;
     page_text_overrides?: Record<string, { offset_x: number; offset_y: number; text_color?: string }>;
-    soft_proof_cmyk?: boolean;
 }
 
 export interface ProjectInfo {

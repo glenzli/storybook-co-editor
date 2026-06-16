@@ -8,18 +8,15 @@ import { invoke } from '@tauri-apps/api/core';
 import html2canvas from 'html2canvas';
 import { jsPDF } from 'jspdf';
 
-// html2canvas-compatible: use textShadow instead of filter (html2canvas doesn't support CSS filter: drop-shadow)
-function getTextShadowStyle(hexColor: string, hasShadow: boolean): string {
-    if (!hasShadow) return 'none';
+
+function getStrokeColor(hexColor: string): string {
     let hex = hexColor.replace('#', '');
     if (hex.length === 3) hex = hex.split('').map(c => c + c).join('');
     const r = parseInt(hex.substring(0, 2), 16) || 0;
     const g = parseInt(hex.substring(2, 4), 16) || 0;
     const b = parseInt(hex.substring(4, 6), 16) || 0;
     const yiq = ((r * 299) + (g * 587) + (b * 114)) / 1000;
-    return yiq >= 128 
-        ? '0 0 2px rgba(0,0,0,1), 0 0 6px rgba(0,0,0,0.8), 0 2px 10px rgba(0,0,0,0.4)' 
-        : '0 0 2px rgba(255,255,255,1), 0 0 6px rgba(255,255,255,0.9), 0 2px 10px rgba(255,255,255,0.6)';
+    return yiq >= 128 ? 'rgba(0,0,0,0.8)' : 'rgba(255,255,255,0.8)';
 }
 
 export interface ImposedSheet {
@@ -135,6 +132,7 @@ export default function PrintScreen() {
             auto_snap_content: true,
             crop_marks: true,
             double_sided: true,
+            cmyk_convert: false,
             offset_x: 0.0,
             offset_y: 0.0,
             ...s
@@ -197,12 +195,16 @@ export default function PrintScreen() {
             const parsedScriptLocal = new Map<number, string>();
             const script = projectState?.global_script || '';
             const hasTitle = /(?:\[(Title|扉页)\])/i.test(script);
-            const blocks = script.split(/(?=\[(?:Cover|封面|Title|扉页|\d+)\])/i);
+            const blocks = script.split(/(?=\[(?:Cover|封面|Title|扉页|Author|作者|\d+)\])/i);
             blocks.forEach(block => {
-                const match = block.match(/\[(Cover|封面|Title|扉页|\d+)\]\s*([\s\S]*)/i);
+                const match = block.match(/\[(Cover|封面|Title|扉页|Author|作者|\d+)\]\s*([\s\S]*)/i);
                 if (match) {
                     const key = match[1].toLowerCase();
                     const text = match[2].trim();
+                    
+                    // Skip author blocks — author is drawn separately via projectState.author_name
+                    if (key === 'author' || key === '作者') return;
+                    
                     let idx = 0;
                     if (key === 'cover' || key === '封面') {
                         idx = 0;
@@ -275,6 +277,7 @@ export default function PrintScreen() {
                     fontSize: number,
                     color: string,
                     hasShadow: boolean,
+                    hasBackdrop: boolean,
                     oxCanvas: number,
                     oyCanvas: number,
                 ) => {
@@ -286,39 +289,65 @@ export default function PrintScreen() {
                     const scaledFontSize = fontSize * S * h2cScale;
                     const fontStr = `${scaledFontSize}px ${mapFont(fontFamily)}`;
                     ctx.font = fontStr;
-                    ctx.fillStyle = color;
                     ctx.textAlign = 'center';
                     ctx.textBaseline = 'bottom';
-
-                    // Shadow
-                    if (hasShadow) {
-                        ctx.shadowColor = getShadowColor(color);
-                        ctx.shadowBlur = 4 * h2cScale;
-                        ctx.shadowOffsetX = 0;
-                        ctx.shadowOffsetY = 2 * h2cScale;
-                    } else {
-                        ctx.shadowColor = 'transparent';
-                        ctx.shadowBlur = 0;
-                    }
 
                     // Position: center X with offset, bottom with offset
                     const centerX = (relLeft + pageW / 2 + oxCanvas * S) * h2cScale;
                     const bottomY = (relTop + pageH - (baseBottomPx - oyCanvas) * S) * h2cScale;
 
-
                     // Handle multi-line text
                     const lines = content.split('\n');
                     const lineHeight = scaledFontSize * 1.5;
+
+                    // Draw backdrop plate behind text
+                    if (hasBackdrop) {
+                        ctx.setTransform(1, 0, 0, 1, 0, 0);
+                        const bgColor = getShadowColor(color).replace('0.8)', '0.35)');
+                        const padX = scaledFontSize * 0.5;
+                        const padY = scaledFontSize * 0.2;
+                        const radius = scaledFontSize * 0.3;
+
+                        // Measure total text block dimensions
+                        let maxLineW = 0;
+                        for (const line of lines) {
+                            const m = ctx.measureText(line);
+                            if (m.width > maxLineW) maxLineW = m.width;
+                        }
+                        const totalTextH = lines.length * lineHeight;
+                        const rectW = maxLineW + padX * 2;
+                        const rectH = totalTextH + padY * 2;
+                        const rectX = centerX - rectW / 2;
+                        const rectY = bottomY - totalTextH - padY + lineHeight * 0.25;
+
+                        ctx.fillStyle = bgColor;
+                        ctx.beginPath();
+                        ctx.roundRect(rectX, rectY, rectW, rectH, radius);
+                        ctx.fill();
+                    }
+
+                    // Pass 1: Draw stroke outline (contrasting color)
+                    if (hasShadow) {
+                        const strokeColor = getShadowColor(color);
+                        ctx.strokeStyle = strokeColor;
+                        ctx.lineWidth = scaledFontSize * 0.08;
+                        ctx.lineJoin = 'round';
+                        ctx.miterLimit = 2;
+                        ctx.shadowColor = 'transparent';
+                        ctx.shadowBlur = 0;
+
+                        for (let li = lines.length - 1; li >= 0; li--) {
+                            const y = bottomY - (lines.length - 1 - li) * lineHeight;
+                            ctx.strokeText(lines[li], centerX, y);
+                        }
+                    }
+
+                    // Pass 2: Draw fill on top
+                    ctx.fillStyle = color;
                     for (let li = lines.length - 1; li >= 0; li--) {
                         const y = bottomY - (lines.length - 1 - li) * lineHeight;
                         ctx.fillText(lines[li], centerX, y);
                     }
-
-                    // Reset shadow
-                    ctx.shadowColor = 'transparent';
-                    ctx.shadowBlur = 0;
-                    ctx.shadowOffsetX = 0;
-                    ctx.shadowOffsetY = 0;
                 };
 
                 // Draw title text
@@ -330,7 +359,7 @@ export default function PrintScreen() {
                     drawSingleText(
                         titleText, ff,
                         ts?.font_size || (isCover ? 40 : (isTitle ? 32 : 20)),
-                        effectiveColor, ts?.has_shadow ?? true,
+                        effectiveColor, ts?.has_shadow ?? true, ts?.has_backdrop ?? false,
                         effectiveOffsetX, effectiveOffsetY,
                     );
                 }
@@ -343,7 +372,7 @@ export default function PrintScreen() {
                         ats?.font_family || 'serif',
                         ats?.font_size || 16,
                         ats?.text_color || '#ffffff',
-                        ats?.has_shadow ?? true,
+                        ats?.has_shadow ?? true, ats?.has_backdrop ?? false,
                         ats?.offset_x ?? 0,
                         ats?.offset_y ?? 0,
                     );
@@ -421,23 +450,28 @@ export default function PrintScreen() {
             if (filePath) {
                 const arrayBuffer = pdf.output('arraybuffer');
                 
-                setExportProgress(99);
-                setExportStatusText('正在调用 Ghostscript 引擎转换 CMYK...');
-                try {
-                    const res = await invoke<{ success: boolean; error_msg: string | null }>('convert_to_cmyk', {
-                        pdfData: Array.from(new Uint8Array(arrayBuffer)),
-                        outputPath: filePath
-                    });
-                    
-                    if (res.success) {
-                        alert(`成功导出印前专业 CMYK 版至：\n${filePath}`);
-                    } else {
+                if (settings.cmyk_convert) {
+                    setExportProgress(99);
+                    setExportStatusText('正在调用 Ghostscript 引擎转换 CMYK...');
+                    try {
+                        const res = await invoke<{ success: boolean; error_msg: string | null }>('convert_to_cmyk', {
+                            pdfData: Array.from(new Uint8Array(arrayBuffer)),
+                            outputPath: filePath
+                        });
+                        
+                        if (res.success) {
+                            alert(`成功导出印前专业 CMYK 版至：\n${filePath}`);
+                        } else {
+                            await writeFile(filePath, new Uint8Array(arrayBuffer));
+                            alert(`专业 CMYK 色彩转换失败，已回退保存为 RGB 版本。\n\n后端错误：\n${res.error_msg}`);
+                        }
+                    } catch (invokeErr) {
                         await writeFile(filePath, new Uint8Array(arrayBuffer));
-                        alert(`专业 CMYK 色彩转换失败，已回退保存为 RGB 版本。\n\n后端错误:\n${res.error_msg}`);
+                        alert(`调用转换引擎失败，已回退保存为 RGB 版本。\n\n错误信息：\n${invokeErr}`);
                     }
-                } catch (invokeErr) {
+                } else {
                     await writeFile(filePath, new Uint8Array(arrayBuffer));
-                    alert(`调用转换引擎失败，已回退保存为 RGB 版本。\n\n错误信息:\n${invokeErr}`);
+                    alert(`成功导出 PDF 至：\n${filePath}`);
                 }
             }
         } catch (err) {
@@ -655,6 +689,7 @@ export default function PrintScreen() {
             fontSize: number,
             color: string,
             hasShadow: boolean,
+            hasBackdrop: boolean,
             oxCanvas: number,
             oyCanvas: number,
         ) => {
@@ -680,7 +715,15 @@ export default function PrintScreen() {
                         fontSize: `${fontSize * S}px`,
                         lineHeight: 1.5,
                         color,
-                        textShadow: getTextShadowStyle(color, hasShadow),
+                        ...(hasBackdrop ? {
+                            background: getStrokeColor(color).replace('0.8)', '0.35)'),
+                            padding: `${fontSize * S * 0.2}px ${fontSize * S * 0.5}px`,
+                            borderRadius: `${fontSize * S * 0.3}px`,
+                        } : {}),
+                        ...(hasShadow ? {
+                            WebkitTextStroke: `${fontSize * S * 0.04}px ${getStrokeColor(color)}`,
+                            paintOrder: 'stroke fill',
+                        } : {}),
                     }}>
                         {content}
                     </div>
@@ -736,7 +779,7 @@ export default function PrintScreen() {
                             <ProImage 
                                 onLoad={(img) => handleImageLoad(pageIdx, img)}
                                 src={imgFile.startsWith('blank://') ? "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" : `http://127.0.0.1:14320/images/${imgFile}`}
-                                className={`${!dim ? 'w-full h-full object-contain' : ''} ${imgFile.startsWith('blank://') ? 'bg-white' : ''} ${projectState?.soft_proof_cmyk && !isExporting ? 'cmyk-soft-proof' : ''}`}
+                                className={`${!dim ? 'w-full h-full object-contain' : ''} ${imgFile.startsWith('blank://') ? 'bg-white' : ''}`}
                                 style={{ 
                                     width: cw,
                                     height: ch,
@@ -754,6 +797,7 @@ export default function PrintScreen() {
                     ts?.font_size || (isCover ? 40 : (isTitle ? 32 : 20)),
                     effectiveColor,
                     ts?.has_shadow ?? true,
+                    ts?.has_backdrop ?? false,
                     effectiveOffsetX,
                     effectiveOffsetY,
                 )}
@@ -768,6 +812,7 @@ export default function PrintScreen() {
                         ats?.font_size || 16,
                         ats?.text_color || '#ffffff',
                         ats?.has_shadow ?? true,
+                        ats?.has_backdrop ?? false,
                         ats?.offset_x ?? 0,
                         ats?.offset_y ?? 0,
                     );
@@ -950,6 +995,10 @@ export default function PrintScreen() {
                 </div>
 
                 <div className="p-4 border-t border-border">
+                    <label className="flex items-center gap-2 mb-3 cursor-pointer">
+                        <input type="checkbox" checked={settings.cmyk_convert} onChange={e => updateSettings({ cmyk_convert: e.target.checked })} className="accent-primary w-4 h-4" />
+                        <span className="text-sm">导出时转换 CMYK 色彩空间</span>
+                    </label>
                     <button 
                         onClick={generatePDF}
                         disabled={isExporting || renderedSheetCount < imposedSheets.length}

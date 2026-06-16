@@ -18,6 +18,7 @@ pub struct TextSettings {
     pub font_size: f32,
     pub text_color: String,
     pub has_shadow: bool,
+    pub has_backdrop: bool,
     pub offset_x: f32,
     pub offset_y: f32,
     pub paper_alignment: String,
@@ -31,6 +32,7 @@ impl Default for TextSettings {
             font_size: 20.0,
             text_color: "#ffffff".to_string(),
             has_shadow: true,
+            has_backdrop: false,
             offset_x: 0.0,
             offset_y: 0.0,
             paper_alignment: "left".to_string(),
@@ -50,6 +52,7 @@ pub struct PageTextOverride {
 }
 
 #[derive(Serialize, Deserialize, Clone)]
+#[serde(default)]
 pub struct PrintSettings {
     pub paper_size: String,
     pub paper_orientation: String,
@@ -61,6 +64,8 @@ pub struct PrintSettings {
     pub binding_margin_mm: f32,
     pub hardware_margin_mm: f32,
     pub crop_marks: bool,
+    pub double_sided: bool,
+    pub cmyk_convert: bool,
     pub offset_x: f32,
     pub offset_y: f32,
     pub paper_alignment: String,
@@ -80,6 +85,8 @@ impl Default for PrintSettings {
             binding_margin_mm: 10.0,
             hardware_margin_mm: 0.0,
             crop_marks: true,
+            double_sided: true,
+            cmyk_convert: false,
             offset_x: 0.0,
             offset_y: 0.0,
             paper_alignment: "left".to_string(),

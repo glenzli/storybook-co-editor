@@ -640,21 +640,7 @@ export function RightSidebar({
             {rightTab === 'style' && (
             <div className="p-4 flex-1 flex flex-col gap-4 w-full overflow-y-auto">
 
-              {/* CMYK Soft Proofing */}
-              <div className="flex items-center justify-between bg-amber-500/10 border border-amber-500/30 rounded-md p-3">
-                <div className="flex flex-col gap-1">
-                  <span className="text-xs font-bold text-amber-600 dark:text-amber-400">CMYK 软打样预览</span>
-                  <span className="text-[10px] text-muted-foreground leading-tight">降低饱和度模拟印厂出墨效果</span>
-                </div>
-                <label className="relative inline-flex items-center cursor-pointer">
-                  <input type="checkbox" className="sr-only peer" 
-                    checked={projectState?.soft_proof_cmyk || false}
-                    onChange={(e) => updateProjectState({ soft_proof_cmyk: e.target.checked })}
-                  />
-                  <div className="w-8 h-4 bg-muted peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-amber-500"></div>
-                </label>
-              </div>
-              
+
               {/* Canvas Settings */}
               <div className="border-b border-border pb-2">
                 <button onClick={() => setOpenSections(s => ({...s, canvas: !s.canvas}))} className="flex items-center justify-between w-full py-1.5 hover:text-foreground transition-colors">
@@ -765,10 +751,17 @@ export function RightSidebar({
                           className="flex-1 pr-4 border-r border-border"
                         />
                         <div className="flex flex-col gap-1.5 pl-4 items-center justify-center">
-                          <label className="text-xs text-muted-foreground">智能阴影</label>
+                          <label className="text-xs text-muted-foreground">描边</label>
                           <input type="checkbox" className="accent-primary w-4 h-4"
                             checked={ats.has_shadow ?? true}
                             onChange={(e) => updateAts({ has_shadow: e.target.checked })}
+                          />
+                        </div>
+                        <div className="flex flex-col gap-1.5 pl-4 items-center justify-center">
+                          <label className="text-xs text-muted-foreground">底板</label>
+                          <input type="checkbox" className="accent-primary w-4 h-4"
+                            checked={ats.has_backdrop ?? false}
+                            onChange={(e) => updateAts({ has_backdrop: e.target.checked })}
                           />
                         </div>
                       </div>
@@ -909,11 +902,20 @@ export function RightSidebar({
                             title={<>颜色{!isCover && <span className="text-primary/60 ml-1">(本页)</span>}</>}
                           />
                           <div className="flex flex-col gap-1.5 pl-4 items-center justify-center">
-                              <label className="text-xs text-muted-foreground">智能阴影</label>
+                              <label className="text-xs text-muted-foreground">描边</label>
                               <input 
                                 type="checkbox" 
                                 checked={settings.has_shadow ?? true}
                                 onChange={(e) => updateSharedSettings({ has_shadow: e.target.checked })}
+                                className="w-4 h-4 accent-primary cursor-pointer"
+                              />
+                          </div>
+                          <div className="flex flex-col gap-1.5 pl-4 items-center justify-center">
+                              <label className="text-xs text-muted-foreground">底板</label>
+                              <input 
+                                type="checkbox" 
+                                checked={settings.has_backdrop ?? false}
+                                onChange={(e) => updateSharedSettings({ has_backdrop: e.target.checked })}
                                 className="w-4 h-4 accent-primary cursor-pointer"
                               />
                           </div>
