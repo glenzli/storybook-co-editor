@@ -308,6 +308,52 @@ export default function EditorScreen() {
     return { parsedScript: map, parsedAuthor: author };
   }, [globalScript]);
 
+  // Compute text overlay info for thumbnails — Cover/Title only
+  const textOverlays = useMemo(() => {
+    const hasTitle = /(?:\[(Title|扉页)\])/i.test(globalScript);
+    const result: Record<number, import('./components/SortableImageItem').TextOverlayInfo[]> = {};
+
+    const buildOverlay = (text: string | undefined, settings: typeof projectState?.cover_text_settings, defaultSize: number) => {
+      if (!text) return null;
+      const ff = settings?.font_family || 'serif';
+      const fontFamily = ff === 'sans' ? 'ui-sans-serif, system-ui, sans-serif' : ff === 'serif' ? 'ui-serif, Georgia, serif' : `'${ff}', sans-serif`;
+      const color = settings?.text_color || '#ffffff';
+      return {
+        text,
+        color,
+        fontSize: settings?.font_size || defaultSize,
+        fontFamily,
+        hasShadow: settings?.has_shadow ?? true,
+        hasBackdrop: settings?.has_backdrop ?? false,
+        strokeColor: getStrokeColor(color),
+        offsetX: settings?.offset_x ?? 0,
+        offsetY: settings?.offset_y ?? 0,
+      };
+    };
+
+    // Cover (idx 0)
+    const coverText = parsedScript.get(0);
+    if (coverText) {
+      const layers: import('./components/SortableImageItem').TextOverlayInfo[] = [];
+      const titleLayer = buildOverlay(coverText, projectState?.cover_text_settings, 40);
+      if (titleLayer) layers.push(titleLayer);
+      const authorLayer = buildOverlay(parsedAuthor || undefined, projectState?.author_text_settings, 16);
+      if (authorLayer) layers.push(authorLayer);
+      if (layers.length > 0) result[0] = layers;
+    }
+
+    // Title page (idx 1)
+    if (hasTitle) {
+      const titleText = parsedScript.get(1);
+      if (titleText) {
+        const layer = buildOverlay(titleText, projectState?.title_text_settings, 32);
+        if (layer) result[1] = [layer];
+      }
+    }
+
+    return result;
+  }, [parsedScript, parsedAuthor, projectState?.cover_text_settings, projectState?.title_text_settings, projectState?.author_text_settings, globalScript]);
+
   const currentText = selectedIdx !== null ? parsedScript.get(selectedIdx) : "";
 
   // Measure viewport and compute canvas scale
@@ -711,6 +757,9 @@ export default function EditorScreen() {
             handleDragEnd={handleDragEnd}
             handleInsertBlank={handleInsertBlankPage}
             hasTitle={/(?:\[(Title|扉页)\])/i.test(projectState?.global_script || '')}
+            imageAdjustments={projectState?.image_adjustments}
+            textOverlays={textOverlays}
+            canvasSize={canvasW}
           />
           {/* Center: Main Canvas */}
           <main ref={viewportRef} className="flex-1 bg-muted relative flex items-center justify-center p-8 overflow-hidden">

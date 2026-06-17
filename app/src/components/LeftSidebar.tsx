@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import { DndContext, closestCenter, PointerSensor, KeyboardSensor, useSensor, useSensors } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy, sortableKeyboardCoordinates } from '@dnd-kit/sortable';
 import { LayoutTemplate, Archive, Sun, Moon, ChevronLeft, ChevronRight, FilePlus, ArrowUpToLine, ArrowDownToLine, Trash2, Download, Copy } from 'lucide-react';
-import { SortableImageItem } from './SortableImageItem';
+import { SortableImageItem, type TextOverlayInfo } from './SortableImageItem';
 
 interface LeftSidebarProps {
   isLeftOpen: boolean;
@@ -21,6 +21,9 @@ interface LeftSidebarProps {
   handleDragEnd: (event: any) => void;
   handleInsertBlank: () => void;
   hasTitle?: boolean;
+  imageAdjustments?: Record<string, any>;
+  textOverlays?: Record<number, TextOverlayInfo[]>;
+  canvasSize?: number;
 }
 
 export function LeftSidebar({
@@ -39,7 +42,10 @@ export function LeftSidebar({
   handleOpenTrash,
   handleDragEnd,
   handleInsertBlank,
-  hasTitle
+  hasTitle,
+  imageAdjustments,
+  textOverlays,
+  canvasSize
 }: LeftSidebarProps) {
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
@@ -141,6 +147,9 @@ export function LeftSidebar({
                     onDelete={handleDelete}
                     onContextMenu={onContextMenu}
                     hasTitle={hasTitle}
+                    imageAdjustment={imageAdjustments?.[String(idx)]}
+                    textOverlays={textOverlays?.[idx]}
+                    canvasSize={canvasSize}
                   />
                 ))}
               </SortableContext>
