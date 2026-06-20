@@ -756,7 +756,8 @@ export default function PrintScreen() {
                         saturate: imgAdj?.saturate ?? 0,
                         temperature: imgAdj?.temperature ?? 0,
                         tint: imgAdj?.tint ?? 0,
-                        selective_colors: imgAdj?.selective_colors || []
+                        selective_colors: imgAdj?.selective_colors || [],
+                        remove_white_bg: imgAdj?.remove_white_bg ?? 0,
                     };
                     
                     let cw: string | undefined = undefined;

@@ -13,6 +13,7 @@ export interface ProAdjustments {
         d_sat: number;
         d_lum: number;
     }[];
+    remove_white_bg?: number; // 0 to 100 (tolerance)
 }
 
 export function applyProAdjustments(
@@ -58,9 +59,25 @@ export function applyProAdjustments(
     const shFact = adj.shadows / 100;    // -1 to 1
 
     for (let i = 0; i < len; i += 4) {
-        let r = data[i] / 255;
-        let g = data[i + 1] / 255;
-        let b = data[i + 2] / 255;
+        let origR = data[i];
+        let origG = data[i + 1];
+        let origB = data[i + 2];
+
+        // 0. Remove White Background
+        if (adj.remove_white_bg && adj.remove_white_bg > 0) {
+            // Calculate distance from pure white (255, 255, 255)
+            const diff = (255 - origR) + (255 - origG) + (255 - origB);
+            const threshold = adj.remove_white_bg * 2.5; // Up to 250 diff
+            if (diff < threshold) {
+                // Soft edge for anti-aliasing
+                const alpha = diff <= (threshold * 0.5) ? 0 : ((diff - threshold * 0.5) / (threshold * 0.5)) * 255;
+                data[i + 3] = Math.min(data[i + 3], alpha);
+            }
+        }
+
+        let r = origR / 255;
+        let g = origG / 255;
+        let b = origB / 255;
 
         // 1. Exposure (Gamma Curve - protects 0 and 1)
         if (gamma !== 1) {

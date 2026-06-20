@@ -313,7 +313,7 @@ export default function EditorScreen() {
     const hasTitle = /(?:\[(Title|扉页)\])/i.test(globalScript);
     const result: Record<number, import('./components/SortableImageItem').TextOverlayInfo[]> = {};
 
-    const buildOverlay = (text: string | undefined, settings: typeof projectState?.cover_text_settings, defaultSize: number) => {
+    const buildOverlay = (text: string | undefined, settings: any, defaultSize: number) => {
       if (!text) return null;
       const ff = settings?.font_family || 'serif';
       const fontFamily = ff === 'sans' ? 'ui-sans-serif, system-ui, sans-serif' : ff === 'serif' ? 'ui-serif, Georgia, serif' : `'${ff}', sans-serif`;
@@ -794,7 +794,8 @@ export default function EditorScreen() {
                         saturate: imgAdj?.saturate ?? 0,
                         temperature: imgAdj?.temperature ?? 0,
                         tint: imgAdj?.tint ?? 0,
-                        selective_colors: imgAdj?.selective_colors || []
+                        selective_colors: imgAdj?.selective_colors || [],
+                        remove_white_bg: imgAdj?.remove_white_bg ?? 0,
                       };
                       const isTransparent = bgColor === 'transparent';
                       const transparentBgStyle = {

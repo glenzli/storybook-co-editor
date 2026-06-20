@@ -141,6 +141,8 @@ pub struct ImageAdjustments {
     pub tint: f32,
     #[serde(default)]
     pub selective_colors: Option<Vec<SelectiveColor>>,
+    #[serde(default)]
+    pub remove_white_bg: f32,
 }
 
 #[derive(Serialize, Deserialize, Clone)]

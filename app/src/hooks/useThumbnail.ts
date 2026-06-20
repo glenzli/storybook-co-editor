@@ -70,6 +70,7 @@ export function useThumbnail(
                 adjustments.highlights !== 0 || adjustments.shadows !== 0 ||
                 adjustments.contrast !== 0 || adjustments.saturate !== 0 ||
                 adjustments.temperature !== 0 || adjustments.tint !== 0 ||
+                (adjustments.remove_white_bg && adjustments.remove_white_bg > 0) ||
                 (adjustments.selective_colors && adjustments.selective_colors.length > 0)
             )) {
                 const imgData = ctx.getImageData(0, 0, tw, th);
@@ -79,7 +80,8 @@ export function useThumbnail(
 
             if (cancelRef.current) return;
 
-            const dataUrl = canvas.toDataURL('image/jpeg', 0.75);
+            // Use PNG to preserve transparency (JPEG turns transparent pixels black)
+            const dataUrl = canvas.toDataURL('image/png');
             cache.set(adjKey, dataUrl);
 
             // Evict old entries if cache gets too large (keep last 200)

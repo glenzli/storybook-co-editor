@@ -74,13 +74,14 @@ export const SortableImageItem = memo(function SortableImageItem({ id, idx, isSe
     temperature: adj.temperature ?? 0,
     tint: adj.tint ?? 0,
     selective_colors: adj.selective_colors || [],
+    remove_white_bg: adj.remove_white_bg ?? 0,
   } : undefined;
 
   const hasAdj = scale !== 1 || offsetX !== 0 || offsetY !== 0 ||
     (adjustments && (
       adjustments.brightness !== 0 || adjustments.exposure !== 0 || adjustments.highlights !== 0 ||
       adjustments.shadows !== 0 || adjustments.contrast !== 0 || adjustments.saturate !== 0 ||
-      adjustments.temperature !== 0 || adjustments.tint !== 0 ||
+      adjustments.temperature !== 0 || adjustments.tint !== 0 || adjustments.remove_white_bg !== 0 ||
       (adjustments.selective_colors && adjustments.selective_colors.length > 0)
     ));
 

@@ -1001,6 +1001,7 @@ export function RightSidebar({
                     const saturate = adj.saturate ?? 0;
                     const temperature = adj.temperature ?? 0;
                     const tint = adj.tint ?? 0;
+                    const removeWhiteBg = adj.remove_white_bg ?? 0;
 
                     const updateAdj = (updates: Partial<typeof adj>) => {
                       const existing = projectState?.image_adjustments || {};
@@ -1060,9 +1061,19 @@ export function RightSidebar({
                           title="画布底色"
                         />
                         <SliderControl
+                          label="过滤白底"
+                          value={removeWhiteBg}
+                          min={0}
+                          max={100}
+                          step={1}
+                          defaultValue={0}
+                          onChange={(val) => updateAdj({ remove_white_bg: val })}
+                          className="mt-2 border-b border-border pb-3"
+                        />
+                        <SliderControl
                           label="缩放比例"
                           value={scale}
-                          min={0.5}
+                          min={0.1}
                           max={3.0}
                           step={0.05}
                           defaultValue={1.0}
@@ -1249,7 +1260,7 @@ export function RightSidebar({
                               })()}
                             </div>
                           </div>
-                        {(scale !== 1 || offsetX !== 0 || offsetY !== 0 || brightness !== 0 || exposure !== 0 || highlights !== 0 || shadows !== 0 || contrast !== 0 || saturate !== 0 || temperature !== 0 || tint !== 0 || bgColor !== 'transparent') && (
+                        {(scale !== 1 || offsetX !== 0 || offsetY !== 0 || brightness !== 0 || exposure !== 0 || highlights !== 0 || shadows !== 0 || contrast !== 0 || saturate !== 0 || temperature !== 0 || tint !== 0 || bgColor !== 'transparent' || removeWhiteBg !== 0) && (
                           <button onClick={resetAdj} className="mt-2 text-xs text-red-400 hover:text-red-500 text-right w-full">
                             恢复默认设置
                           </button>
