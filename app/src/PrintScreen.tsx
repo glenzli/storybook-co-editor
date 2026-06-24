@@ -193,6 +193,7 @@ export default function PrintScreen() {
             const canvasW = projectState?.canvas_width || 1024;
             const canvasH = projectState?.canvas_height || 1024;
             const parsedScriptLocal = new Map<number, string>();
+            let parsedAuthorLocal = '';
             const script = projectState?.global_script || '';
             const hasTitle = /(?:\[(Title|扉页)\])/i.test(script);
             const blocks = script.split(/(?=\[(?:Cover|封面|Title|扉页|Author|作者|\d+)\])/i);
@@ -202,8 +203,10 @@ export default function PrintScreen() {
                     const key = match[1].toLowerCase();
                     const text = match[2].trim();
                     
-                    // Skip author blocks — author is drawn separately via projectState.author_name
-                    if (key === 'author' || key === '作者') return;
+                    if (key === 'author' || key === '作者') {
+                        parsedAuthorLocal = text;
+                        return;
+                    }
                     
                     let idx = 0;
                     if (key === 'cover' || key === '封面') {
@@ -296,8 +299,25 @@ export default function PrintScreen() {
                     const centerX = (relLeft + pageW / 2 + oxCanvas * S) * h2cScale;
                     const bottomY = (relTop + pageH - (baseBottomPx - oyCanvas) * S) * h2cScale;
 
-                    // Handle multi-line text
-                    const lines = content.split('\n');
+                    // Handle multi-line text with auto-wrapping
+                    const maxWidth = (pageW - 48 * 2) * h2cScale;
+                    let lines: string[] = [];
+                    content.split('\n').forEach(paragraph => {
+                        let currentLine = '';
+                        for (const char of paragraph) {
+                            const testLine = currentLine + char;
+                            const m = ctx.measureText(testLine);
+                            if (m.width > maxWidth && currentLine.length > 0) {
+                                lines.push(currentLine);
+                                currentLine = char;
+                            } else {
+                                currentLine = testLine;
+                            }
+                        }
+                        if (currentLine) {
+                            lines.push(currentLine);
+                        }
+                    });
                     const lineHeight = scaledFontSize * 1.5;
 
                     // Draw backdrop plate behind text
@@ -365,10 +385,11 @@ export default function PrintScreen() {
                 }
 
                 // Draw author text (cover only)
-                if (isCover && projectState?.author_name) {
+                const authorNameToDraw = parsedAuthorLocal || projectState?.author_name;
+                if (isCover && authorNameToDraw) {
                     const ats = projectState?.author_text_settings;
                     drawSingleText(
-                        projectState.author_name,
+                        authorNameToDraw,
                         ats?.font_family || 'serif',
                         ats?.font_size || 16,
                         ats?.text_color || '#ffffff',
@@ -758,6 +779,7 @@ export default function PrintScreen() {
                         tint: imgAdj?.tint ?? 0,
                         selective_colors: imgAdj?.selective_colors || [],
                         remove_white_bg: imgAdj?.remove_white_bg ?? 0,
+                        remove_bg_color: imgAdj?.remove_bg_color,
                     };
                     
                     let cw: string | undefined = undefined;

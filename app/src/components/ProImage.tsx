@@ -30,6 +30,7 @@ export const ProImage: React.FC<ProImageProps> = ({
         if (adjustments && (
             adjustments.brightness !== 0 || adjustments.exposure !== 0 || adjustments.highlights !== 0 || adjustments.shadows !== 0 || 
             adjustments.contrast !== 0 || adjustments.saturate !== 0 || adjustments.temperature !== 0 || adjustments.tint !== 0 ||
+            (adjustments.remove_white_bg && adjustments.remove_white_bg > 0) ||
             (adjustments.selective_colors && adjustments.selective_colors.length > 0)
         )) {
             const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);

@@ -796,6 +796,7 @@ export default function EditorScreen() {
                         tint: imgAdj?.tint ?? 0,
                         selective_colors: imgAdj?.selective_colors || [],
                         remove_white_bg: imgAdj?.remove_white_bg ?? 0,
+                        remove_bg_color: imgAdj?.remove_bg_color,
                       };
                       const isTransparent = bgColor === 'transparent';
                       const transparentBgStyle = {

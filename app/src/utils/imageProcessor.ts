@@ -14,6 +14,7 @@ export interface ProAdjustments {
         d_lum: number;
     }[];
     remove_white_bg?: number; // 0 to 100 (tolerance)
+    remove_bg_color?: string; // target color to remove, defaults to #ffffff
 }
 
 export function applyProAdjustments(
@@ -58,19 +59,38 @@ export function applyProAdjustments(
     const hlFact = adj.highlights / 100; // -1 to 1
     const shFact = adj.shadows / 100;    // -1 to 1
 
+    // Pre-calculate background removal target
+    let bgTargetR = 255;
+    let bgTargetG = 255;
+    let bgTargetB = 255;
+    if (adj.remove_bg_color) {
+        let hex = adj.remove_bg_color.replace('#', '');
+        if (hex.length === 3) hex = hex.split('').map(c => c + c).join('');
+        if (hex.length === 6) {
+            bgTargetR = parseInt(hex.substring(0, 2), 16);
+            bgTargetG = parseInt(hex.substring(2, 4), 16);
+            bgTargetB = parseInt(hex.substring(4, 6), 16);
+        }
+    }
+
     for (let i = 0; i < len; i += 4) {
         let origR = data[i];
         let origG = data[i + 1];
         let origB = data[i + 2];
 
-        // 0. Remove White Background
+        // 0. Remove Background Color
         if (adj.remove_white_bg && adj.remove_white_bg > 0) {
-            // Calculate distance from pure white (255, 255, 255)
-            const diff = (255 - origR) + (255 - origG) + (255 - origB);
-            const threshold = adj.remove_white_bg * 2.5; // Up to 250 diff
-            if (diff < threshold) {
+            // Euclidean distance
+            const dr = origR - bgTargetR;
+            const dg = origG - bgTargetG;
+            const db = origB - bgTargetB;
+            const distance = Math.sqrt(dr * dr + dg * dg + db * db);
+            
+            // Map 0-100 tolerance to 0-250 Euclidean distance (max distance is 441)
+            const threshold = adj.remove_white_bg * 2.5; 
+            if (distance < threshold) {
                 // Soft edge for anti-aliasing
-                const alpha = diff <= (threshold * 0.5) ? 0 : ((diff - threshold * 0.5) / (threshold * 0.5)) * 255;
+                const alpha = distance <= (threshold * 0.5) ? 0 : ((distance - threshold * 0.5) / (threshold * 0.5)) * 255;
                 data[i + 3] = Math.min(data[i + 3], alpha);
             }
         }

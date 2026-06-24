@@ -75,6 +75,7 @@ export const SortableImageItem = memo(function SortableImageItem({ id, idx, isSe
     tint: adj.tint ?? 0,
     selective_colors: adj.selective_colors || [],
     remove_white_bg: adj.remove_white_bg ?? 0,
+    remove_bg_color: adj.remove_bg_color,
   } : undefined;
 
   const hasAdj = scale !== 1 || offsetX !== 0 || offsetY !== 0 ||
@@ -170,6 +171,7 @@ export const SortableImageItem = memo(function SortableImageItem({ id, idx, isSe
                       paintOrder: 'stroke fill',
                     } : {}),
                     maxWidth: '100%',
+                    transform: `translate(calc(${t.offsetX} * var(--s, 0.2) * 1px), calc(${t.offsetY} * var(--s, 0.2) * 1px))`,
                   }}>
                     {t.text}
                   </div>

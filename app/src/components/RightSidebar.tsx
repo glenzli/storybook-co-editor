@@ -1002,6 +1002,7 @@ export function RightSidebar({
                     const temperature = adj.temperature ?? 0;
                     const tint = adj.tint ?? 0;
                     const removeWhiteBg = adj.remove_white_bg ?? 0;
+                    const removeBgColor = adj.remove_bg_color || '#ffffff';
 
                     const updateAdj = (updates: Partial<typeof adj>) => {
                       const existing = projectState?.image_adjustments || {};
@@ -1060,16 +1061,25 @@ export function RightSidebar({
                           className="border-b border-border pb-2"
                           title="画布底色"
                         />
-                        <SliderControl
-                          label="过滤白底"
-                          value={removeWhiteBg}
-                          min={0}
-                          max={100}
-                          step={1}
-                          defaultValue={0}
-                          onChange={(val) => updateAdj({ remove_white_bg: val })}
-                          className="mt-2 border-b border-border pb-3"
-                        />
+                        <div className="mt-2 border-b border-border pb-3">
+                          <ColorPickerPanel 
+                            colors={extractedColors}
+                            value={removeBgColor}
+                            onChange={(c) => updateAdj({ remove_bg_color: c })}
+                            allowTransparent={false}
+                            className="pb-2"
+                            title="抠除底色"
+                          />
+                          <SliderControl
+                            label="抠除强度"
+                            value={removeWhiteBg}
+                            min={0}
+                            max={100}
+                            step={1}
+                            defaultValue={0}
+                            onChange={(val) => updateAdj({ remove_white_bg: val })}
+                          />
+                        </div>
                         <SliderControl
                           label="缩放比例"
                           value={scale}
