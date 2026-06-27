@@ -129,8 +129,13 @@ chmod +x release.sh
 ```text
 release/storybook-co-editor.app
 release/storybook-co-editor_1.1.2_aarch64.dmg
+release/storybook-co-editor.app.zip
 release/storybook-co-editor-extension-v1.1.2.zip
+release/SHA256SUMS.txt
+release/RELEASE_NOTES_v1.1.2.md
 ```
+
+详细手动发布流程见 [RELEASE.md](RELEASE.md)。
 
 ## 技术栈
 

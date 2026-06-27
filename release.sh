@@ -1,29 +1,118 @@
 #!/usr/bin/env bash
-set -e
+set -euo pipefail
+
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+RELEASE_DIR="$ROOT_DIR/release"
+
+require_cmd() {
+  if ! command -v "$1" >/dev/null 2>&1; then
+    echo "Missing required command: $1" >&2
+    exit 1
+  fi
+}
+
+json_version() {
+  node -e "console.log(require(process.argv[1]).version)" "$1"
+}
+
+require_cmd node
+require_cmd pnpm
+require_cmd zip
+require_cmd shasum
+
+APP_VERSION="$(json_version "$ROOT_DIR/app/package.json")"
+TAURI_VERSION="$(json_version "$ROOT_DIR/app/src-tauri/tauri.conf.json")"
+CARGO_VERSION="$(awk -F'"' '/^version =/ { print $2; exit }' "$ROOT_DIR/app/src-tauri/Cargo.toml")"
+EXT_VERSION="$(json_version "$ROOT_DIR/extension/package.json")"
+MANIFEST_VERSION="$(json_version "$ROOT_DIR/extension/public/manifest.json")"
+
+if [[ "$APP_VERSION" != "$TAURI_VERSION" || "$APP_VERSION" != "$CARGO_VERSION" || "$APP_VERSION" != "$EXT_VERSION" || "$APP_VERSION" != "$MANIFEST_VERSION" ]]; then
+  echo "Version mismatch:" >&2
+  echo "  app/package.json: $APP_VERSION" >&2
+  echo "  app/src-tauri/tauri.conf.json: $TAURI_VERSION" >&2
+  echo "  app/src-tauri/Cargo.toml: $CARGO_VERSION" >&2
+  echo "  extension/package.json: $EXT_VERSION" >&2
+  echo "  extension/public/manifest.json: $MANIFEST_VERSION" >&2
+  exit 1
+fi
+
+VERSION="$APP_VERSION"
 
 echo "🧹 Cleaning up release directory..."
-mkdir -p release
-rm -rf release/*
+mkdir -p "$RELEASE_DIR"
+find "$RELEASE_DIR" -mindepth 1 -maxdepth 1 -exec rm -rf {} +
 
 echo "📦 Building Chrome Extension..."
-cd extension
-pnpm install
+cd "$ROOT_DIR/extension"
+pnpm install --frozen-lockfile
 pnpm run build
 cd dist
-EXT_VERSION=$(grep '"version"' ../package.json | head -1 | awk -F'"' '{print $4}')
-zip -r ../../release/storybook-co-editor-extension-v${EXT_VERSION}.zip . > /dev/null
-cd ../../
+zip -qry "$RELEASE_DIR/storybook-co-editor-extension-v${VERSION}.zip" . -x "*.DS_Store"
 
 echo "🚀 Building Tauri App..."
-cd app
-pnpm install
+cd "$ROOT_DIR/app"
+pnpm install --frozen-lockfile
 pnpm tauri build
-APP_VERSION=$(grep '"version"' src-tauri/tauri.conf.json | head -1 | awk -F'"' '{print $4}')
 
 echo "🚚 Copying Tauri App artifacts..."
-cp -r src-tauri/target/release/bundle/macos/storybook-co-editor.app ../release/
-cp src-tauri/target/release/bundle/dmg/*.dmg ../release/
-cd ..
+APP_BUNDLE="$ROOT_DIR/app/src-tauri/target/release/bundle/macos/storybook-co-editor.app"
+DMG_PATH="$(find "$ROOT_DIR/app/src-tauri/target/release/bundle/dmg" -maxdepth 1 -name "*.dmg" -print -quit)"
+
+if [[ ! -d "$APP_BUNDLE" ]]; then
+  echo "Missing app bundle: $APP_BUNDLE" >&2
+  exit 1
+fi
+
+if [[ -z "$DMG_PATH" || ! -f "$DMG_PATH" ]]; then
+  echo "Missing DMG artifact under app/src-tauri/target/release/bundle/dmg" >&2
+  exit 1
+fi
+
+cp -R "$APP_BUNDLE" "$RELEASE_DIR/"
+cp "$DMG_PATH" "$RELEASE_DIR/"
+
+echo "🗜️  Creating app zip..."
+if command -v ditto >/dev/null 2>&1; then
+  ditto -c -k --sequesterRsrc --keepParent "$APP_BUNDLE" "$RELEASE_DIR/storybook-co-editor.app.zip"
+else
+  cd "$(dirname "$APP_BUNDLE")"
+  zip -qry "$RELEASE_DIR/storybook-co-editor.app.zip" "$(basename "$APP_BUNDLE")" -x "*.DS_Store"
+fi
+
+DMG_NAME="$(basename "$DMG_PATH")"
+
+echo "🧾 Writing checksums..."
+cd "$RELEASE_DIR"
+shasum -a 256 \
+  "$DMG_NAME" \
+  "storybook-co-editor-extension-v${VERSION}.zip" \
+  "storybook-co-editor.app.zip" \
+  > SHA256SUMS.txt
+
+cat > "RELEASE_NOTES_v${VERSION}.md" <<EOF
+## Storybook Co-Editor v${VERSION}
+
+本次发布提供 macOS 桌面端和 Chrome 扩展手动安装包。
+
+### 下载内容
+
+- \`$DMG_NAME\`: macOS 安装镜像，推荐普通用户下载。
+- \`storybook-co-editor.app.zip\`: macOS App Bundle 压缩包，适合直接解压测试。
+- \`storybook-co-editor-extension-v${VERSION}.zip\`: Chrome 扩展包，解压后通过开发者模式加载。
+- \`SHA256SUMS.txt\`: 发布产物校验和。
+
+### 安装说明
+
+1. 安装并启动 macOS 桌面端。
+2. 解压 Chrome 扩展包。
+3. 打开 \`chrome://extensions\`，启用开发者模式，选择解压后的扩展目录加载。
+4. 在支持的网页上悬停图片，使用“发送”按钮同步到桌面端。
+
+### 注意事项
+
+- 当前构建未包含 Apple notarization。macOS 首次打开时如果出现安全提示，请在 Finder 中右键打开，或到系统设置中允许打开。
+- PDF 的 CMYK 转换依赖 Ghostscript。如需使用该功能，请先安装：\`brew install ghostscript\`。
+EOF
 
 echo "✅ Release build complete! All artifacts are in the 'release' directory."
-ls -la release/
+ls -la "$RELEASE_DIR"
