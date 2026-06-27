@@ -19,6 +19,7 @@ require_cmd node
 require_cmd pnpm
 require_cmd zip
 require_cmd shasum
+require_cmd hdiutil
 
 APP_VERSION="$(json_version "$ROOT_DIR/app/package.json")"
 TAURI_VERSION="$(json_version "$ROOT_DIR/app/src-tauri/tauri.conf.json")"
@@ -52,34 +53,48 @@ zip -qry "$RELEASE_DIR/storybook-co-editor-extension-v${VERSION}.zip" . -x "*.DS
 echo "🚀 Building Tauri App..."
 cd "$ROOT_DIR/app"
 pnpm install --frozen-lockfile
-pnpm tauri build
+pnpm tauri build --bundles app
 
 echo "🚚 Copying Tauri App artifacts..."
 APP_BUNDLE="$ROOT_DIR/app/src-tauri/target/release/bundle/macos/storybook-co-editor.app"
-DMG_PATH="$(find "$ROOT_DIR/app/src-tauri/target/release/bundle/dmg" -maxdepth 1 -name "*.dmg" -print -quit)"
 
 if [[ ! -d "$APP_BUNDLE" ]]; then
   echo "Missing app bundle: $APP_BUNDLE" >&2
   exit 1
 fi
 
-if [[ -z "$DMG_PATH" || ! -f "$DMG_PATH" ]]; then
-  echo "Missing DMG artifact under app/src-tauri/target/release/bundle/dmg" >&2
-  exit 1
-fi
-
 cp -R "$APP_BUNDLE" "$RELEASE_DIR/"
-cp "$DMG_PATH" "$RELEASE_DIR/"
+
+APP_RELEASE_BUNDLE="$RELEASE_DIR/storybook-co-editor.app"
+case "$(uname -m)" in
+  arm64) TARGET_ARCH="aarch64" ;;
+  x86_64) TARGET_ARCH="x64" ;;
+  *) TARGET_ARCH="$(uname -m)" ;;
+esac
+DMG_NAME="storybook-co-editor_${VERSION}_${TARGET_ARCH}.dmg"
+
+echo "💿 Creating simple DMG..."
+DMG_STAGE="$(mktemp -d)"
+cleanup() {
+  rm -rf "$DMG_STAGE"
+}
+trap cleanup EXIT
+cp -R "$APP_BUNDLE" "$DMG_STAGE/"
+ln -s /Applications "$DMG_STAGE/Applications"
+hdiutil create \
+  -volname "Storybook Co-Editor" \
+  -srcfolder "$DMG_STAGE" \
+  -ov \
+  -format UDZO \
+  "$RELEASE_DIR/$DMG_NAME"
 
 echo "🗜️  Creating app zip..."
 if command -v ditto >/dev/null 2>&1; then
-  ditto -c -k --sequesterRsrc --keepParent "$APP_BUNDLE" "$RELEASE_DIR/storybook-co-editor.app.zip"
+  ditto -c -k --sequesterRsrc --keepParent "$APP_RELEASE_BUNDLE" "$RELEASE_DIR/storybook-co-editor.app.zip"
 else
-  cd "$(dirname "$APP_BUNDLE")"
-  zip -qry "$RELEASE_DIR/storybook-co-editor.app.zip" "$(basename "$APP_BUNDLE")" -x "*.DS_Store"
+  cd "$RELEASE_DIR"
+  zip -qry "$RELEASE_DIR/storybook-co-editor.app.zip" "$(basename "$APP_RELEASE_BUNDLE")" -x "*.DS_Store"
 fi
-
-DMG_NAME="$(basename "$DMG_PATH")"
 
 echo "🧾 Writing checksums..."
 cd "$RELEASE_DIR"
@@ -113,6 +128,8 @@ cat > "RELEASE_NOTES_v${VERSION}.md" <<EOF
 - 当前构建未包含 Apple notarization。macOS 首次打开时如果出现安全提示，请在 Finder 中右键打开，或到系统设置中允许打开。
 - PDF 的 CMYK 转换依赖 Ghostscript。如需使用该功能，请先安装：\`brew install ghostscript\`。
 EOF
+
+find "$RELEASE_DIR" -name ".DS_Store" -delete
 
 echo "✅ Release build complete! All artifacts are in the 'release' directory."
 ls -la "$RELEASE_DIR"
