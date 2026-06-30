@@ -126,7 +126,6 @@ cat > "RELEASE_NOTES_v${VERSION}.md" <<EOF
 ### 注意事项
 
 - 当前构建未包含 Apple notarization。macOS 首次打开时如果出现安全提示，请在 Finder 中右键打开，或到系统设置中允许打开。
-- PDF 的 CMYK 转换依赖 Ghostscript。如需使用该功能，请先安装：\`brew install ghostscript\`。
 EOF
 
 find "$RELEASE_DIR" -name ".DS_Store" -delete

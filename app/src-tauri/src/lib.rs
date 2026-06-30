@@ -1,4 +1,3 @@
-mod pdf_exporter;
 mod project_manager;
 
 use axum::{
@@ -702,7 +701,6 @@ pub fn run() {
             project_manager::close_project,
             project_manager::update_project_state,
             project_manager::get_system_fonts,
-            pdf_exporter::convert_to_cmyk,
             greet
         ])
         .run(tauri::generate_context!())

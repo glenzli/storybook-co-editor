@@ -8,56 +8,145 @@
   <img alt="License" src="https://img.shields.io/badge/license-MIT-green.svg" />
 </p>
 
-Storybook Co-Editor 是一套面向 AI 绘本和网页绘本内容的本地协同排版工具。它由 Chrome 扩展和 Tauri 桌面端组成：扩展负责从网页里捕获插图，桌面端负责分页整理、图文排版、图像微调和印前 PDF 导出。
+Storybook Co-Editor 是一套面向 AI 绘本和网页绘本内容的本地协同排版工具。它把“网页生成图片”到“本地印前 PDF”的流程串起来：Chrome 扩展负责抓取插图，Tauri 桌面端负责分页、文字排版、图像微调、项目保存和印前拼版。
 
-当前版本：`1.1.2`
+适合用 ChatGPT、Gemini、Midjourney、Discord 或其他网页工具生成绘本后，把图片整理成可编辑、可保存、可导出的本地项目。
+
+- 当前版本：`1.1.2`
+- 下载发布版：[GitHub Releases](https://github.com/glenzli/storybook-co-editor/releases)
+- 项目格式：`.scproj`
+- 本地桥接：`http://127.0.0.1:14320`
 
 ## 预览
 
-**桌面端编辑器**
+**Chrome 扩展：网页悬浮捕获**
 
-<img src="docs/images/app-editor.png" alt="Storybook Co-Editor desktop editor" width="100%" />
+在支持页面里悬停图片，直接发送到本地编辑器；也可以设为参考图，用于后续风格对齐。
 
-**Chrome 扩展网页浮层**
+<img src="docs/images/extension-overlay.png" alt="Chrome extension capture overlay" width="680" />
 
-<img src="docs/images/extension-overlay.png" alt="Storybook Co-Editor Chrome extension overlay" width="560" />
+**内容编辑：分页、封面、扉页、正文和文字样式**
 
-## 主要能力
+左侧管理绘本页序，中间预览画布，右侧统一调整脚本、字体、字号、颜色、描边、底板和偏移。
 
-- 网页采集：在 ChatGPT、OpenAI、Discord、Midjourney、Gemini 等页面悬停大图后，可直接发送到本地编辑器。
-- 绘本分页：支持页面拖拽排序、移动到顶部/底部、删除、恢复、复制和导出原图。
-- 文本脚本：使用 `[Cover]`、`[Title]`、`[Author]`、`[1]` 等标签维护整本绘本文字。
-- 图文排版：分别调整封面、扉页、正文和作者署名的字体、字号、颜色、描边、底板和 XY 偏移。
-- 图像微调：支持曝光、亮度、对比度、高光、阴影、饱和度、色温、色调、局部 HSL 和指定底色抠除。
-- 印前拼版：支持骑马钉、无线胶装、蝴蝶对裱，支持 1-up/2-up、裁切线、胶装边距和硬件边距。
-- 项目管理：项目保存为 `.scproj`，内含 `project.json`、图片资源和回收站内容。
+<img src="docs/images/app-editor.png" alt="Storybook Co-Editor content editor" width="100%" />
 
-## 工作流
+**脚本编辑：用标签把文字绑定到页面**
+
+在脚本面板里维护整本书的文字，`[Cover]`、`[Author]`、`[Title]` 和数字页会自动映射到对应页面预览。
+
+<img src="docs/images/app-script-editor.png" alt="Storybook Co-Editor script editor" width="100%" />
+
+**图像微调：针对单页做本地图像处理**
+
+支持画布底色、指定底色抠除、缩放偏移、曝光、阴影、高光、饱和度、色温、色调和局部 HSL。
+
+<img src="docs/images/app-image-tuning.png" alt="Storybook Co-Editor image tuning panel" width="100%" />
+
+**印前拼版：面向实际打印的物理预览**
+
+在 A4/A5/A3 等纸张上预览单页或双页拼版，配置装订方式、胶区留白、硬件边距、裁切线和双面打印。
+
+<img src="docs/images/app-prepress.png" alt="Storybook Co-Editor pre-press preview" width="100%" />
+
+## 核心流程
 
 ```mermaid
 flowchart LR
-  A["网页绘本 / AI 生成页面"] --> B["Chrome 扩展捕获图片"]
-  B --> C["本地服务 127.0.0.1:14320"]
-  C --> D["Tauri 桌面编辑器"]
-  D --> E["分页 / 文本 / 图像微调"]
-  E --> F["印前拼版"]
-  F --> G["PDF 导出"]
+  A["网页生成绘本图片"] --> B["Chrome 扩展发送"]
+  B --> C["本地桥接服务 127.0.0.1:14320"]
+  C --> D["Tauri 桌面项目"]
+  D --> E["分页与脚本排版"]
+  E --> F["图像微调"]
+  F --> G["印前拼版"]
+  G --> H["PDF 导出"]
 ```
 
-## 仓库结构
+## 功能一览
+
+**网页采集**
+
+- 图片悬浮按钮：`发送`、`参考`。
+- 支持从网页 DOM、懒加载图片、常见 AI 图片 URL 中提取图片。
+- 图片以 base64 或 URL 方式发送到本地桌面端。
+- 根据图片内容哈希去重，避免重复导入同一张图。
+
+**本地绘本编辑**
+
+- 左侧分页列表支持拖拽排序、置顶、置底、删除、恢复、复制和导出原图。
+- 支持插入虚拟空白页 `blank://`，用于补齐印刷页数。
+- 支持封面、扉页、正文、作者署名的独立样式。
+- 脚本标签支持英文和中文：`[Cover]`、`[封面]`、`[Title]`、`[扉页]`、`[Author]`、`[作者]`、`[1]`、`[2]`。
+
+**图像处理**
+
+- 基础调色：亮度、曝光、对比度、高光、阴影、饱和度、色温、色调。
+- 局部调色：按目标色相做 HSL 偏移，适合统一 AI 出图色彩。
+- 背景处理：指定底色抠除，解决 AI 图片边缘泛白、泛黄或泛灰问题。
+- 页面级微调：每页独立保存缩放、偏移、底色和图像参数。
+
+**印前与导出**
+
+- 支持骑马钉、无线胶装、蝴蝶对裱等常见装订方式。
+- 支持 1-up / 2-up 拼版、正反面预览、裁切线、胶区留白和硬件边距。
+- 导出时使用 Canvas 渲染文字，保持预览和 PDF 的位置一致。
+
+**项目管理**
+
+- `.scproj` 是 zip 项目包，包含 `project.json`、图片资源和回收站。
+- 支持最近项目、保存、另存为、自动保存、撤销和重做。
+- 所有编辑在本地完成，不依赖远程服务。
+
+## 下载安装
+
+从 [Releases](https://github.com/glenzli/storybook-co-editor/releases) 下载对应版本：
 
 ```text
-.
-├── app/                 # Tauri 桌面端：React 前端 + Rust 后端
-│   ├── src/             # 编辑器、拼版、组件和图像处理逻辑
-│   └── src-tauri/       # 本地 HTTP 服务、项目管理、PDF/CMYK 能力
-├── extension/           # Chrome Manifest V3 扩展
-│   ├── src/content.ts   # 网页注入层：图片浮层、发送、参考图
-│   └── src/background.ts# 转发图片到本地桌面端
-├── docs/images/         # README 截图资源
-├── release/             # 构建产物输出目录
-└── release.sh           # 一键构建扩展和 macOS 桌面端
+storybook-co-editor_1.1.2_aarch64.dmg
+storybook-co-editor-extension-v1.1.2.zip
 ```
+
+安装步骤：
+
+1. 安装并打开 macOS 桌面端。
+2. 解压 Chrome 扩展包。
+3. 打开 `chrome://extensions`，启用开发者模式。
+4. 选择解压后的扩展目录加载。
+5. 保持桌面端打开，在网页图片上点击扩展浮层的 `发送`。
+
+说明：
+
+- 当前 macOS 包未做 Apple notarization。首次打开如遇安全提示，可在 Finder 中右键打开，或到系统设置中允许打开。
+
+## 脚本文本格式
+
+右侧脚本区按标签拆分文字并映射到页面：
+
+```text
+[Cover]
+大闹天宫
+
+[Author]
+匿名
+
+[Title]
+
+[1]
+云端之上，金箍棒搅动天宫。
+
+[2]
+猴王立在云海边，看见远处宫阙连绵。
+
+[3]
+风卷起云层，天兵天将从四面八方赶来。
+```
+
+规则：
+
+- `[Cover]` 或 `[封面]` 映射第 0 页。
+- `[Author]` 或 `[作者]` 映射封面作者署名。
+- `[Title]` 或 `[扉页]` 映射扉页；如果存在扉页，正文数字页会自动后移。
+- `[1]`、`[2]` 等数字标签映射正文页。
 
 ## 本地开发
 
@@ -75,8 +164,6 @@ pnpm tauri dev
 http://127.0.0.1:14320
 ```
 
-扩展会通过这个地址把图片和批次状态同步给桌面端。
-
 ### Chrome 扩展
 
 ```bash
@@ -87,33 +174,20 @@ pnpm dev
 
 然后在 Chrome 打开 `chrome://extensions`，启用开发者模式，选择 `extension/dist` 作为 unpacked extension 加载。
 
-## 脚本文本格式
-
-编辑器右侧脚本区按标签拆分文字并映射到页面：
+## 仓库结构
 
 ```text
-[Cover]
-Dr. Stochastic Parrot
-
-[Author]
-by Storybook Co-Editor
-
-[Title]
-关于随机鹦鹉博士的故事
-
-[1]
-森林深处，住着一位喜欢研究概率的鹦鹉博士。
-
-[2]
-他每天都会记录风、羽毛和机械齿轮之间的奇妙关系。
+.
+├── app/                 # Tauri 桌面端：React 前端 + Rust 后端
+│   ├── src/             # 编辑器、拼版、组件和图像处理逻辑
+│   └── src-tauri/       # 本地 HTTP 服务和项目管理
+├── extension/           # Chrome Manifest V3 扩展
+│   ├── src/content.ts   # 网页注入层：图片浮层、发送、参考图
+│   └── src/background.ts# 转发图片到本地桌面端
+├── docs/images/         # README 截图资源
+├── release/             # 本地构建产物输出目录
+└── release.sh           # 手动 release 构建脚本
 ```
-
-说明：
-
-- `[Cover]` 映射封面。
-- `[Author]` 映射封面作者署名。
-- `[Title]` 映射扉页；如果存在扉页，正文页码会自动后移。
-- `[1]`、`[2]` 等数字标签映射正文页。
 
 ## 构建发布
 
@@ -142,7 +216,7 @@ release/RELEASE_NOTES_v1.1.2.md
 - Desktop: Tauri 2, Rust, Axum, Tokio
 - Frontend: React 19, Vite, TypeScript, Tailwind CSS
 - Extension: Chrome Manifest V3, TypeScript, Vite
-- Export: html2canvas, jsPDF, Ghostscript CMYK conversion
+- Export: html2canvas, jsPDF
 
 ## License
 

@@ -77,9 +77,3 @@ gh release create v1.1.2 \
 The current macOS build is not notarized. If macOS blocks the first launch, open the app from Finder with right-click > Open, or allow it in System Settings.
 
 The Chrome extension package is not published through the Chrome Web Store. Users should unzip it, open `chrome://extensions`, enable Developer Mode, and load the unzipped folder.
-
-CMYK PDF conversion requires Ghostscript:
-
-```bash
-brew install ghostscript
-```

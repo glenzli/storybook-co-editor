@@ -3,8 +3,7 @@ import { useProject } from './ProjectContext';
 import { ProImage } from './components/ProImage';
 import { Printer, Download, AlertTriangle, FileText, RefreshCw } from 'lucide-react';
 import { save } from '@tauri-apps/plugin-dialog';
-import { writeFile, remove } from '@tauri-apps/plugin-fs';
-import { invoke } from '@tauri-apps/api/core';
+import { writeFile } from '@tauri-apps/plugin-fs';
 import html2canvas from 'html2canvas';
 import { jsPDF } from 'jspdf';
 
@@ -132,7 +131,6 @@ export default function PrintScreen() {
             auto_snap_content: true,
             crop_marks: true,
             double_sided: true,
-            cmyk_convert: false,
             offset_x: 0.0,
             offset_y: 0.0,
             ...s
@@ -470,30 +468,8 @@ export default function PrintScreen() {
 
             if (filePath) {
                 const arrayBuffer = pdf.output('arraybuffer');
-                
-                if (settings.cmyk_convert) {
-                    setExportProgress(99);
-                    setExportStatusText('正在调用 Ghostscript 引擎转换 CMYK...');
-                    try {
-                        const res = await invoke<{ success: boolean; error_msg: string | null }>('convert_to_cmyk', {
-                            pdfData: Array.from(new Uint8Array(arrayBuffer)),
-                            outputPath: filePath
-                        });
-                        
-                        if (res.success) {
-                            alert(`成功导出印前专业 CMYK 版至：\n${filePath}`);
-                        } else {
-                            await writeFile(filePath, new Uint8Array(arrayBuffer));
-                            alert(`专业 CMYK 色彩转换失败，已回退保存为 RGB 版本。\n\n后端错误：\n${res.error_msg}`);
-                        }
-                    } catch (invokeErr) {
-                        await writeFile(filePath, new Uint8Array(arrayBuffer));
-                        alert(`调用转换引擎失败，已回退保存为 RGB 版本。\n\n错误信息：\n${invokeErr}`);
-                    }
-                } else {
-                    await writeFile(filePath, new Uint8Array(arrayBuffer));
-                    alert(`成功导出 PDF 至：\n${filePath}`);
-                }
+                await writeFile(filePath, new Uint8Array(arrayBuffer));
+                alert(`成功导出 PDF 至：\n${filePath}`);
             }
         } catch (err) {
             console.error('PDF export failed:', err);
@@ -1018,10 +994,6 @@ export default function PrintScreen() {
                 </div>
 
                 <div className="p-4 border-t border-border">
-                    <label className="flex items-center gap-2 mb-3 cursor-pointer">
-                        <input type="checkbox" checked={settings.cmyk_convert} onChange={e => updateSettings({ cmyk_convert: e.target.checked })} className="accent-primary w-4 h-4" />
-                        <span className="text-sm">导出时转换 CMYK 色彩空间</span>
-                    </label>
                     <button 
                         onClick={generatePDF}
                         disabled={isExporting || renderedSheetCount < imposedSheets.length}

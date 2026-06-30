@@ -131,6 +131,10 @@ export function migrateProjectState(rawState: any): ProjectState {
         state.schema_version = 2;
     }
 
+    if (state.print_settings && typeof state.print_settings === 'object') {
+        delete state.print_settings.cmyk_convert;
+    }
+
     return state as ProjectState;
 }
 
