@@ -1,6 +1,10 @@
 # Storybook Co-Editor
 
 <p align="center">
+  <img src="docs/images/banner.png" alt="Storybook Co-Editor banner" width="100%" />
+</p>
+
+<p align="center">
   <img alt="Version" src="https://img.shields.io/badge/version-1.1.3-blue.svg?cacheSeconds=2592000" />
   <img alt="Tauri" src="https://img.shields.io/badge/Tauri-2-FFC131?logo=tauri&logoColor=white" />
   <img alt="React" src="https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=white" />
