@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Storybook Co-Editor",
-  "version": "1.1.2",
+  "version": "1.1.3",
   "description": "Capture images and layout metadata for the Storybook Co-Editor.",
   "permissions": [
     "activeTab",

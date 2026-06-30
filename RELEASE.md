@@ -13,7 +13,7 @@ git status --short
 2. Confirm all public versions match.
 
 ```bash
-rg -n '"version": "1.1.2"|version = "1.1.2"|v1.1.2' \
+rg -n '"version": "1.1.3"|version = "1.1.3"|v1.1.3' \
   app/package.json \
   app/src-tauri/tauri.conf.json \
   app/src-tauri/Cargo.toml \
@@ -32,12 +32,12 @@ rg -n '"version": "1.1.2"|version = "1.1.2"|v1.1.2' \
 The script writes artifacts to `release/`:
 
 ```text
-storybook-co-editor_1.1.2_aarch64.dmg
+storybook-co-editor_1.1.3_aarch64.dmg
 storybook-co-editor.app
 storybook-co-editor.app.zip
-storybook-co-editor-extension-v1.1.2.zip
+storybook-co-editor-extension-v1.1.3.zip
 SHA256SUMS.txt
-RELEASE_NOTES_v1.1.2.md
+RELEASE_NOTES_v1.1.3.md
 ```
 
 4. Smoke test the build.
@@ -51,22 +51,22 @@ RELEASE_NOTES_v1.1.2.md
 5. Create and push the version tag.
 
 ```bash
-git tag -a v1.1.2 -m "Storybook Co-Editor v1.1.2"
+git tag -a v1.1.3 -m "Storybook Co-Editor v1.1.3"
 git push origin main
-git push origin v1.1.2
+git push origin v1.1.3
 ```
 
 6. Create a draft GitHub Release.
 
 ```bash
-gh release create v1.1.2 \
-  release/storybook-co-editor_1.1.2_aarch64.dmg \
+gh release create v1.1.3 \
+  release/storybook-co-editor_1.1.3_aarch64.dmg \
   release/storybook-co-editor.app.zip \
-  release/storybook-co-editor-extension-v1.1.2.zip \
+  release/storybook-co-editor-extension-v1.1.3.zip \
   release/SHA256SUMS.txt \
   --repo glenzli/storybook-co-editor \
-  --title "Storybook Co-Editor v1.1.2" \
-  --notes-file release/RELEASE_NOTES_v1.1.2.md \
+  --title "Storybook Co-Editor v1.1.3" \
+  --notes-file release/RELEASE_NOTES_v1.1.3.md \
   --draft
 ```
 

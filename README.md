@@ -1,7 +1,7 @@
 # Storybook Co-Editor
 
 <p align="center">
-  <img alt="Version" src="https://img.shields.io/badge/version-1.1.2-blue.svg?cacheSeconds=2592000" />
+  <img alt="Version" src="https://img.shields.io/badge/version-1.1.3-blue.svg?cacheSeconds=2592000" />
   <img alt="Tauri" src="https://img.shields.io/badge/Tauri-2-FFC131?logo=tauri&logoColor=white" />
   <img alt="React" src="https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=white" />
   <img alt="Rust" src="https://img.shields.io/badge/Rust-1.77-000000?logo=rust&logoColor=white" />
@@ -12,7 +12,7 @@ Storybook Co-Editor 是一套面向 AI 绘本和网页绘本内容的本地协�
 
 适合用 ChatGPT、Gemini、Midjourney、Discord 或其他网页工具生成绘本后，把图片整理成可编辑、可保存、可导出的本地项目。
 
-- 当前版本：`1.1.2`
+- 当前版本：`1.1.3`
 - 下载发布版：[GitHub Releases](https://github.com/glenzli/storybook-co-editor/releases)
 - 项目格式：`.scproj`
 - 本地桥接：`http://127.0.0.1:14320`
@@ -102,8 +102,8 @@ flowchart LR
 从 [Releases](https://github.com/glenzli/storybook-co-editor/releases) 下载对应版本：
 
 ```text
-storybook-co-editor_1.1.2_aarch64.dmg
-storybook-co-editor-extension-v1.1.2.zip
+storybook-co-editor_1.1.3_aarch64.dmg
+storybook-co-editor-extension-v1.1.3.zip
 ```
 
 安装步骤：
@@ -202,11 +202,11 @@ chmod +x release.sh
 
 ```text
 release/storybook-co-editor.app
-release/storybook-co-editor_1.1.2_aarch64.dmg
+release/storybook-co-editor_1.1.3_aarch64.dmg
 release/storybook-co-editor.app.zip
-release/storybook-co-editor-extension-v1.1.2.zip
+release/storybook-co-editor-extension-v1.1.3.zip
 release/SHA256SUMS.txt
-release/RELEASE_NOTES_v1.1.2.md
+release/RELEASE_NOTES_v1.1.3.md
 ```
 
 详细手动发布流程见 [RELEASE.md](RELEASE.md)。

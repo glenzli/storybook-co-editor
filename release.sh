@@ -3,6 +3,7 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 RELEASE_DIR="$ROOT_DIR/release"
+export CI="${CI:-true}"
 
 require_cmd() {
   if ! command -v "$1" >/dev/null 2>&1; then
@@ -45,14 +46,14 @@ find "$RELEASE_DIR" -mindepth 1 -maxdepth 1 -exec rm -rf {} +
 
 echo "📦 Building Chrome Extension..."
 cd "$ROOT_DIR/extension"
-pnpm install --frozen-lockfile
+pnpm install --frozen-lockfile --ignore-scripts=true
 pnpm run build
 cd dist
 zip -qry "$RELEASE_DIR/storybook-co-editor-extension-v${VERSION}.zip" . -x "*.DS_Store"
 
 echo "🚀 Building Tauri App..."
 cd "$ROOT_DIR/app"
-pnpm install --frozen-lockfile
+pnpm install --frozen-lockfile --ignore-scripts=true
 pnpm tauri build --bundles app
 
 echo "🚚 Copying Tauri App artifacts..."

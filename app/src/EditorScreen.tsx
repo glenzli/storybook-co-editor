@@ -981,7 +981,7 @@ export default function EditorScreen() {
                   </div>
               )}
               <div className="flex items-center gap-4 text-xs font-mono text-muted-foreground/80">
-                  <span className="font-bold text-foreground/50">STORYBOOK CO-EDITOR v1.1.2</span>
+                  <span className="font-bold text-foreground/50">STORYBOOK CO-EDITOR v1.1.3</span>
                   <span>本地桥接已连接</span>
               </div>
           </div>
