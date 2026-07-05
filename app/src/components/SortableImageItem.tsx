@@ -4,6 +4,7 @@ import { CSS } from '@dnd-kit/utilities';
 import { Trash2 } from 'lucide-react';
 import { useThumbnail } from '../hooks/useThumbnail';
 import type { ProAdjustments } from '../utils/imageProcessor';
+import type { ImageAdjustments } from '../ProjectContext';
 
 export interface TextOverlayInfo {
   text: string;
@@ -25,21 +26,7 @@ interface SortableImageItemProps {
   onDelete: (id: string) => void;
   onContextMenu?: (e: React.MouseEvent, id: string, idx: number) => void;
   hasTitle?: boolean;
-  imageAdjustment?: {
-    scale?: number;
-    offset_x?: number;
-    offset_y?: number;
-    bg_color?: string;
-    brightness?: number;
-    exposure?: number;
-    highlights?: number;
-    shadows?: number;
-    contrast?: number;
-    saturate?: number;
-    temperature?: number;
-    tint?: number;
-    selective_colors?: any[];
-  };
+  imageAdjustment?: ImageAdjustments;
   textOverlays?: TextOverlayInfo[];
   canvasSize?: number; // canvas width for scaling text
 }
@@ -137,7 +124,8 @@ export const SortableImageItem = memo(function SortableImageItem({ id, idx, isSe
                 // Observe resize for sidebar drag
                 const ro = new ResizeObserver(update);
                 ro.observe(el);
-                (el as any).__ro = ro;
+                (el as HTMLDivElement & { __ro?: ResizeObserver }).__ro?.disconnect();
+                (el as HTMLDivElement & { __ro?: ResizeObserver }).__ro = ro;
               }}
               style={{
                 position: 'absolute',

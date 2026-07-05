@@ -98,7 +98,7 @@ export function useThumbnail(
         return () => {
             cancelRef.current = true;
         };
-    }, [adjKey]);
+    }, [adjKey, adjustments, bgColor, offsetX, offsetY, scale, src]);
 
     return thumb;
 }

@@ -44,6 +44,14 @@ echo "🧹 Cleaning up release directory..."
 mkdir -p "$RELEASE_DIR"
 find "$RELEASE_DIR" -mindepth 1 -maxdepth 1 -exec rm -rf {} +
 
+echo "📄 Copying license notices..."
+LICENSE_DIR="$RELEASE_DIR/licenses"
+FONT_LICENSE_DIR="$LICENSE_DIR/fonts"
+mkdir -p "$FONT_LICENSE_DIR"
+cp "$ROOT_DIR/LICENSE" "$LICENSE_DIR/LICENSE"
+cp "$ROOT_DIR/THIRD_PARTY_NOTICES.md" "$LICENSE_DIR/THIRD_PARTY_NOTICES.md"
+find "$ROOT_DIR/app/src/assets/fonts" -name "OFL-*.txt" -exec cp {} "$FONT_LICENSE_DIR/" \;
+
 echo "📦 Building Chrome Extension..."
 cd "$ROOT_DIR/extension"
 pnpm install --frozen-lockfile --ignore-scripts=true
@@ -75,12 +83,20 @@ esac
 DMG_NAME="storybook-co-editor_${VERSION}_${TARGET_ARCH}.dmg"
 
 echo "💿 Creating simple DMG..."
-DMG_STAGE="$(mktemp -d)"
+DMG_STAGE=""
+APP_ZIP_STAGE=""
 cleanup() {
-  rm -rf "$DMG_STAGE"
+  if [[ -n "$DMG_STAGE" ]]; then
+    rm -rf "$DMG_STAGE"
+  fi
+  if [[ -n "$APP_ZIP_STAGE" ]]; then
+    rm -rf "$APP_ZIP_STAGE"
+  fi
 }
 trap cleanup EXIT
+DMG_STAGE="$(mktemp -d)"
 cp -R "$APP_BUNDLE" "$DMG_STAGE/"
+cp -R "$LICENSE_DIR" "$DMG_STAGE/licenses"
 ln -s /Applications "$DMG_STAGE/Applications"
 hdiutil create \
   -volname "Storybook Co-Editor" \
@@ -90,12 +106,19 @@ hdiutil create \
   "$RELEASE_DIR/$DMG_NAME"
 
 echo "🗜️  Creating app zip..."
+APP_ZIP_STAGE="$(mktemp -d)"
+cp -R "$APP_RELEASE_BUNDLE" "$APP_ZIP_STAGE/"
+cp -R "$LICENSE_DIR" "$APP_ZIP_STAGE/licenses"
 if command -v ditto >/dev/null 2>&1; then
-  ditto -c -k --sequesterRsrc --keepParent "$APP_RELEASE_BUNDLE" "$RELEASE_DIR/storybook-co-editor.app.zip"
+  ditto -c -k --sequesterRsrc "$APP_ZIP_STAGE" "$RELEASE_DIR/storybook-co-editor.app.zip"
 else
-  cd "$RELEASE_DIR"
-  zip -qry "$RELEASE_DIR/storybook-co-editor.app.zip" "$(basename "$APP_RELEASE_BUNDLE")" -x "*.DS_Store"
+  cd "$APP_ZIP_STAGE"
+  zip -qry "$RELEASE_DIR/storybook-co-editor.app.zip" "$(basename "$APP_RELEASE_BUNDLE")" "licenses" -x "*.DS_Store"
 fi
+
+echo "🗂️  Creating license notices zip..."
+cd "$LICENSE_DIR"
+zip -qry "$RELEASE_DIR/storybook-co-editor-licenses-v${VERSION}.zip" . -x "*.DS_Store"
 
 echo "🧾 Writing checksums..."
 cd "$RELEASE_DIR"
@@ -103,6 +126,7 @@ shasum -a 256 \
   "$DMG_NAME" \
   "storybook-co-editor-extension-v${VERSION}.zip" \
   "storybook-co-editor.app.zip" \
+  "storybook-co-editor-licenses-v${VERSION}.zip" \
   > SHA256SUMS.txt
 
 cat > "RELEASE_NOTES_v${VERSION}.md" <<EOF
@@ -115,6 +139,7 @@ cat > "RELEASE_NOTES_v${VERSION}.md" <<EOF
 - \`$DMG_NAME\`: macOS 安装镜像，推荐普通用户下载。
 - \`storybook-co-editor.app.zip\`: macOS App Bundle 压缩包，适合直接解压测试。
 - \`storybook-co-editor-extension-v${VERSION}.zip\`: Chrome 扩展包，解压后通过开发者模式加载。
+- \`storybook-co-editor-licenses-v${VERSION}.zip\`: 应用和内置字体的许可证与第三方 notice。
 - \`SHA256SUMS.txt\`: 发布产物校验和。
 
 ### 安装说明

@@ -1,5 +1,6 @@
 /* eslint-disable react-refresh/only-export-components */
-import { createContext, useContext, useState, useEffect, useRef, useCallback, ReactNode } from 'react';
+import { createContext, useContext, useState, useEffect, useRef, useCallback } from 'react';
+import type { ReactNode } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import { load } from '@tauri-apps/plugin-store';
@@ -24,11 +25,14 @@ export interface SelectiveColor {
     d_lum: number;       // -100 to 100
     range?: number;      // 5 to 90 degrees falloff, default 25
 }
+
 export interface ImageAdjustments {
     offset_x?: number;
     offset_y?: number;
     scale?: number;
     bg_color?: string;
+    remove_white_bg?: number;
+    remove_bg_color?: string;
     brightness?: number;
     exposure?: number;
     highlights?: number;
@@ -55,6 +59,7 @@ export interface PrintSettings {
     offset_y: number;
     paper_alignment: 'center' | 'left' | 'top-left';
     auto_snap_content: boolean;
+    double_sided: boolean;
 }
 
 export interface ProjectState {
@@ -68,6 +73,7 @@ export interface ProjectState {
     cover_text_settings?: TextSettings;
     title_text_settings?: TextSettings;
     inner_text_settings?: TextSettings;
+    author_name?: string;
     image_adjustments?: Record<string, ImageAdjustments>;
     print_settings?: PrintSettings;
     canvas_width: number;
@@ -111,9 +117,14 @@ interface ProjectContextType {
 
 const ProjectContext = createContext<ProjectContextType | undefined>(undefined);
 
-export function migrateProjectState(rawState: any): ProjectState {
-    if (!rawState) return rawState;
-    const state = { ...rawState };
+type LegacyProjectState = Partial<ProjectState> & {
+    author_name?: string;
+    print_settings?: Partial<PrintSettings> & { cmyk_convert?: unknown };
+};
+
+export function migrateProjectState(rawState: unknown): ProjectState {
+    if (!rawState || typeof rawState !== 'object') return rawState as ProjectState;
+    const state = { ...(rawState as LegacyProjectState) };
     
     // Existing projects and v1 projects will get schema_version 1
     if (typeof state.schema_version !== 'number') {
@@ -158,7 +169,7 @@ export const ProjectProvider = ({ children }: { children: ReactNode }) => {
     useEffect(() => {
         // Load recent projects
         const loadRecent = async () => {
-            const store = await load('settings.json', { autoSave: false } as any);
+            const store = await load('settings.json', { defaults: {}, autoSave: false });
             const recent = await store.get<RecentProject[]>('recentProjects');
             if (recent) setRecentProjects(recent);
         };
@@ -188,10 +199,10 @@ export const ProjectProvider = ({ children }: { children: ReactNode }) => {
             unlisten.then(f => f());
             unlistenProgress.then(f => f());
         };
-    }, []);
+    }, [navigate]);
 
     const saveRecentToStore = async (projects: RecentProject[]) => {
-        const store = await load('settings.json', { autoSave: false } as any);
+        const store = await load('settings.json', { defaults: {}, autoSave: false });
         await store.set('recentProjects', projects);
         await store.save();
         setRecentProjects(projects);

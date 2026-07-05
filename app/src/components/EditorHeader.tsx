@@ -1,7 +1,9 @@
 import { FileBox, Undo2, Redo2, Save, FolderOpen, XCircle, Loader2 } from 'lucide-react';
+import type { ProjectState } from '../ProjectContext';
+import { LicenseNoticeButton } from './LicenseNoticeButton';
 
 interface EditorHeaderProps {
-  projectState: any;
+  projectState: ProjectState | null;
   isDirty: boolean;
   currentProjectPath: string | null;
   activeTab: 'edit' | 'print';
@@ -94,6 +96,7 @@ export function EditorHeader({
               <FolderOpen size={14} />
           </button>
           <div className="w-px h-4 bg-border mx-1"></div>
+          <LicenseNoticeButton compact className="text-muted-foreground hover:bg-muted hover:text-foreground" />
           <button onClick={closeProject} className="p-1.5 rounded-md hover:bg-red-500/10 text-red-500 transition-colors" title="关闭项目">
               <XCircle size={14} />
           </button>

@@ -3,7 +3,7 @@ export type LogLevel = 'debug' | 'info' | 'warn' | 'error';
 class LogManager {
     private moduleName: string;
     // Vite injects import.meta.env.DEV
-    private isDev = (import.meta as any).env ? (import.meta as any).env.DEV : true;
+    private isDev = import.meta.env ? import.meta.env.DEV : true;
 
     constructor(moduleName: string) {
         this.moduleName = moduleName;
@@ -14,23 +14,23 @@ class LogManager {
         return `[${time}] [${level.toUpperCase()}] [${this.moduleName}] ${msg}`;
     }
 
-    debug(msg: string, ...args: any[]) {
+    debug(msg: string, ...args: unknown[]) {
         if (this.isDev) {
             console.debug(this.formatMsg('debug', msg), ...args);
         }
     }
 
-    info(msg: string, ...args: any[]) {
+    info(msg: string, ...args: unknown[]) {
         if (this.isDev) {
             console.info(this.formatMsg('info', msg), ...args);
         }
     }
 
-    warn(msg: string, ...args: any[]) {
+    warn(msg: string, ...args: unknown[]) {
         console.warn(this.formatMsg('warn', msg), ...args);
     }
 
-    error(msg: string, ...args: any[]) {
+    error(msg: string, ...args: unknown[]) {
         console.error(this.formatMsg('error', msg), ...args);
     }
 }

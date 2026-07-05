@@ -12,6 +12,7 @@ export interface ProAdjustments {
         d_hue: number;
         d_sat: number;
         d_lum: number;
+        range?: number;
     }[];
     remove_white_bg?: number; // 0 to 100 (tolerance)
     remove_bg_color?: string; // target color to remove, defaults to #ffffff
@@ -74,9 +75,9 @@ export function applyProAdjustments(
     }
 
     for (let i = 0; i < len; i += 4) {
-        let origR = data[i];
-        let origG = data[i + 1];
-        let origB = data[i + 2];
+        const origR = data[i];
+        const origG = data[i + 1];
+        const origB = data[i + 2];
 
         // 0. Remove Background Color
         if (adj.remove_white_bg && adj.remove_white_bg > 0) {

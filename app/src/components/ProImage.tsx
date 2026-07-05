@@ -1,7 +1,8 @@
-import React, { useEffect, useRef } from 'react';
-import { applyProAdjustments, ProAdjustments } from '../utils/imageProcessor';
+import React, { useCallback, useEffect, useRef } from 'react';
+import { applyProAdjustments } from '../utils/imageProcessor';
+import type { ProAdjustments } from '../utils/imageProcessor';
 
-export interface ProImageProps extends React.ImgHTMLAttributes<HTMLCanvasElement> {
+export interface ProImageProps extends Omit<React.CanvasHTMLAttributes<HTMLCanvasElement>, 'onLoad'> {
     src: string;
     adjustments?: ProAdjustments;
     onLoad?: (img: HTMLImageElement) => void;
@@ -13,8 +14,18 @@ export const ProImage: React.FC<ProImageProps> = ({
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const imgRef = useRef<HTMLImageElement | null>(null);
     const renderTimeoutRef = useRef<number | null>(null);
+    const onLoadRef = useRef(onLoad);
+    const adjustmentsRef = useRef(adjustments);
 
-    const renderNow = (img: HTMLImageElement) => {
+    useEffect(() => {
+        onLoadRef.current = onLoad;
+    }, [onLoad]);
+
+    useEffect(() => {
+        adjustmentsRef.current = adjustments;
+    }, [adjustments]);
+
+    const renderNow = useCallback((img: HTMLImageElement) => {
         const canvas = canvasRef.current;
         if (!canvas) return;
         const ctx = canvas.getContext('2d', { willReadFrequently: true });
@@ -27,17 +38,18 @@ export const ProImage: React.FC<ProImageProps> = ({
 
         ctx.drawImage(img, 0, 0);
 
-        if (adjustments && (
-            adjustments.brightness !== 0 || adjustments.exposure !== 0 || adjustments.highlights !== 0 || adjustments.shadows !== 0 || 
-            adjustments.contrast !== 0 || adjustments.saturate !== 0 || adjustments.temperature !== 0 || adjustments.tint !== 0 ||
-            (adjustments.remove_white_bg && adjustments.remove_white_bg > 0) ||
-            (adjustments.selective_colors && adjustments.selective_colors.length > 0)
+        const activeAdjustments = adjustmentsRef.current;
+        if (activeAdjustments && (
+            activeAdjustments.brightness !== 0 || activeAdjustments.exposure !== 0 || activeAdjustments.highlights !== 0 || activeAdjustments.shadows !== 0 ||
+            activeAdjustments.contrast !== 0 || activeAdjustments.saturate !== 0 || activeAdjustments.temperature !== 0 || activeAdjustments.tint !== 0 ||
+            (activeAdjustments.remove_white_bg && activeAdjustments.remove_white_bg > 0) ||
+            (activeAdjustments.selective_colors && activeAdjustments.selective_colors.length > 0)
         )) {
             const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-            applyProAdjustments(imgData, adjustments);
+            applyProAdjustments(imgData, activeAdjustments);
             ctx.putImageData(imgData, 0, 0);
         }
-    };
+    }, []);
 
     useEffect(() => {
         if (!src) return;
@@ -47,10 +59,10 @@ export const ProImage: React.FC<ProImageProps> = ({
         img.onload = () => {
             imgRef.current = img;
             renderNow(img);
-            if (onLoad) onLoad(img);
+            onLoadRef.current?.(img);
         };
         img.onerror = () => {
-            if (onLoad) onLoad(img);
+            onLoadRef.current?.(img);
         };
         
         img.src = src.startsWith('blank://') 
@@ -60,7 +72,7 @@ export const ProImage: React.FC<ProImageProps> = ({
         return () => {
             imgRef.current = null;
         };
-    }, [src]);
+    }, [src, renderNow]);
 
     const adjString = JSON.stringify(adjustments || {});
     useEffect(() => {
@@ -72,7 +84,7 @@ export const ProImage: React.FC<ProImageProps> = ({
                 }
             });
         }
-    }, [adjString]);
+    }, [adjString, renderNow]);
 
     return (
         <canvas 

@@ -1,11 +1,12 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { useProject } from './ProjectContext';
+import { useProject, type PrintSettings } from './ProjectContext';
 import { ProImage } from './components/ProImage';
 import { Printer, Download, AlertTriangle, FileText, RefreshCw } from 'lucide-react';
 import { save } from '@tauri-apps/plugin-dialog';
 import { writeFile } from '@tauri-apps/plugin-fs';
 import html2canvas from 'html2canvas';
 import { jsPDF } from 'jspdf';
+import { getFontFamilyStack, waitForProjectFonts } from './utils/fonts';
 
 
 function getStrokeColor(hexColor: string): string {
@@ -25,7 +26,7 @@ export interface ImposedSheet {
   back?: { left: number | null, right: number | null };
 }
 
-function calculateImposition(images: string[], settings: any): ImposedSheet[] {
+function calculateImposition(images: string[], settings: PrintSettings): ImposedSheet[] {
   if (images.length === 0) return [];
   const sheets: ImposedSheet[] = [];
 
@@ -117,17 +118,19 @@ function calculateImposition(images: string[], settings: any): ImposedSheet[] {
 export default function PrintScreen() {
     const { projectState, updateProjectState } = useProject();
 
-    const settings = useMemo(() => {
+    const settings = useMemo<PrintSettings>(() => {
         const s = projectState?.print_settings || {};
         return {
             paper_size: 'A4',
             paper_orientation: 'landscape',
+            book_size: 'A5',
             layout_mode: '2-up',
             binding_method: 'saddle',
             has_back_cover: true,
             spine_mm: 5,
             binding_margin_mm: 15,
             hardware_margin_mm: 5,
+            paper_alignment: 'center',
             auto_snap_content: true,
             crop_marks: true,
             double_sided: true,
@@ -154,8 +157,12 @@ export default function PrintScreen() {
         setExportProgress(0);
 
         try {
+            setExportStatusText('加载字体...');
+            await waitForProjectFonts(projectState);
+            setExportStatusText('导出中...');
+
             document.body.classList.add('pdf-exporting');
-            await new Promise(resolve => setTimeout(resolve, 150));
+            await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
 
             const targets = document.querySelectorAll('.sheet-export-target');
             if (targets.length === 0) {
@@ -206,14 +213,11 @@ export default function PrintScreen() {
                         return;
                     }
                     
-                    let idx = 0;
-                    if (key === 'cover' || key === '封面') {
-                        idx = 0;
-                    } else if (key === 'title' || key === '扉页') {
-                        idx = 1;
-                    } else {
-                        idx = parseInt(key, 10) + (hasTitle ? 1 : 0);
-                    }
+                    const idx = key === 'cover' || key === '封面'
+                        ? 0
+                        : key === 'title' || key === '扉页'
+                          ? 1
+                          : parseInt(key, 10) + (hasTitle ? 1 : 0);
                     parsedScriptLocal.set(idx, text);
                 }
             });
@@ -222,14 +226,6 @@ export default function PrintScreen() {
             // then draw their text directly onto the captured canvas.
             const h2cScale = 5; // must match html2canvas scale above
             const baseBottomPx = 40; // Tailwind bottom-10 in canvas coords
-
-
-            // Map font family keys to canvas-compatible font strings
-            const mapFont = (ff: string) => {
-                if (ff === 'sans') return '"Helvetica Neue", "PingFang SC", sans-serif';
-                if (ff === 'serif') return 'Georgia, "Songti SC", serif';
-                return `"${ff}", "PingFang SC", sans-serif`;
-            };
 
             // Helper: get shadow color based on text brightness
             const getShadowColor = (hexColor: string) => {
@@ -288,7 +284,7 @@ export default function PrintScreen() {
                     ctx.setTransform(1, 0, 0, 1, 0, 0);
 
                     const scaledFontSize = fontSize * S * h2cScale;
-                    const fontStr = `${scaledFontSize}px ${mapFont(fontFamily)}`;
+                    const fontStr = `${scaledFontSize}px ${getFontFamilyStack(fontFamily)}`;
                     ctx.font = fontStr;
                     ctx.textAlign = 'center';
                     ctx.textBaseline = 'bottom';
@@ -298,8 +294,8 @@ export default function PrintScreen() {
                     const bottomY = (relTop + pageH - (baseBottomPx - oyCanvas) * S) * h2cScale;
 
                     // Handle multi-line text with auto-wrapping
-                    const maxWidth = (pageW - 48 * 2) * h2cScale;
-                    let lines: string[] = [];
+                    const maxWidth = (pageW - 48 * 2 * S) * h2cScale;
+                    const lines: string[] = [];
                     content.split('\n').forEach(paragraph => {
                         let currentLine = '';
                         for (const char of paragraph) {
@@ -482,7 +478,7 @@ export default function PrintScreen() {
         }
     };
 
-    const updateSettings = (updates: any) => {
+    const updateSettings = (updates: Partial<PrintSettings>) => {
         updateProjectState({ print_settings: { ...settings, ...updates } });
     };
 
@@ -534,8 +530,8 @@ export default function PrintScreen() {
         const effectiveOrientation = (settings.binding_method === 'saddle' || settings.binding_method === 'butterfly')
             ? 'landscape' : (settings.paper_orientation || 'landscape');
         const isLandscape = effectiveOrientation === 'landscape';
-        let w_mm = isLandscape ? pH_mm : pW_mm;
-        let h_mm = isLandscape ? pW_mm : pH_mm;
+        const w_mm = isLandscape ? pH_mm : pW_mm;
+        const h_mm = isLandscape ? pW_mm : pH_mm;
 
         const globalIs1up = settings.binding_method === 'perfect' && settings.layout_mode === '1-up';
         const bW_mm = globalIs1up ? w_mm : w_mm / 2;
@@ -619,14 +615,11 @@ export default function PrintScreen() {
                 if (key === 'author' || key === '作者') {
                     author = text;
                 } else {
-                    let idx = 0;
-                    if (key === 'cover' || key === '封面') {
-                        idx = 0;
-                    } else if (key === 'title' || key === '扉页') {
-                        idx = 1;
-                    } else {
-                        idx = parseInt(key, 10) + (hasTitle ? 1 : 0);
-                    }
+                    const idx = key === 'cover' || key === '封面'
+                        ? 0
+                        : key === 'title' || key === '扉页'
+                          ? 1
+                          : parseInt(key, 10) + (hasTitle ? 1 : 0);
                     map.set(idx, text);
                 }
             }
@@ -652,7 +645,7 @@ export default function PrintScreen() {
         const ts = isCover ? projectState?.cover_text_settings : (isTitle ? projectState?.title_text_settings : projectState?.inner_text_settings);
         const pageOverride = !isCover && !isTitle ? projectState?.page_text_overrides?.[String(pageIdx)] : undefined;
         const ff = ts?.font_family || 'serif';
-        const fontFamily = ff === 'sans' ? 'ui-sans-serif, system-ui, sans-serif' : ff === 'serif' ? 'ui-serif, Georgia, serif' : `'${ff}', sans-serif`;
+        const fontFamily = getFontFamilyStack(ff);
         const effectiveColor = (pageOverride?.text_color ?? ts?.text_color) || '#ffffff';
         const effectiveOffsetX = pageOverride?.offset_x ?? ts?.offset_x ?? 0;
         const effectiveOffsetY = pageOverride?.offset_y ?? ts?.offset_y ?? 0;
@@ -707,7 +700,7 @@ export default function PrintScreen() {
                     boxSizing: 'border-box',
                     pointerEvents: 'none' as const,
                 }}>
-                    <div className="text-center tracking-wide whitespace-pre-wrap" style={{
+                    <div className="text-center whitespace-pre-wrap" style={{
                         fontFamily: font,
                         fontSize: `${fontSize * S}px`,
                         lineHeight: 1.5,
@@ -804,7 +797,7 @@ export default function PrintScreen() {
                 {isCover && parsedAuthor && (() => {
                     const ats = projectState?.author_text_settings;
                     const aff = ats?.font_family || 'serif';
-                    const authorFont = aff === 'sans' ? 'ui-sans-serif, system-ui, sans-serif' : aff === 'serif' ? 'ui-serif, Georgia, serif' : `'${aff}', sans-serif`;
+                    const authorFont = getFontFamilyStack(aff);
                     return renderTextOverlay(
                         parsedAuthor,
                         authorFont,
@@ -837,7 +830,7 @@ export default function PrintScreen() {
                         <select 
                             className="w-full bg-background border border-border rounded-md p-2 text-sm focus:ring-1 focus:ring-primary outline-none"
                             value={settings.binding_method}
-                            onChange={(e) => updateSettings({ binding_method: e.target.value })}
+                            onChange={(e) => updateSettings({ binding_method: e.target.value as PrintSettings['binding_method'] })}
                         >
                             <option value="saddle">骑马钉</option>
                             <option value="perfect">无线胶装</option>
@@ -864,7 +857,7 @@ export default function PrintScreen() {
                                 <select 
                                     className="w-full bg-background border border-border rounded-md p-2 text-sm focus:ring-1 focus:ring-primary outline-none"
                                     value={settings.paper_size}
-                                    onChange={(e) => updateSettings({ paper_size: e.target.value })}
+                                    onChange={(e) => updateSettings({ paper_size: e.target.value as PrintSettings['paper_size'] })}
                                 >
                                     <option value="A5">A5</option>
                                     <option value="A4">A4</option>
@@ -876,7 +869,7 @@ export default function PrintScreen() {
                                 <select 
                                     className={`w-full bg-background border border-border rounded-md p-2 text-sm focus:ring-1 focus:ring-primary outline-none ${(settings.binding_method === 'saddle' || settings.binding_method === 'butterfly') ? 'opacity-40 cursor-not-allowed' : ''}`}
                                     value={effectiveOrientation}
-                                    onChange={(e) => updateSettings({ paper_orientation: e.target.value })}
+                                    onChange={(e) => updateSettings({ paper_orientation: e.target.value as PrintSettings['paper_orientation'] })}
                                     disabled={settings.binding_method === 'saddle' || settings.binding_method === 'butterfly'}
                                 >
                                     <option value="portrait">纵向</option>
@@ -890,7 +883,7 @@ export default function PrintScreen() {
                             <select 
                                 className="w-full bg-background border border-border rounded-md p-2 text-sm focus:ring-1 focus:ring-primary outline-none"
                                 value={settings.binding_method !== 'perfect' ? '2-up' : settings.layout_mode}
-                                onChange={(e) => updateSettings({ layout_mode: e.target.value })}
+                                onChange={(e) => updateSettings({ layout_mode: e.target.value as PrintSettings['layout_mode'] })}
                                 disabled={settings.binding_method !== 'perfect'}
                             >
                                 <option value="1-up">单页</option>
@@ -1227,7 +1220,6 @@ export default function PrintScreen() {
 
                                             let wrapperLeft_l = (cW_l - scaledW) / 2;
                                             if (objPos_l === 'left center') wrapperLeft_l = 0;
-                                            else if (objPos_l === 'right center') wrapperLeft_l = cW_l - scaledW;
 
                                             const wrapperTop = (cH - scaledH) / 2;
                                             const wrapperCX_l = wrapperLeft_l + scaledW / 2;
@@ -1248,8 +1240,7 @@ export default function PrintScreen() {
                                                 const cW_r = bookBlockWidthPx * 0.5 - padL_r;
                                                 const objPos_r = (settings.binding_method === 'perfect') ? 'right center' : 'center center';
                                                 let wrapperLeft_r = (cW_r - scaledW) / 2;
-                                                if (objPos_r === 'left center') wrapperLeft_r = 0;
-                                                else if (objPos_r === 'right center') wrapperLeft_r = cW_r - scaledW;
+                                                if (objPos_r === 'right center') wrapperLeft_r = cW_r - scaledW;
                                                 const wrapperCX_r = wrapperLeft_r + scaledW / 2;
                                                 
                                                 const globalLeft_r = frontLeft + (bookBlockWidthPx * 0.5 + padL_r) * fitScale;
@@ -1412,8 +1403,7 @@ export default function PrintScreen() {
                                                 const cW_r = bookBlockWidthPx * 0.5 - padR_r;
                                                 const objPos_r = (settings.binding_method === 'perfect') ? 'right center' : 'center center';
                                                 let wrapperLeft_r = (cW_r - scaledW) / 2;
-                                                if (objPos_r === 'left center') wrapperLeft_r = 0;
-                                                else if (objPos_r === 'right center') wrapperLeft_r = cW_r - scaledW;
+                                                if (objPos_r === 'right center') wrapperLeft_r = cW_r - scaledW;
                                                 const wrapperCX_r = wrapperLeft_r + scaledW / 2;
                                                 
                                                 const globalLeft_r = backLeft + (bookBlockWidthPx * 0.5) * fitScale; // back side right page has 0 left padding internally

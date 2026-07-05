@@ -1,5 +1,6 @@
 import { BookOpen, FolderOpen, Plus, Clock } from 'lucide-react';
 import { useProject } from './ProjectContext';
+import { LicenseNoticeButton } from './components/LicenseNoticeButton';
 
 
 export default function WelcomeScreen() {
@@ -10,7 +11,7 @@ export default function WelcomeScreen() {
     };
 
     return (
-        <div className="flex flex-col h-screen bg-background text-foreground items-center justify-center p-8">
+        <div className="relative flex flex-col h-screen bg-background text-foreground items-center justify-center p-8">
             <div className="max-w-4xl w-full grid grid-cols-1 md:grid-cols-2 gap-12 items-start">
                 
                 {/* Left Side: Actions */}
@@ -83,6 +84,9 @@ export default function WelcomeScreen() {
                     </div>
                 </div>
 
+            </div>
+            <div className="absolute bottom-5 right-5">
+                <LicenseNoticeButton className="text-muted-foreground hover:bg-muted hover:text-foreground" />
             </div>
         </div>
     );

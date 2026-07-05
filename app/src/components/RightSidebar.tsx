@@ -1,10 +1,12 @@
 import { useState, useEffect, useRef } from 'react';
 import { PenTool, Type, Maximize2, ChevronDown, ChevronRight, ChevronLeft, LayoutTemplate, Pipette, Trash2, Copy, ClipboardPaste } from 'lucide-react';
 import { HexColorPicker } from 'react-colorful';
+import type { ImageAdjustments, ProjectState, SelectiveColor, TextSettings } from '../ProjectContext';
+import { BUILT_IN_FONT_OPTIONS } from '../utils/fonts';
 
 function DebouncedTextarea({ value, onChange, onCursorChange, className }: { value: string, onChange: (v: string) => void, onCursorChange?: (idx: number | null) => void, className?: string }) {
   const [localValue, setLocalValue] = useState(value);
-  const timeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     setLocalValue(value);
@@ -39,7 +41,7 @@ function DebouncedTextarea({ value, onChange, onCursorChange, className }: { val
     
     if (matches.length > 0) {
       const lastMatch = matches[matches.length - 1][1].toLowerCase();
-      let idx: number | null = null;
+      let idx: number | null;
       if (lastMatch === 'cover' || lastMatch === '封面') {
           idx = 0;
       } else if (lastMatch === 'title' || lastMatch === '扉页') {
@@ -91,7 +93,7 @@ function DebouncedTextarea({ value, onChange, onCursorChange, className }: { val
         
         {/* Textarea */}
         <textarea 
-          className="flex-1 w-full bg-transparent py-3 px-3 text-sm text-foreground focus:outline-none resize-none font-mono whitespace-pre overflow-auto leading-[1.5rem]"
+          className={className || "flex-1 w-full bg-transparent py-3 px-3 text-sm text-foreground focus:outline-none resize-none font-mono whitespace-pre overflow-auto leading-[1.5rem]"}
           value={localValue}
           onChange={handleChange}
           onBlur={handleBlur}
@@ -124,10 +126,12 @@ const useEyedropper = () => {
   const open = async (): Promise<string | null> => {
     if (isSupported) {
       try {
-        const dropper = new (window as any).EyeDropper();
+        const EyeDropper = (window as Window & { EyeDropper?: new () => { open: () => Promise<{ sRGBHex: string }> } }).EyeDropper;
+        if (!EyeDropper) return null;
+        const dropper = new EyeDropper();
         const result = await dropper.open();
         return result.sRGBHex;
-      } catch (e) {
+      } catch {
         return null;
       }
     } else {
@@ -171,7 +175,7 @@ function hexToHue(hex: string): number {
   const max = Math.max(r, g, b), min = Math.min(r, g, b);
   if (max === min) return 0;
   const d = max - min;
-  let h = 0;
+  let h: number;
   if (max === r) h = (g - b) / d + (g < b ? 6 : 0);
   else if (max === g) h = (b - r) / d + 2;
   else h = (r - g) / d + 4;
@@ -199,8 +203,8 @@ function hueToHex(hue: number): string {
 interface RightSidebarProps {
   isRightOpen: boolean;
   setIsRightOpen: (open: boolean) => void;
-  projectState: any;
-  updateProjectState: (updates: any) => void;
+  projectState: ProjectState | null;
+  updateProjectState: (updates: Partial<ProjectState>) => void;
   globalScript: string;
   setGlobalScript: (script: string) => void;
   imgMeta: { width: number, height: number, sizeMB: string } | null;
@@ -470,7 +474,7 @@ function SyncTextSettingsDialog({
   );
 }
 
-let clipboardAdjustments: any = null;
+let clipboardAdjustments: ImageAdjustments | null = null;
 
 export function RightSidebar({
   isRightOpen,
@@ -538,8 +542,8 @@ export function RightSidebar({
     if (!hex) return;
     const h = hexToHue(hex);
     
-    const existing = projectState?.image_adjustments || {};
-    const current = existing[pageKey] || {};
+    const existing: Record<string, ImageAdjustments> = projectState?.image_adjustments || {};
+    const current: ImageAdjustments = existing[pageKey] || {};
     const selective_colors = [...(current.selective_colors || [])];
     selective_colors.push({
       id: Math.random().toString(36).substr(2, 9),
@@ -553,21 +557,21 @@ export function RightSidebar({
     });
   };
 
-  const handleUpdateSelectiveColor = (pageKey: string, id: string, updates: any) => {
-    const existing = projectState?.image_adjustments || {};
-    const current = existing[pageKey] || {};
+  const handleUpdateSelectiveColor = (pageKey: string, id: string, updates: Partial<SelectiveColor>) => {
+    const existing: Record<string, ImageAdjustments> = projectState?.image_adjustments || {};
+    const current: ImageAdjustments = existing[pageKey] || {};
     if (!current.selective_colors) return;
-    const selective_colors = current.selective_colors.map((sc: any) => sc.id === id ? { ...sc, ...updates } : sc);
+    const selective_colors = current.selective_colors.map((sc) => sc.id === id ? { ...sc, ...updates } : sc);
     updateProjectState({
       image_adjustments: { ...existing, [pageKey]: { ...current, selective_colors } }
     });
   };
 
   const handleRemoveSelectiveColor = (pageKey: string, id: string) => {
-    const existing = projectState?.image_adjustments || {};
-    const current = existing[pageKey] || {};
+    const existing: Record<string, ImageAdjustments> = projectState?.image_adjustments || {};
+    const current: ImageAdjustments = existing[pageKey] || {};
     if (!current.selective_colors) return;
-    const selective_colors = current.selective_colors.filter((sc: any) => sc.id !== id);
+    const selective_colors = current.selective_colors.filter((sc) => sc.id !== id);
     updateProjectState({
       image_adjustments: { ...existing, [pageKey]: { ...current, selective_colors } }
     });
@@ -711,7 +715,7 @@ export function RightSidebar({
                 </div>
                 {(() => {
                   const ats = projectState?.author_text_settings || { font_size: 16, text_color: '#ffffff', font_family: 'serif', has_shadow: true, offset_x: 0, offset_y: 0 };
-                  const updateAts = (updates: any) => updateProjectState({ author_text_settings: { ...ats, ...updates } });
+                  const updateAts = (updates: Partial<TextSettings>) => updateProjectState({ author_text_settings: { ...ats, ...updates } });
                   return (
                     <>
                       <div className="flex flex-col gap-1.5">
@@ -721,13 +725,10 @@ export function RightSidebar({
                           value={ats.font_family || 'serif'}
                           onChange={(e) => updateAts({ font_family: e.target.value })}
                         >
-                          <optgroup label="内置在线字体">
-                            <option value="serif">系统衬线体 (Serif)</option>
-                            <option value="sans">系统无衬线体 (Sans)</option>
-                            <option value="LXGW WenKai">霞鹜文楷 (手写/绘本)</option>
-                            <option value="ZCOOL KuaiLe">站酷快乐体 (卡通)</option>
-                            <option value="Noto Serif SC">思源宋体 (端庄)</option>
-                            <option value="Noto Sans SC">思源黑体 (现代)</option>
+                          <optgroup label="本地内置字体">
+                            {BUILT_IN_FONT_OPTIONS.map((font) => (
+                              <option key={font.value} value={font.value}>{font.label}</option>
+                            ))}
                           </optgroup>
                         </select>
                       </div>
@@ -820,7 +821,15 @@ export function RightSidebar({
                             offset_x: 0,
                             offset_y: 0
                         };
-                        const settings = currentSettings || defaultSettings;
+                        const settings = {
+                            font_size: currentSettings?.font_size ?? defaultSettings.font_size,
+                            text_color: currentSettings?.text_color ?? defaultSettings.text_color,
+                            font_family: currentSettings?.font_family ?? defaultSettings.font_family,
+                            has_shadow: currentSettings?.has_shadow ?? defaultSettings.has_shadow,
+                            has_backdrop: currentSettings?.has_backdrop ?? false,
+                            offset_x: currentSettings?.offset_x ?? defaultSettings.offset_x,
+                            offset_y: currentSettings?.offset_y ?? defaultSettings.offset_y,
+                        };
 
                         // For inner pages (not cover, not title), per-page overrides for position/color
                         const pageKey = String(selectedIdx);
@@ -832,7 +841,7 @@ export function RightSidebar({
                         const effectiveOffsetY = (isCover || isTitle) ? (settings.offset_y || 0) : (pageOverride?.offset_y ?? settings.offset_y ?? 0);
 
                         // Update shared style (font/size/shadow)
-                        const updateSharedSettings = (updates: any) => {
+                        const updateSharedSettings = (updates: Partial<TextSettings>) => {
                           if (isCover) {
                             updateProjectState({ cover_text_settings: { ...settings, ...updates } });
                           } else if (isTitle) {
@@ -866,13 +875,10 @@ export function RightSidebar({
                           value={settings.font_family}
                           onChange={(e) => updateSharedSettings({ font_family: e.target.value })}
                         >
-                          <optgroup label="内置在线字体">
-                              <option value="serif">系统衬线体 (Serif)</option>
-                              <option value="sans">系统无衬线体 (Sans)</option>
-                              <option value="LXGW WenKai">霞鹜文楷 (手写/绘本)</option>
-                              <option value="ZCOOL KuaiLe">站酷快乐体 (卡通)</option>
-                              <option value="Noto Serif SC">思源宋体 (端庄)</option>
-                              <option value="Noto Sans SC">思源黑体 (现代)</option>
+                          <optgroup label="本地内置字体">
+                              {BUILT_IN_FONT_OPTIONS.map((font) => (
+                                <option key={font.value} value={font.value}>{font.label}</option>
+                              ))}
                           </optgroup>
                           {systemFonts.length > 0 && (
                               <optgroup label="本地系统字体">
@@ -1210,7 +1216,7 @@ export function RightSidebar({
                             
                             <div className="flex flex-col gap-2">
                               {(() => {
-                                const scs = (projectState?.image_adjustments?.[pageKey]?.selective_colors || []) as any[];
+                                const scs = projectState?.image_adjustments?.[pageKey]?.selective_colors || [];
                                 if (scs.length === 0) {
                                   return <div className="text-xs text-muted-foreground text-center py-2 bg-muted/30 rounded border border-dashed border-border">未添加局部颜色</div>;
                                 }

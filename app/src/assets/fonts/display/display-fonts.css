@@ -1,0 +1,23 @@
+@font-face {
+  font-family: 'Smiley Sans';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('./SmileySans-Oblique.ttf.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'ZCOOL QingKe HuangYou';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('./ZCOOLQingKeHuangYou-Regular.ttf') format('truetype');
+}
+
+@font-face {
+  font-family: 'ZCOOL XiaoWei';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('./ZCOOLXiaoWei-Regular.ttf') format('truetype');
+}

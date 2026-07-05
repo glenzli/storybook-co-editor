@@ -1,8 +1,9 @@
 import { useState, useRef, useEffect } from 'react';
-import { DndContext, closestCenter, PointerSensor, KeyboardSensor, useSensor, useSensors } from '@dnd-kit/core';
+import { DndContext, closestCenter, PointerSensor, KeyboardSensor, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy, sortableKeyboardCoordinates } from '@dnd-kit/sortable';
 import { LayoutTemplate, Archive, Sun, Moon, ChevronLeft, ChevronRight, FilePlus, ArrowUpToLine, ArrowDownToLine, Trash2, Download, Copy } from 'lucide-react';
 import { SortableImageItem, type TextOverlayInfo } from './SortableImageItem';
+import type { ImageAdjustments } from '../ProjectContext';
 
 interface LeftSidebarProps {
   isLeftOpen: boolean;
@@ -18,10 +19,10 @@ interface LeftSidebarProps {
   handleExportImage?: (id: string, idx: number) => void;
   handleCopyToClipboard?: (id: string, idx: number) => void;
   handleOpenTrash: () => void;
-  handleDragEnd: (event: any) => void;
+  handleDragEnd: (event: DragEndEvent) => void;
   handleInsertBlank: () => void;
   hasTitle?: boolean;
-  imageAdjustments?: Record<string, any>;
+  imageAdjustments?: Record<string, ImageAdjustments>;
   textOverlays?: Record<number, TextOverlayInfo[]>;
   canvasSize?: number;
 }
@@ -174,7 +175,7 @@ export function LeftSidebar({
             className="w-full px-3 py-1.5 text-left flex items-center gap-2 hover:bg-muted transition-colors disabled:opacity-50"
             disabled={contextMenu.idx === 0}
             onClick={() => {
-              handleMoveToTop && handleMoveToTop(contextMenu.idx);
+              handleMoveToTop?.(contextMenu.idx);
               setContextMenu(null);
             }}
           >
@@ -185,7 +186,7 @@ export function LeftSidebar({
             className="w-full px-3 py-1.5 text-left flex items-center gap-2 hover:bg-muted transition-colors disabled:opacity-50"
             disabled={contextMenu.idx === images.length - 1}
             onClick={() => {
-              handleMoveToBottom && handleMoveToBottom(contextMenu.idx);
+              handleMoveToBottom?.(contextMenu.idx);
               setContextMenu(null);
             }}
           >
@@ -195,7 +196,7 @@ export function LeftSidebar({
           <button 
             className="w-full px-3 py-1.5 text-left flex items-center gap-2 hover:bg-muted transition-colors"
             onClick={() => {
-              handleCopyToClipboard && handleCopyToClipboard(contextMenu.id, contextMenu.idx);
+              handleCopyToClipboard?.(contextMenu.id, contextMenu.idx);
               setContextMenu(null);
             }}
           >
@@ -206,7 +207,7 @@ export function LeftSidebar({
           <button 
             className="w-full px-3 py-1.5 text-left flex items-center gap-2 hover:bg-muted transition-colors"
             onClick={() => {
-              handleExportImage && handleExportImage(contextMenu.id, contextMenu.idx);
+              handleExportImage?.(contextMenu.id, contextMenu.idx);
               setContextMenu(null);
             }}
           >

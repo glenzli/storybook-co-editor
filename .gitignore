@@ -133,3 +133,4 @@ dist
 *.onnx
 
 release/
+.pnpm-store/

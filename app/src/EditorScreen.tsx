@@ -1,13 +1,14 @@
 import { useEffect, useState, useMemo, useRef, useCallback } from 'react';
 import { listen } from '@tauri-apps/api/event';
 import { invoke } from '@tauri-apps/api/core';
+import type { DragEndEvent } from '@dnd-kit/core';
 import { save } from '@tauri-apps/plugin-dialog';
 import { writeFile } from '@tauri-apps/plugin-fs';
 import { writeImage } from '@tauri-apps/plugin-clipboard-manager';
 import { Image as TauriImage } from '@tauri-apps/api/image';
 import { Image as ImageIcon, Info, XOctagon, RefreshCw, Trash2, ArchiveRestore, ZoomIn } from 'lucide-react';
 import { getPaletteSync } from 'colorthief';
-import { useProject } from './ProjectContext';
+import { useProject, type ImageAdjustments, type ProjectState, type TextSettings } from './ProjectContext';
 import { ProImage } from './components/ProImage';
 import { arrayMove } from '@dnd-kit/sortable';
 import { createLogger } from './utils/logger';
@@ -15,6 +16,7 @@ import PrintScreen from './PrintScreen';
 import { EditorHeader } from './components/EditorHeader';
 import { LeftSidebar } from './components/LeftSidebar';
 import { RightSidebar } from './components/RightSidebar';
+import { getFontFamilyStack, waitForProjectFonts } from './utils/fonts';
 
 const logger = createLogger('App');
 
@@ -117,6 +119,10 @@ export default function EditorScreen() {
   }, []);
 
   useEffect(() => {
+    waitForProjectFonts(projectState).catch(e => logger.warn("Failed to preload project fonts", e));
+  }, [projectState]);
+
+  useEffect(() => {
     if (projectState) {
         const urls = projectState.visible_images.map((f: string) => f.startsWith('blank://') ? f : `http://127.0.0.1:14320/images/${f}`);
         const trashUrls = projectState.trashed_images.map((f: string) => f.startsWith('blank://') ? f : `http://127.0.0.1:14320/images/${f}`);
@@ -139,6 +145,7 @@ export default function EditorScreen() {
             img.src = urls[0];
         }
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeWorkspaceId]); // Run once when workspace changes
 
   useEffect(() => {
@@ -213,7 +220,7 @@ export default function EditorScreen() {
     return () => {
       Promise.all([u1, u2, u3]).then(fns => fns.forEach(fn => fn()));
     };
-  }, []);
+  }, [appendSourceUrlMap]);
 
   // Sync project state
   useEffect(() => {
@@ -226,7 +233,7 @@ export default function EditorScreen() {
         });
       }, 500);
       return () => clearTimeout(tid);
-  }, [images, trashedImages, globalScript, isLoaded]);
+  }, [images, trashedImages, globalScript, isLoaded, updateProjectState]);
 
   // Load Image Metadata when selectedIdx changes
   useEffect(() => {
@@ -293,14 +300,11 @@ export default function EditorScreen() {
         if (key === 'author' || key === '作者') {
             author = text;
         } else {
-            let idx = 0;
-            if (key === 'cover' || key === '封面') {
-                idx = 0;
-            } else if (key === 'title' || key === '扉页') {
-                idx = 1;
-            } else {
-                idx = parseInt(key, 10) + (hasTitle ? 1 : 0);
-            }
+            const idx = key === 'cover' || key === '封面'
+                ? 0
+                : key === 'title' || key === '扉页'
+                  ? 1
+                  : parseInt(key, 10) + (hasTitle ? 1 : 0);
             map.set(idx, text);
         }
       }
@@ -313,10 +317,10 @@ export default function EditorScreen() {
     const hasTitle = /(?:\[(Title|扉页)\])/i.test(globalScript);
     const result: Record<number, import('./components/SortableImageItem').TextOverlayInfo[]> = {};
 
-    const buildOverlay = (text: string | undefined, settings: any, defaultSize: number) => {
+    const buildOverlay = (text: string | undefined, settings: TextSettings | undefined, defaultSize: number) => {
       if (!text) return null;
       const ff = settings?.font_family || 'serif';
-      const fontFamily = ff === 'sans' ? 'ui-sans-serif, system-ui, sans-serif' : ff === 'serif' ? 'ui-serif, Georgia, serif' : `'${ff}', sans-serif`;
+      const fontFamily = getFontFamilyStack(ff);
       const color = settings?.text_color || '#ffffff';
       return {
         text,
@@ -438,8 +442,8 @@ export default function EditorScreen() {
 
   const shiftProjectDictionaries = useCallback((mapping: (oldIdx: number) => number | null, numItems: number) => {
     if (!projectState) return;
-    const newImageAdjustments: Record<string, any> = {};
-    const newPageTextOverrides: Record<string, any> = {};
+    const newImageAdjustments: Record<string, ImageAdjustments> = {};
+    const newPageTextOverrides: NonNullable<ProjectState['page_text_overrides']> = {};
     for (let i = 0; i < numItems; i++) {
         const oldKey = String(i);
         const newIdx = mapping(i);
@@ -459,13 +463,14 @@ export default function EditorScreen() {
     });
   }, [projectState, updateProjectState]);
 
-  const handleDragEnd = (event: any) => {
+  const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
 
     if (over && active.id !== over.id) {
       setImages((items) => {
-        const oldIndex = items.indexOf(active.id);
-        const newIndex = items.indexOf(over.id);
+        const oldIndex = items.indexOf(String(active.id));
+        const newIndex = items.indexOf(String(over.id));
+        if (oldIndex < 0 || newIndex < 0) return items;
         
         if (selectedIdx === oldIndex) {
             setSelectedIdx(newIndex);
@@ -565,7 +570,7 @@ export default function EditorScreen() {
       }
   }, []);
 
-  const handleCopyToClipboard = useCallback(async (id: string, idx: number) => {
+  const handleCopyToClipboard = useCallback(async (id: string) => {
       if (id.startsWith('blank://')) {
           alert('空白页不能复制。');
           return;
@@ -825,7 +830,7 @@ export default function EditorScreen() {
                     const baseSettings = isCover ? projectState?.cover_text_settings : (isTitle ? projectState?.title_text_settings : projectState?.inner_text_settings);
                     const pageOverride = !isCover && !isTitle && selectedIdx !== null ? projectState?.page_text_overrides?.[String(selectedIdx)] : undefined;
                     const ff = baseSettings?.font_family || 'serif';
-                    const fontFamily = ff === 'sans' ? 'ui-sans-serif, system-ui, sans-serif' : ff === 'serif' ? 'ui-serif, Georgia, serif' : `'${ff}', sans-serif`;
+                    const fontFamily = getFontFamilyStack(ff);
                     const fontSize = baseSettings?.font_size || (isCover ? 40 : (isTitle ? 32 : 20));
                     const textColor = (pageOverride?.text_color ?? baseSettings?.text_color) || '#ffffff';
                     const offsetX = pageOverride?.offset_x ?? baseSettings?.offset_x ?? 0;
@@ -836,7 +841,7 @@ export default function EditorScreen() {
                     <div className="absolute bottom-10 left-0 w-full px-12 pointer-events-none flex justify-center">
                       <div 
                         ref={textRef}
-                        className="text-center tracking-wide whitespace-pre-wrap pointer-events-auto"
+                        className="text-center whitespace-pre-wrap pointer-events-auto"
                         style={{
                           fontFamily,
                           fontSize: `${fontSize}px`,
@@ -863,12 +868,12 @@ export default function EditorScreen() {
                   {selectedIdx === 0 && parsedAuthor && (() => {
                     const ats = projectState?.author_text_settings;
                     const ff = ats?.font_family || 'serif';
-                    const fontFamily = ff === 'sans' ? 'ui-sans-serif, system-ui, sans-serif' : ff === 'serif' ? 'ui-serif, Georgia, serif' : `'${ff}', sans-serif`;
+                    const fontFamily = getFontFamilyStack(ff);
                     return (
                       <div className="absolute bottom-10 left-0 w-full px-12 pointer-events-none flex justify-center">
                         <div 
                           ref={authorTextRef}
-                          className="text-center tracking-wide whitespace-pre-wrap pointer-events-auto"
+                          className="text-center whitespace-pre-wrap pointer-events-auto"
                           style={{
                             fontFamily,
                             fontSize: `${ats?.font_size || 16}px`,
@@ -981,7 +986,7 @@ export default function EditorScreen() {
                   </div>
               )}
               <div className="flex items-center gap-4 text-xs font-mono text-muted-foreground/80">
-                  <span className="font-bold text-foreground/50">STORYBOOK CO-EDITOR v1.1.3</span>
+                  <span className="font-bold text-foreground/50">STORYBOOK CO-EDITOR v1.1.4</span>
                   <span>本地桥接已连接</span>
               </div>
           </div>

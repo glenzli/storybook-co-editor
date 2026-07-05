@@ -1,6 +1,6 @@
 # Manual Release Guide
 
-This project uses a manual GitHub Release flow. macOS packaging stays local because Tauri desktop builds depend on the local macOS toolchain and signing/notarization choices.
+This project uses a manual GitLab Release flow. macOS packaging stays local because Tauri desktop builds depend on the local macOS toolchain and signing/notarization choices.
 
 ## Release Checklist
 
@@ -13,7 +13,7 @@ git status --short
 2. Confirm all public versions match.
 
 ```bash
-rg -n '"version": "1.1.3"|version = "1.1.3"|v1.1.3' \
+rg -n '"version": "1.1.4"|version = "1.1.4"|v1.1.4' \
   app/package.json \
   app/src-tauri/tauri.conf.json \
   app/src-tauri/Cargo.toml \
@@ -32,12 +32,13 @@ rg -n '"version": "1.1.3"|version = "1.1.3"|v1.1.3' \
 The script writes artifacts to `release/`:
 
 ```text
-storybook-co-editor_1.1.3_aarch64.dmg
+storybook-co-editor_1.1.4_aarch64.dmg
 storybook-co-editor.app
 storybook-co-editor.app.zip
-storybook-co-editor-extension-v1.1.3.zip
+storybook-co-editor-extension-v1.1.4.zip
+storybook-co-editor-licenses-v1.1.4.zip
 SHA256SUMS.txt
-RELEASE_NOTES_v1.1.3.md
+RELEASE_NOTES_v1.1.4.md
 ```
 
 4. Smoke test the build.
@@ -51,26 +52,26 @@ RELEASE_NOTES_v1.1.3.md
 5. Create and push the version tag.
 
 ```bash
-git tag -a v1.1.3 -m "Storybook Co-Editor v1.1.3"
-git push origin main
-git push origin v1.1.3
+git tag -a v1.1.4 -m "Storybook Co-Editor v1.1.4"
+git push gitlab main
+git push gitlab v1.1.4
 ```
 
-6. Create a draft GitHub Release.
+6. Create a GitLab Release.
 
 ```bash
-gh release create v1.1.3 \
-  release/storybook-co-editor_1.1.3_aarch64.dmg \
+glab release create v1.1.4 \
+  release/storybook-co-editor_1.1.4_aarch64.dmg \
   release/storybook-co-editor.app.zip \
-  release/storybook-co-editor-extension-v1.1.3.zip \
+  release/storybook-co-editor-extension-v1.1.4.zip \
+  release/storybook-co-editor-licenses-v1.1.4.zip \
   release/SHA256SUMS.txt \
   --repo glenzli/storybook-co-editor \
-  --title "Storybook Co-Editor v1.1.3" \
-  --notes-file release/RELEASE_NOTES_v1.1.3.md \
-  --draft
+  --name "Storybook Co-Editor v1.1.4" \
+  --notes-file release/RELEASE_NOTES_v1.1.4.md
 ```
 
-7. Review the draft release in GitHub, then publish it manually.
+7. Review the release in GitLab.
 
 ## Notes For Users
 
