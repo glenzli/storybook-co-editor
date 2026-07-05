@@ -248,6 +248,34 @@ if (isSupportedUrl(window.location.href)) {
         applyOverlayTheme();
     }
 
+    function getSendResultFeedback(response: { success?: boolean; status?: string; error?: string } | undefined) {
+        if (!response?.success) {
+            return {
+                buttonText: '❌ 失败',
+                toastText: response?.error ? `发送失败：${response.error}` : '发送失败，请确认桌面端已打开'
+            };
+        }
+
+        if (response.status === 'trashed') {
+            return {
+                buttonText: '🗑️ 在回收站',
+                toastText: '这张图片已在 app 回收站中，请先在 app 里恢复或清理后再发送'
+            };
+        }
+
+        if (response.status === 'duplicate') {
+            return {
+                buttonText: '↩️ 已存在',
+                toastText: '这张图片已经在当前项目中'
+            };
+        }
+
+        return {
+            buttonText: '✅ 成功',
+            toastText: '图片已发送到 Storybook Co-Editor'
+        };
+    }
+
     btnSend.innerText = '📸 发送';
     updateOverlayButtons();
 
@@ -423,8 +451,12 @@ if (isSupportedUrl(window.location.href)) {
             chrome.runtime.sendMessage(
                 { action: 'saveImage', payload: { url: imageUrl, stable_id: getStableId(imageUrl), page: 1, base64_data, insert_after_current: true } },
                 (response) => {
-                    btnSend.innerText = response?.success ? '✅ 成功' : '❌ 失败';
-                    if (!response?.success) console.error('Error:', response?.error);
+                    const runtimeError = chrome.runtime.lastError?.message;
+                    const effectiveResponse = runtimeError ? { success: false, error: runtimeError } : response;
+                    const feedback = getSendResultFeedback(effectiveResponse);
+                    btnSend.innerText = feedback.buttonText;
+                    showToast(feedback.toastText);
+                    if (!effectiveResponse?.success) console.error('Error:', effectiveResponse?.error);
                     setTimeout(() => { btnSend.innerText = '📸 发送'; overlay.style.display = 'none'; }, 2000);
                 }
             );
@@ -435,4 +467,3 @@ if (isSupportedUrl(window.location.href)) {
         }
     });
 }
-
