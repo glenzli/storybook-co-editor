@@ -8,7 +8,7 @@ import { writeImage } from '@tauri-apps/plugin-clipboard-manager';
 import { Image as TauriImage } from '@tauri-apps/api/image';
 import { Image as ImageIcon, Info, XOctagon, RefreshCw, Trash2, ArchiveRestore, ZoomIn } from 'lucide-react';
 import { getPaletteSync } from 'colorthief';
-import { useProject, type ImageAdjustments, type ProjectState, type TextSettings } from './ProjectContext';
+import { useProject, type ImageAdjustments, type ProjectState } from './ProjectContext';
 import { ProImage } from './components/ProImage';
 import { arrayMove } from '@dnd-kit/sortable';
 import { createLogger } from './utils/logger';
@@ -17,21 +17,16 @@ import { EditorHeader } from './components/EditorHeader';
 import { LeftSidebar } from './components/LeftSidebar';
 import { RightSidebar } from './components/RightSidebar';
 import { getFontFamilyStack, waitForProjectFonts } from './utils/fonts';
+import { StoryTextOverlay } from './components/StoryTextOverlay';
+import {
+  buildStoryPages,
+  getDefaultExportFilename,
+  getStrokeColor,
+  parseStoryScript,
+} from './utils/storyPageRenderer';
+import { generateElectronicPdf, type ElectronicPdfProgress } from './utils/electronicPdf';
 
 const logger = createLogger('App');
-
-
-
-
-function getStrokeColor(hexColor: string): string {
-    let hex = hexColor.replace('#', '');
-    if (hex.length === 3) hex = hex.split('').map(c => c + c).join('');
-    const r = parseInt(hex.substring(0, 2), 16) || 0;
-    const g = parseInt(hex.substring(2, 4), 16) || 0;
-    const b = parseInt(hex.substring(4, 6), 16) || 0;
-    const yiq = ((r * 299) + (g * 587) + (b * 114)) / 1000;
-    return yiq >= 128 ? 'rgba(0,0,0,0.8)' : 'rgba(255,255,255,0.8)';
-}
 
 interface SavedImageEvent {
   filepath: string;
@@ -77,6 +72,7 @@ export default function EditorScreen() {
 
   // Tabs
   const [activeTab, setActiveTab] = useState<'edit' | 'print'>('edit');
+  const [electronicPdfProgress, setElectronicPdfProgress] = useState<ElectronicPdfProgress | null>(null);
 
 
 
@@ -284,81 +280,37 @@ export default function EditorScreen() {
     img.src = images[selectedIdx];
   }, [selectedIdx, images]);
 
-  // Parse global script into a map
-  const { parsedScript, parsedAuthor } = useMemo(() => {
-    const map = new Map<number, string>();
-    let author = "";
-    const hasTitle = /(?:\[(Title|扉页)\])/i.test(globalScript);
-    const blocks = globalScript.split(/(?=\[(?:Cover|封面|Title|扉页|Author|作者|\d+)\])/i);
-    
-    blocks.forEach(block => {
-      const match = block.match(/\[(Cover|封面|Title|扉页|Author|作者|\d+)\]\s*([\s\S]*)/i);
-      if (match) {
-        const key = match[1].toLowerCase();
-        const text = match[2].trim();
-        
-        if (key === 'author' || key === '作者') {
-            author = text;
-        } else {
-            const idx = key === 'cover' || key === '封面'
-                ? 0
-                : key === 'title' || key === '扉页'
-                  ? 1
-                  : parseInt(key, 10) + (hasTitle ? 1 : 0);
-            map.set(idx, text);
-        }
-      }
-    });
-    return { parsedScript: map, parsedAuthor: author };
-  }, [globalScript]);
+  const parsedStory = useMemo(() => parseStoryScript(globalScript), [globalScript]);
+  const parsedAuthor = parsedStory.author;
+  const storyPages = useMemo(() => {
+    if (!projectState) return [];
+    return buildStoryPages({ ...projectState, global_script: globalScript }, images);
+  }, [globalScript, images, projectState]);
 
   // Compute text overlay info for thumbnails — Cover/Title only
   const textOverlays = useMemo(() => {
-    const hasTitle = /(?:\[(Title|扉页)\])/i.test(globalScript);
     const result: Record<number, import('./components/SortableImageItem').TextOverlayInfo[]> = {};
 
-    const buildOverlay = (text: string | undefined, settings: TextSettings | undefined, defaultSize: number) => {
-      if (!text) return null;
-      const ff = settings?.font_family || 'serif';
-      const fontFamily = getFontFamilyStack(ff);
-      const color = settings?.text_color || '#ffffff';
-      return {
-        text,
-        color,
-        fontSize: settings?.font_size || defaultSize,
-        fontFamily,
-        hasShadow: settings?.has_shadow ?? true,
-        hasBackdrop: settings?.has_backdrop ?? false,
-        strokeColor: getStrokeColor(color),
-        offsetX: settings?.offset_x ?? 0,
-        offsetY: settings?.offset_y ?? 0,
-      };
-    };
-
-    // Cover (idx 0)
-    const coverText = parsedScript.get(0);
-    if (coverText) {
-      const layers: import('./components/SortableImageItem').TextOverlayInfo[] = [];
-      const titleLayer = buildOverlay(coverText, projectState?.cover_text_settings, 40);
-      if (titleLayer) layers.push(titleLayer);
-      const authorLayer = buildOverlay(parsedAuthor || undefined, projectState?.author_text_settings, 16);
-      if (authorLayer) layers.push(authorLayer);
-      if (layers.length > 0) result[0] = layers;
-    }
-
-    // Title page (idx 1)
-    if (hasTitle) {
-      const titleText = parsedScript.get(1);
-      if (titleText) {
-        const layer = buildOverlay(titleText, projectState?.title_text_settings, 32);
-        if (layer) result[1] = [layer];
-      }
-    }
+    storyPages.filter(page => page.role !== 'body').forEach(page => {
+      if (page.textLayers.length === 0) return;
+      result[page.index] = page.textLayers.map(layer => ({
+        text: layer.text,
+        color: layer.color,
+        fontSize: layer.fontSize,
+        fontFamily: getFontFamilyStack(layer.fontFamily),
+        hasShadow: layer.hasShadow,
+        hasBackdrop: layer.hasBackdrop,
+        strokeColor: getStrokeColor(layer.color),
+        offsetX: layer.offsetX,
+        offsetY: layer.offsetY,
+      }));
+    });
 
     return result;
-  }, [parsedScript, parsedAuthor, projectState?.cover_text_settings, projectState?.title_text_settings, projectState?.author_text_settings, globalScript]);
+  }, [storyPages]);
 
-  const currentText = selectedIdx !== null ? parsedScript.get(selectedIdx) : "";
+  const selectedPage = selectedIdx !== null ? storyPages[selectedIdx] : undefined;
+  const currentText = selectedPage?.textLayers.find(layer => layer.id === 'main')?.text || '';
 
   // Measure viewport and compute canvas scale
   const canvasW = projectState?.canvas_width || 1024;
@@ -545,6 +497,43 @@ export default function EditorScreen() {
         return next;
       });
   }, [shiftProjectDictionaries]);
+
+  const handleExportElectronicPdf = useCallback(async () => {
+    if (!projectState || electronicPdfProgress) return;
+
+    const exportState: ProjectState = {
+      ...projectState,
+      global_script: globalScript,
+      visible_images: images.map(source => (
+        source.startsWith('blank://') ? source : source.split('/').pop()!
+      )),
+    };
+
+    if (exportState.visible_images.length === 0) {
+      alert('项目中没有可导出的页面。');
+      return;
+    }
+
+    try {
+      const filePath = await save({
+        filters: [{ name: 'PDF Document', extensions: ['pdf'] }],
+        defaultPath: `${getDefaultExportFilename(exportState, '-电子版')}.pdf`,
+      });
+      if (!filePath) return;
+
+      setElectronicPdfProgress({ current: 0, total: exportState.visible_images.length });
+      await waitForProjectFonts(exportState);
+      const pdfBytes = await generateElectronicPdf(exportState, setElectronicPdfProgress);
+      await writeFile(filePath, pdfBytes);
+      alert(`成功导出电子 PDF 至：\n${filePath}`);
+    } catch (error) {
+      logger.error('Electronic PDF export failed', error);
+      const message = error instanceof Error ? error.message : String(error);
+      alert(`电子 PDF 导出失败：${message}`);
+    } finally {
+      setElectronicPdfProgress(null);
+    }
+  }, [electronicPdfProgress, globalScript, images, projectState]);
 
   const handleExportImage = useCallback(async (id: string, idx: number) => {
       if (id.startsWith('blank://')) {
@@ -739,6 +728,8 @@ export default function EditorScreen() {
         closeProject={closeProject}
         isSaving={isSaving}
         saveProgress={saveProgress}
+        exportElectronicPdf={handleExportElectronicPdf}
+        electronicPdfProgress={electronicPdfProgress}
       />
 
       {/* Main Area */}
@@ -784,26 +775,9 @@ export default function EditorScreen() {
                   }}
                 >
                   <div className="absolute inset-0 overflow-hidden rounded-sm flex items-center justify-center">
-                    {(() => {
-                      const imgAdj = projectState?.image_adjustments?.[String(selectedIdx)];
-                      const scale = imgAdj?.scale ?? 1;
-                      const offsetX = imgAdj?.offset_x ?? 0;
-                      const offsetY = imgAdj?.offset_y ?? 0;
-                      const bgColor = imgAdj?.bg_color || 'transparent';
-                      const adjustments = {
-                        brightness: imgAdj?.brightness ?? 0,
-                        exposure: imgAdj?.exposure ?? 0,
-                        highlights: imgAdj?.highlights ?? 0,
-                        shadows: imgAdj?.shadows ?? 0,
-                        contrast: imgAdj?.contrast ?? 0,
-                        saturate: imgAdj?.saturate ?? 0,
-                        temperature: imgAdj?.temperature ?? 0,
-                        tint: imgAdj?.tint ?? 0,
-                        selective_colors: imgAdj?.selective_colors || [],
-                        remove_white_bg: imgAdj?.remove_white_bg ?? 0,
-                        remove_bg_color: imgAdj?.remove_bg_color,
-                      };
-                      const isTransparent = bgColor === 'transparent';
+                    {selectedPage && (() => {
+                      const imageLayer = selectedPage.image;
+                      const isTransparent = imageLayer.backgroundColor === 'transparent';
                       const transparentBgStyle = {
                         backgroundImage: 'linear-gradient(45deg, #e5e5e5 25%, transparent 25%), linear-gradient(-45deg, #e5e5e5 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #e5e5e5 75%), linear-gradient(-45deg, transparent 75%, #e5e5e5 75%)',
                         backgroundSize: '20px 20px',
@@ -811,91 +785,26 @@ export default function EditorScreen() {
                         backgroundColor: '#ffffff'
                       };
                       return (
-                        <div className="absolute inset-0 flex items-center justify-center transition-colors" style={isTransparent ? transparentBgStyle : { backgroundColor: bgColor }}>
-                          <div className="relative w-full h-full" style={{ transform: `translate(${offsetX}%, ${offsetY}%) scale(${scale})` }}>
+                        <div className="absolute inset-0 flex items-center justify-center transition-colors" style={isTransparent ? transparentBgStyle : { backgroundColor: imageLayer.backgroundColor }}>
+                          <div className="relative w-full h-full" style={{ transform: `translate(${imageLayer.offsetX}%, ${imageLayer.offsetY}%) scale(${imageLayer.scale})` }}>
                             <ProImage 
-                              src={images[selectedIdx]} 
-                              className={`w-full h-full object-contain ${images[selectedIdx].startsWith('blank://') ? 'bg-white' : ''}`}
-                              adjustments={adjustments}
+                              src={imageLayer.source}
+                              className={`w-full h-full object-contain ${imageLayer.source.startsWith('blank://') ? 'bg-white' : ''}`}
+                              adjustments={imageLayer.adjustments}
                             />
                           </div>
                         </div>
                       );
                     })()}
                   </div>
-                  {currentText && (() => {
-                    const isCover = selectedIdx === 0;
-                    const hasTitle = /(?:\[(Title|扉页)\])/i.test(projectState?.global_script || '');
-                    const isTitle = hasTitle && selectedIdx === 1;
-                    const baseSettings = isCover ? projectState?.cover_text_settings : (isTitle ? projectState?.title_text_settings : projectState?.inner_text_settings);
-                    const pageOverride = !isCover && !isTitle && selectedIdx !== null ? projectState?.page_text_overrides?.[String(selectedIdx)] : undefined;
-                    const ff = baseSettings?.font_family || 'serif';
-                    const fontFamily = getFontFamilyStack(ff);
-                    const fontSize = baseSettings?.font_size || (isCover ? 40 : (isTitle ? 32 : 20));
-                    const textColor = (pageOverride?.text_color ?? baseSettings?.text_color) || '#ffffff';
-                    const offsetX = pageOverride?.offset_x ?? baseSettings?.offset_x ?? 0;
-                    const offsetY = pageOverride?.offset_y ?? baseSettings?.offset_y ?? 0;
-                    const hasShadow = baseSettings?.has_shadow ?? true;
-                    const hasBackdrop = baseSettings?.has_backdrop ?? false;
-                    return (
-                    <div className="absolute bottom-10 left-0 w-full px-12 pointer-events-none flex justify-center">
-                      <div 
-                        ref={textRef}
-                        className="text-center whitespace-pre-wrap pointer-events-auto"
-                        style={{
-                          fontFamily,
-                          fontSize: `${fontSize}px`,
-                          lineHeight: 1.5,
-                          color: textColor,
-                          ...(hasBackdrop ? {
-                            background: getStrokeColor(textColor).replace('0.8)', '0.35)'),
-                            padding: `${fontSize * 0.2}px ${fontSize * 0.5}px`,
-                            borderRadius: `${fontSize * 0.3}px`,
-                          } : {}),
-                          ...(hasShadow ? {
-                            WebkitTextStroke: `${fontSize * 0.04}px ${getStrokeColor(textColor)}`,
-                            paintOrder: 'stroke fill',
-                          } : {}),
-                          transform: `translate(${offsetX}px, ${offsetY}px)`
-                        }}
-                      >
-                        {currentText}
-                      </div>
-                    </div>
-                  );
-                  })()}
-                  {/* Author text overlay — cover only */}
-                  {selectedIdx === 0 && parsedAuthor && (() => {
-                    const ats = projectState?.author_text_settings;
-                    const ff = ats?.font_family || 'serif';
-                    const fontFamily = getFontFamilyStack(ff);
-                    return (
-                      <div className="absolute bottom-10 left-0 w-full px-12 pointer-events-none flex justify-center">
-                        <div 
-                          ref={authorTextRef}
-                          className="text-center whitespace-pre-wrap pointer-events-auto"
-                          style={{
-                            fontFamily,
-                            fontSize: `${ats?.font_size || 16}px`,
-                            lineHeight: 1.5,
-                            color: ats?.text_color || '#ffffff',
-                            ...((ats?.has_backdrop ?? false) ? {
-                              background: getStrokeColor(ats?.text_color || '#ffffff').replace('0.8)', '0.35)'),
-                              padding: `${(ats?.font_size || 16) * 0.2}px ${(ats?.font_size || 16) * 0.5}px`,
-                              borderRadius: `${(ats?.font_size || 16) * 0.3}px`,
-                            } : {}),
-                            ...((ats?.has_shadow ?? true) ? {
-                              WebkitTextStroke: `${(ats?.font_size || 16) * 0.04}px ${getStrokeColor(ats?.text_color || '#ffffff')}`,
-                              paintOrder: 'stroke fill',
-                            } : {}),
-                            transform: `translate(${ats?.offset_x || 0}px, ${ats?.offset_y || 0}px)`
-                          }}
-                        >
-                          {parsedAuthor}
-                        </div>
-                      </div>
-                    );
-                  })()}
+                  {selectedPage?.textLayers.map(layer => (
+                    <StoryTextOverlay
+                      key={layer.id}
+                      layer={layer}
+                      textRef={layer.id === 'main' ? textRef : authorTextRef}
+                      interactive
+                    />
+                  ))}
                 </div>
               </div>
             ) : (

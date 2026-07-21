@@ -6,18 +6,9 @@ import { save } from '@tauri-apps/plugin-dialog';
 import { writeFile } from '@tauri-apps/plugin-fs';
 import html2canvas from 'html2canvas';
 import { jsPDF } from 'jspdf';
-import { getFontFamilyStack, waitForProjectFonts } from './utils/fonts';
-
-
-function getStrokeColor(hexColor: string): string {
-    let hex = hexColor.replace('#', '');
-    if (hex.length === 3) hex = hex.split('').map(c => c + c).join('');
-    const r = parseInt(hex.substring(0, 2), 16) || 0;
-    const g = parseInt(hex.substring(2, 4), 16) || 0;
-    const b = parseInt(hex.substring(4, 6), 16) || 0;
-    const yiq = ((r * 299) + (g * 587) + (b * 114)) / 1000;
-    return yiq >= 128 ? 'rgba(0,0,0,0.8)' : 'rgba(255,255,255,0.8)';
-}
+import { waitForProjectFonts } from './utils/fonts';
+import { StoryTextOverlay } from './components/StoryTextOverlay';
+import { buildStoryPages, getDefaultExportFilename, renderStoryPageToCanvas } from './utils/storyPageRenderer';
 
 export interface ImposedSheet {
   id: string;
@@ -146,6 +137,14 @@ export default function PrintScreen() {
 
     const [renderedSheetCount, setRenderedSheetCount] = useState(1);
 
+    const storyPages = useMemo(() => {
+        if (!projectState) return [];
+        const imageSources = projectState.visible_images.map(source => (
+            source.startsWith('blank://') ? source : `http://127.0.0.1:14320/images/${source}`
+        ));
+        return buildStoryPages(projectState, imageSources);
+    }, [projectState]);
+
     // Force landscape for saddle/butterfly
     const effectiveOrientation = (settings.binding_method === 'saddle' || settings.binding_method === 'butterfly')
         ? 'landscape'
@@ -193,208 +192,23 @@ export default function PrintScreen() {
                 setExportProgress(Math.round((Math.min(i + concurrency, total) / total) * 80));
             }
 
-            // Now draw text directly onto each canvas using Canvas 2D API.
-            // This bypasses html2canvas's text rendering entirely for pixel-perfect positioning.
-            const canvasW = projectState?.canvas_width || 1024;
-            const canvasH = projectState?.canvas_height || 1024;
-            const parsedScriptLocal = new Map<number, string>();
-            let parsedAuthorLocal = '';
-            const script = projectState?.global_script || '';
-            const hasTitle = /(?:\[(Title|扉页)\])/i.test(script);
-            const blocks = script.split(/(?=\[(?:Cover|封面|Title|扉页|Author|作者|\d+)\])/i);
-            blocks.forEach(block => {
-                const match = block.match(/\[(Cover|封面|Title|扉页|Author|作者|\d+)\]\s*([\s\S]*)/i);
-                if (match) {
-                    const key = match[1].toLowerCase();
-                    const text = match[2].trim();
-                    
-                    if (key === 'author' || key === '作者') {
-                        parsedAuthorLocal = text;
-                        return;
-                    }
-                    
-                    const idx = key === 'cover' || key === '封面'
-                        ? 0
-                        : key === 'title' || key === '扉页'
-                          ? 1
-                          : parseInt(key, 10) + (hasTitle ? 1 : 0);
-                    parsedScriptLocal.set(idx, text);
-                }
-            });
+            // Replace each captured page with the shared logical page renderer. The surrounding
+            // sheet, crop marks and print margins still come from the imposed DOM preview.
+            const h2cScale = 5;
+            const renderedPages = new Map<number, HTMLCanvasElement>();
+            const pageIndexes = [...new Set(Array.from(targets).flatMap(target => (
+                Array.from(target.querySelectorAll<HTMLElement>('[data-page-idx]'))
+                    .map(pageEl => Number.parseInt(pageEl.dataset.pageIdx || '', 10))
+                    .filter(Number.isFinite)
+            )))];
 
-            // For each sheet-export-target, find which page containers (data-page-idx) are inside it,
-            // then draw their text directly onto the captured canvas.
-            const h2cScale = 5; // must match html2canvas scale above
-            const baseBottomPx = 40; // Tailwind bottom-10 in canvas coords
+            for (let pagePosition = 0; pagePosition < pageIndexes.length; pagePosition += 1) {
+                const pageIndex = pageIndexes[pagePosition];
+                const page = storyPages[pageIndex];
+                if (page) renderedPages.set(pageIndex, await renderStoryPageToCanvas(page));
+                setExportProgress(80 + Math.round(((pagePosition + 1) / pageIndexes.length) * 10));
+            }
 
-            // Helper: get shadow color based on text brightness
-            const getShadowColor = (hexColor: string) => {
-                let h = hexColor.replace('#', '');
-                if (h.length === 3) h = h.split('').map(c => c + c).join('');
-                const r = parseInt(h.substring(0, 2), 16) || 0;
-                const g = parseInt(h.substring(2, 4), 16) || 0;
-                const b = parseInt(h.substring(4, 6), 16) || 0;
-                const yiq = ((r * 299) + (g * 587) + (b * 114)) / 1000;
-                return yiq >= 128 ? 'rgba(0,0,0,0.8)' : 'rgba(255,255,255,0.8)';
-            };
-
-            // Draw text on canvas for a specific page
-            const drawTextOnCanvas = (
-                ctx: CanvasRenderingContext2D,
-                pageEl: HTMLElement, // the [data-page-idx] element
-                sheetEl: Element,    // the .sheet-export-target element
-            ) => {
-                const pageIdx = parseInt(pageEl.dataset.pageIdx || '', 10);
-                if (isNaN(pageIdx)) return;
-
-                const isCover = pageIdx === 0;
-                const hasTitle = /(?:\[(Title|扉页)\])/i.test(projectState?.global_script || '');
-                const isTitle = hasTitle && pageIdx === 1;
-                const ts = isCover ? projectState?.cover_text_settings : (isTitle ? projectState?.title_text_settings : projectState?.inner_text_settings);
-                const pageOverride = !isCover && !isTitle ? projectState?.page_text_overrides?.[String(pageIdx)] : undefined;
-                const ff = ts?.font_family || 'serif';
-
-                // Get page element's position relative to the sheet-export-target
-                const sheetRect = sheetEl.getBoundingClientRect();
-                const pageRect = pageEl.getBoundingClientRect();
-                const relLeft = pageRect.left - sheetRect.left;
-                const relTop = pageRect.top - sheetRect.top;
-                const pageW = pageRect.width;
-                const pageH = pageRect.height;
-
-                // Scale factor from canvas coords to page element pixels
-                const S = Math.min(pageW / canvasW, pageH / canvasH);
-
-                // All coordinates below are in page-element pixels, relative to page-element origin.
-                // Then we add relLeft/relTop to get sheet-relative, then multiply by h2cScale for canvas pixels.
-
-                const drawSingleText = (
-                    content: string,
-                    fontFamily: string,
-                    fontSize: number,
-                    color: string,
-                    hasShadow: boolean,
-                    hasBackdrop: boolean,
-                    oxCanvas: number,
-                    oyCanvas: number,
-                ) => {
-                    if (!content) return;
-
-                    // Reset any transforms html2canvas may have left on the context
-                    ctx.setTransform(1, 0, 0, 1, 0, 0);
-
-                    const scaledFontSize = fontSize * S * h2cScale;
-                    const fontStr = `${scaledFontSize}px ${getFontFamilyStack(fontFamily)}`;
-                    ctx.font = fontStr;
-                    ctx.textAlign = 'center';
-                    ctx.textBaseline = 'bottom';
-
-                    // Position: center X with offset, bottom with offset
-                    const centerX = (relLeft + pageW / 2 + oxCanvas * S) * h2cScale;
-                    const bottomY = (relTop + pageH - (baseBottomPx - oyCanvas) * S) * h2cScale;
-
-                    // Handle multi-line text with auto-wrapping
-                    const maxWidth = (pageW - 48 * 2 * S) * h2cScale;
-                    const lines: string[] = [];
-                    content.split('\n').forEach(paragraph => {
-                        let currentLine = '';
-                        for (const char of paragraph) {
-                            const testLine = currentLine + char;
-                            const m = ctx.measureText(testLine);
-                            if (m.width > maxWidth && currentLine.length > 0) {
-                                lines.push(currentLine);
-                                currentLine = char;
-                            } else {
-                                currentLine = testLine;
-                            }
-                        }
-                        if (currentLine) {
-                            lines.push(currentLine);
-                        }
-                    });
-                    const lineHeight = scaledFontSize * 1.5;
-
-                    // Draw backdrop plate behind text
-                    if (hasBackdrop) {
-                        ctx.setTransform(1, 0, 0, 1, 0, 0);
-                        const bgColor = getShadowColor(color).replace('0.8)', '0.35)');
-                        const padX = scaledFontSize * 0.5;
-                        const padY = scaledFontSize * 0.2;
-                        const radius = scaledFontSize * 0.3;
-
-                        // Measure total text block dimensions
-                        let maxLineW = 0;
-                        for (const line of lines) {
-                            const m = ctx.measureText(line);
-                            if (m.width > maxLineW) maxLineW = m.width;
-                        }
-                        const totalTextH = lines.length * lineHeight;
-                        const rectW = maxLineW + padX * 2;
-                        const rectH = totalTextH + padY * 2;
-                        const rectX = centerX - rectW / 2;
-                        const rectY = bottomY - totalTextH - padY + lineHeight * 0.25;
-
-                        ctx.fillStyle = bgColor;
-                        ctx.beginPath();
-                        ctx.roundRect(rectX, rectY, rectW, rectH, radius);
-                        ctx.fill();
-                    }
-
-                    // Pass 1: Draw stroke outline (contrasting color)
-                    if (hasShadow) {
-                        const strokeColor = getShadowColor(color);
-                        ctx.strokeStyle = strokeColor;
-                        ctx.lineWidth = scaledFontSize * 0.08;
-                        ctx.lineJoin = 'round';
-                        ctx.miterLimit = 2;
-                        ctx.shadowColor = 'transparent';
-                        ctx.shadowBlur = 0;
-
-                        for (let li = lines.length - 1; li >= 0; li--) {
-                            const y = bottomY - (lines.length - 1 - li) * lineHeight;
-                            ctx.strokeText(lines[li], centerX, y);
-                        }
-                    }
-
-                    // Pass 2: Draw fill on top
-                    ctx.fillStyle = color;
-                    for (let li = lines.length - 1; li >= 0; li--) {
-                        const y = bottomY - (lines.length - 1 - li) * lineHeight;
-                        ctx.fillText(lines[li], centerX, y);
-                    }
-                };
-
-                // Draw title text
-                const titleText = parsedScriptLocal.get(pageIdx);
-                if (titleText) {
-                    const effectiveColor = (pageOverride?.text_color ?? ts?.text_color) || '#ffffff';
-                    const effectiveOffsetX = pageOverride?.offset_x ?? ts?.offset_x ?? 0;
-                    const effectiveOffsetY = pageOverride?.offset_y ?? ts?.offset_y ?? 0;
-                    drawSingleText(
-                        titleText, ff,
-                        ts?.font_size || (isCover ? 40 : (isTitle ? 32 : 20)),
-                        effectiveColor, ts?.has_shadow ?? true, ts?.has_backdrop ?? false,
-                        effectiveOffsetX, effectiveOffsetY,
-                    );
-                }
-
-                // Draw author text (cover only)
-                const authorNameToDraw = parsedAuthorLocal || projectState?.author_name;
-                if (isCover && authorNameToDraw) {
-                    const ats = projectState?.author_text_settings;
-                    drawSingleText(
-                        authorNameToDraw,
-                        ats?.font_family || 'serif',
-                        ats?.font_size || 16,
-                        ats?.text_color || '#ffffff',
-                        ats?.has_shadow ?? true, ats?.has_backdrop ?? false,
-                        ats?.offset_x ?? 0,
-                        ats?.offset_y ?? 0,
-                    );
-                }
-            };
-
-            // For each captured canvas, find the page containers and draw text
             for (let i = 0; i < total; i++) {
                 const canvas = canvasArray[i];
                 const ctx = canvas.getContext('2d');
@@ -403,7 +217,21 @@ export default function PrintScreen() {
                 const target = targets[i];
                 const pageEls = target.querySelectorAll('[data-page-idx]');
                 pageEls.forEach(el => {
-                    drawTextOnCanvas(ctx, el as HTMLElement, target);
+                    const pageEl = el as HTMLElement;
+                    const pageIndex = Number.parseInt(pageEl.dataset.pageIdx || '', 10);
+                    const renderedPage = renderedPages.get(pageIndex);
+                    if (!renderedPage) return;
+
+                    const sheetRect = target.getBoundingClientRect();
+                    const pageRect = pageEl.getBoundingClientRect();
+                    ctx.setTransform(1, 0, 0, 1, 0, 0);
+                    ctx.drawImage(
+                        renderedPage,
+                        (pageRect.left - sheetRect.left) * h2cScale,
+                        (pageRect.top - sheetRect.top) * h2cScale,
+                        pageRect.width * h2cScale,
+                        pageRect.height * h2cScale,
+                    );
                 });
             }
 
@@ -438,23 +266,7 @@ export default function PrintScreen() {
 
             setExportProgress(95);
 
-            let filename = '';
-            if (projectState?.global_script) {
-                const lines = projectState.global_script.split('\n');
-                for (const line of lines) {
-                    const trimmed = line.trim();
-                    if (trimmed.length > 0 && !trimmed.startsWith('[')) {
-                        filename = trimmed.substring(0, 30).replace(/[/\\?%*:|"<>]/g, '-');
-                        break;
-                    }
-                }
-            }
-            if (!filename && projectState?.project_name && projectState.project_name.trim() !== 'Untitled') {
-                filename = projectState.project_name.replace(/[/\\?%*:|"<>]/g, '-');
-            }
-            if (!filename) {
-                filename = '未命名';
-            }
+            const filename = projectState ? getDefaultExportFilename(projectState) : '未命名';
 
             // Prompt user for save path
             const filePath = await save({
@@ -599,34 +411,6 @@ export default function PrintScreen() {
         });
     };
 
-    // Parse global script for text overlays
-    const { parsedScript, parsedAuthor } = useMemo(() => {
-        const map = new Map<number, string>();
-        let author = "";
-        const script = projectState?.global_script || '';
-        const hasTitle = /(?:\[(Title|扉页)\])/i.test(script);
-        const blocks = script.split(/(?=\[(?:Cover|封面|Title|扉页|Author|作者|\d+)\])/i);
-        blocks.forEach(block => {
-            const match = block.match(/\[(Cover|封面|Title|扉页|Author|作者|\d+)\]\s*([\s\S]*)/i);
-            if (match) {
-                const key = match[1].toLowerCase();
-                const text = match[2].trim();
-                
-                if (key === 'author' || key === '作者') {
-                    author = text;
-                } else {
-                    const idx = key === 'cover' || key === '封面'
-                        ? 0
-                        : key === 'title' || key === '扉页'
-                          ? 1
-                          : parseInt(key, 10) + (hasTitle ? 1 : 0);
-                    map.set(idx, text);
-                }
-            }
-        });
-        return { parsedScript: map, parsedAuthor: author };
-    }, [projectState?.global_script]);
-
     // Helper: render a complete page cell (image + text) inside a single canvas div.
     // Both image and text share the same canvas coordinate system (canvas_width × canvas_height),
     // then the canvas is CSS-transform-scaled to fit the page slot.
@@ -636,19 +420,8 @@ export default function PrintScreen() {
     const renderPageCanvas = (pageIdx: number, slotW: number, slotH: number, objPos: string) => {
         if (pageIdx === null || pageIdx === undefined) return null;
         const imgFile = projectState?.visible_images[pageIdx];
-        if (!imgFile) return null;
-        
-        const text = parsedScript.get(pageIdx);
-        const isCover = pageIdx === 0;
-        const hasTitle = /(?:\[(Title|扉页)\])/i.test(projectState?.global_script || '');
-        const isTitle = hasTitle && pageIdx === 1;
-        const ts = isCover ? projectState?.cover_text_settings : (isTitle ? projectState?.title_text_settings : projectState?.inner_text_settings);
-        const pageOverride = !isCover && !isTitle ? projectState?.page_text_overrides?.[String(pageIdx)] : undefined;
-        const ff = ts?.font_family || 'serif';
-        const fontFamily = getFontFamilyStack(ff);
-        const effectiveColor = (pageOverride?.text_color ?? ts?.text_color) || '#ffffff';
-        const effectiveOffsetX = pageOverride?.offset_x ?? ts?.offset_x ?? 0;
-        const effectiveOffsetY = pageOverride?.offset_y ?? ts?.offset_y ?? 0;
+        const page = storyPages[pageIdx];
+        if (!imgFile || !page) return null;
         
         // Scale canvas to fit slot
         const S = Math.min(slotW / canvasW, slotH / canvasH);
@@ -668,59 +441,6 @@ export default function PrintScreen() {
             top = (slotH - scaledH) / 2;
         }
 
-        const baseBottomPx = 40;
-        const basePadPx = 48;
-        
-        // Text overlay — visible on screen preview, hidden during export.
-        // During export, text is drawn via Canvas 2D API for pixel-perfect positioning.
-        const renderTextOverlay = (
-            content: string,
-            font: string,
-            fontSize: number,
-            color: string,
-            hasShadow: boolean,
-            hasBackdrop: boolean,
-            oxCanvas: number,
-            oyCanvas: number,
-        ) => {
-            return (
-                <div className="hide-on-export" style={{
-                    position: 'absolute',
-                    top: 0,
-                    left: 0,
-                    width: '100%',
-                    height: '100%',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    justifyContent: 'flex-end',
-                    alignItems: 'center',
-                    paddingBottom: `${(baseBottomPx - oyCanvas) * S}px`,
-                    paddingLeft: `${(basePadPx + oxCanvas) * S}px`,
-                    paddingRight: `${(basePadPx - oxCanvas) * S}px`,
-                    boxSizing: 'border-box',
-                    pointerEvents: 'none' as const,
-                }}>
-                    <div className="text-center whitespace-pre-wrap" style={{
-                        fontFamily: font,
-                        fontSize: `${fontSize * S}px`,
-                        lineHeight: 1.5,
-                        color,
-                        ...(hasBackdrop ? {
-                            background: getStrokeColor(color).replace('0.8)', '0.35)'),
-                            padding: `${fontSize * S * 0.2}px ${fontSize * S * 0.5}px`,
-                            borderRadius: `${fontSize * S * 0.3}px`,
-                        } : {}),
-                        ...(hasShadow ? {
-                            WebkitTextStroke: `${fontSize * S * 0.04}px ${getStrokeColor(color)}`,
-                            paintOrder: 'stroke fill',
-                        } : {}),
-                    }}>
-                        {content}
-                    </div>
-                </div>
-            );
-        };
-        
         return (
             <div className="absolute" data-page-idx={pageIdx} style={{
                 left: `${left}px`,
@@ -732,42 +452,25 @@ export default function PrintScreen() {
             }}>
                 {/* Image fills canvas with overflow handling */}
                 {(() => {
-                    const imgAdj = projectState?.image_adjustments?.[String(pageIdx)];
-                    const scale = imgAdj?.scale ?? 1;
-                    const offsetX = imgAdj?.offset_x ?? 0;
-                    const offsetY = imgAdj?.offset_y ?? 0;
-                    const bgColor = imgAdj?.bg_color || 'transparent';
-                    const adjustments = {
-                        brightness: imgAdj?.brightness ?? 0,
-                        exposure: imgAdj?.exposure ?? 0,
-                        highlights: imgAdj?.highlights ?? 0,
-                        shadows: imgAdj?.shadows ?? 0,
-                        contrast: imgAdj?.contrast ?? 0,
-                        saturate: imgAdj?.saturate ?? 0,
-                        temperature: imgAdj?.temperature ?? 0,
-                        tint: imgAdj?.tint ?? 0,
-                        selective_colors: imgAdj?.selective_colors || [],
-                        remove_white_bg: imgAdj?.remove_white_bg ?? 0,
-                        remove_bg_color: imgAdj?.remove_bg_color,
-                    };
+                    const imageLayer = page.image;
                     
                     let cw: string | undefined = undefined;
                     let ch: string | undefined = undefined;
-                    let effectiveOffsetX = offsetX;
-                    let effectiveOffsetY = offsetY;
+                    let effectiveOffsetX = imageLayer.offsetX;
+                    let effectiveOffsetY = imageLayer.offsetY;
                     const dim = imageDims[pageIdx];
                     if (dim) {
                         const s = Math.min(scaledW / dim.w, scaledH / dim.h);
                         // Bake scale into explicit width/height to bypass html2canvas transform bugs
-                        cw = `${dim.w * s * scale}px`;
-                        ch = `${dim.h * s * scale}px`;
+                        cw = `${dim.w * s * imageLayer.scale}px`;
+                        ch = `${dim.h * s * imageLayer.scale}px`;
                         // Adjust translation percentage since the element's base width/height has changed
-                        effectiveOffsetX = offsetX / scale;
-                        effectiveOffsetY = offsetY / scale;
+                        effectiveOffsetX = imageLayer.offsetX / Math.max(imageLayer.scale, 0.01);
+                        effectiveOffsetY = imageLayer.offsetY / Math.max(imageLayer.scale, 0.01);
                     }
                     
                     return (
-                        <div className="absolute inset-0 overflow-hidden flex items-center justify-center" style={{ backgroundColor: bgColor }}>
+                        <div className="absolute inset-0 overflow-hidden flex items-center justify-center" style={{ backgroundColor: imageLayer.backgroundColor }}>
                             <ProImage 
                                 onLoad={(img) => handleImageLoad(pageIdx, img)}
                                 src={imgFile.startsWith('blank://') ? "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" : `http://127.0.0.1:14320/images/${imgFile}`}
@@ -777,38 +480,14 @@ export default function PrintScreen() {
                                     height: ch,
                                     transform: `translate(${effectiveOffsetX}%, ${effectiveOffsetY}%)` // scale is baked
                                 }}
-                                adjustments={adjustments}
+                                adjustments={imageLayer.adjustments}
                             />
                         </div>
                     );
                 })()}
-                {/* Title text overlay */}
-                {text && renderTextOverlay(
-                    text,
-                    fontFamily,
-                    ts?.font_size || (isCover ? 40 : (isTitle ? 32 : 20)),
-                    effectiveColor,
-                    ts?.has_shadow ?? true,
-                    ts?.has_backdrop ?? false,
-                    effectiveOffsetX,
-                    effectiveOffsetY,
-                )}
-                {/* Author overlay — cover only */}
-                {isCover && parsedAuthor && (() => {
-                    const ats = projectState?.author_text_settings;
-                    const aff = ats?.font_family || 'serif';
-                    const authorFont = getFontFamilyStack(aff);
-                    return renderTextOverlay(
-                        parsedAuthor,
-                        authorFont,
-                        ats?.font_size || 16,
-                        ats?.text_color || '#ffffff',
-                        ats?.has_shadow ?? true,
-                        ats?.has_backdrop ?? false,
-                        ats?.offset_x ?? 0,
-                        ats?.offset_y ?? 0,
-                    );
-                })()}
+                {page.textLayers.map(layer => (
+                    <StoryTextOverlay key={layer.id} layer={layer} scale={S} hideOnPdfExport />
+                ))}
             </div>
         );
     };

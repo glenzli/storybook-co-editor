@@ -1,4 +1,4 @@
-import { FileBox, Undo2, Redo2, Save, FolderOpen, XCircle, Loader2 } from 'lucide-react';
+import { FileBox, Undo2, Redo2, Save, FolderOpen, XCircle, Loader2, FileDown } from 'lucide-react';
 import type { ProjectState } from '../ProjectContext';
 import { LicenseNoticeButton } from './LicenseNoticeButton';
 
@@ -17,6 +17,8 @@ interface EditorHeaderProps {
   closeProject: () => void;
   isSaving?: boolean;
   saveProgress?: { current: number, total: number } | null;
+  exportElectronicPdf: () => void;
+  electronicPdfProgress?: { current: number, total: number } | null;
 }
 
 export function EditorHeader({
@@ -33,7 +35,9 @@ export function EditorHeader({
   saveProjectAs,
   closeProject,
   isSaving,
-  saveProgress
+  saveProgress,
+  exportElectronicPdf,
+  electronicPdfProgress,
 }: EditorHeaderProps) {
   return (
     <header className="h-12 bg-card border-b border-border flex items-center justify-between px-4 text-sm flex-shrink-0 relative z-30 shadow-sm">
@@ -72,6 +76,17 @@ export function EditorHeader({
       </div>
 
       <div className="flex items-center justify-end gap-1 w-1/3">
+          <button
+            onClick={exportElectronicPdf}
+            disabled={Boolean(electronicPdfProgress)}
+            className={`p-1.5 rounded-md transition-colors ${electronicPdfProgress ? 'text-primary' : 'hover:bg-muted text-foreground'}`}
+            title={electronicPdfProgress
+              ? `正在导出电子 PDF ${electronicPdfProgress.current}/${electronicPdfProgress.total}`
+              : '导出电子 PDF'}
+          >
+              {electronicPdfProgress ? <Loader2 size={14} className="animate-spin" /> : <FileDown size={14} />}
+          </button>
+          <div className="w-px h-4 bg-border mx-1"></div>
           <button onClick={undo} disabled={!canUndo} className={`p-1.5 rounded-md transition-colors ${canUndo ? 'hover:bg-muted text-foreground' : 'text-muted-foreground/30 cursor-not-allowed'}`} title="撤销 (Cmd+Z)">
               <Undo2 size={14} />
           </button>

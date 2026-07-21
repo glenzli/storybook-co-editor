@@ -47,7 +47,8 @@ RELEASE_NOTES_v1.1.4.md
 - Create a new project and confirm the footer says the local bridge is connected.
 - Load the extension from `extension/dist` in `chrome://extensions`.
 - Send one image from a supported page to the desktop app.
-- Export a small PDF from the print tab.
+- Export a small electronic PDF from the editor header.
+- Export a small print PDF from the print tab.
 
 5. Create and push the version tag.
 
