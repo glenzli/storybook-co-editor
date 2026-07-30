@@ -1,5 +1,5 @@
 use lopdf::encryption::crypt_filters::{Aes256CryptFilter, CryptFilter};
-use lopdf::{Document, EncryptionState, EncryptionVersion, Permissions};
+use lopdf::{Document, EncryptionState, EncryptionVersion, Object, Permissions};
 use rand::Rng as _;
 use serde::Deserialize;
 use std::collections::BTreeMap;
@@ -64,6 +64,33 @@ fn replace_with_verified_file(original_path: &Path, protected_path: &Path) -> Re
         .map_err(|error| format!("无法安装已验证的加密 PDF：{error}"))
 }
 
+fn complete_aes256_encryption_dictionary(document: &mut Document) -> Result<(), String> {
+    let encryption_id = document
+        .trailer
+        .get(b"Encrypt")
+        .and_then(Object::as_reference)
+        .map_err(|error| format!("无法定位 PDF 加密字典：{error}"))?;
+    let encryption_dictionary = document
+        .objects
+        .get_mut(&encryption_id)
+        .ok_or_else(|| "无法读取 PDF 加密字典。".to_string())?
+        .as_dict_mut()
+        .map_err(|error| format!("PDF 加密字典格式无效：{error}"))?;
+
+    // lopdf 0.39 omits these declarations, which external readers need to decrypt AESV3 streams.
+    encryption_dictionary.set("Length", 256);
+    let standard_filter = encryption_dictionary
+        .get_mut(b"CF")
+        .and_then(Object::as_dict_mut)
+        .and_then(|filters| filters.get_mut(b"StdCF"))
+        .and_then(Object::as_dict_mut)
+        .map_err(|error| format!("PDF AES-256 过滤器格式无效：{error}"))?;
+    standard_filter.set("Length", 32);
+    standard_filter.set("AuthEvent", Object::Name(b"DocOpen".to_vec()));
+
+    Ok(())
+}
+
 fn protect_pdf_at_path(path: &Path, options: &PdfProtectionOptions) -> Result<(), String> {
     let mut document =
         Document::load(path).map_err(|error| format!("无法读取待加密 PDF：{error}"))?;
@@ -96,6 +123,7 @@ fn protect_pdf_at_path(path: &Path, options: &PdfProtectionOptions) -> Result<()
     document
         .encrypt(&encryption_state)
         .map_err(|error| format!("无法加密 PDF：{error}"))?;
+    complete_aes256_encryption_dictionary(&mut document)?;
 
     let protected_path = sibling_temp_path(path, "protected")?;
     let result = (|| {
@@ -105,24 +133,30 @@ fn protect_pdf_at_path(path: &Path, options: &PdfProtectionOptions) -> Result<()
 
         let mut verification = Document::load(&protected_path)
             .map_err(|error| format!("无法重新读取加密 PDF：{error}"))?;
-        if !verification.is_encrypted() {
+        let (version, revision, actual_permissions) = if verification.is_encrypted() {
+            let decoded = EncryptionState::decode(&verification, options.open_password.as_bytes())
+                .map_err(|error| format!("加密校验失败：{error}"))?;
+            let properties = (decoded.version(), decoded.revision(), decoded.permissions());
+            verification
+                .decrypt(&options.open_password)
+                .map_err(|error| format!("打开密码校验失败：{error}"))?;
+            properties
+        } else if let Some(decoded) = verification.encryption_state.as_ref() {
+            // lopdf automatically decrypts files whose user password is empty.
+            (decoded.version(), decoded.revision(), decoded.permissions())
+        } else {
             return Err("加密校验失败：输出文件未标记为加密。".to_string());
-        }
-        let decoded = EncryptionState::decode(&verification, options.open_password.as_bytes())
-            .map_err(|error| format!("加密校验失败：{error}"))?;
-        if decoded.version() != 5 || decoded.revision() != 6 {
+        };
+
+        if version != 5 || revision != 6 {
             return Err(format!(
                 "加密校验失败：预期 V=5/R=6，实际 V={}/R={}。",
-                decoded.version(),
-                decoded.revision()
+                version, revision
             ));
         }
-        if decoded.permissions() != expected_permissions {
+        if actual_permissions != expected_permissions {
             return Err("加密校验失败：PDF 权限与发布设置不一致。".to_string());
         }
-        verification
-            .decrypt(&options.open_password)
-            .map_err(|error| format!("打开密码校验失败：{error}"))?;
 
         replace_with_verified_file(path, &protected_path)
     })();
@@ -144,10 +178,15 @@ mod tests {
     use super::*;
     use lopdf::{dictionary, Object};
 
+    const TEST_PAGE_CONTENT: &[u8] = b"q 0.83 0.15 0.25 rg 0 0 300 300 re f Q";
+
     fn create_test_pdf(path: &Path) {
         let mut document = Document::with_version("1.5");
         let pages_id = document.new_object_id();
-        let content_id = document.add_object(lopdf::Stream::new(dictionary! {}, Vec::new()));
+        let content_id = document.add_object(lopdf::Stream::new(
+            dictionary! {},
+            TEST_PAGE_CONTENT.to_vec(),
+        ));
         let resources_id = document.add_object(dictionary! {});
         let page_id = document.add_object(dictionary! {
             "Type" => "Page",
@@ -187,7 +226,37 @@ mod tests {
 
         protect_pdf_at_path(&path, &options).unwrap();
 
-        let mut encrypted = Document::load(&path).unwrap();
+        let encrypted = Document::load(&path).unwrap();
+        let encryption_dictionary = encrypted.get_encrypted().unwrap();
+        assert_eq!(
+            encryption_dictionary
+                .get(b"Length")
+                .unwrap()
+                .as_i64()
+                .unwrap(),
+            256
+        );
+        let standard_filter = encryption_dictionary
+            .get(b"CF")
+            .unwrap()
+            .as_dict()
+            .unwrap()
+            .get(b"StdCF")
+            .unwrap()
+            .as_dict()
+            .unwrap();
+        assert_eq!(
+            standard_filter.get(b"Length").unwrap().as_i64().unwrap(),
+            32
+        );
+        assert_eq!(
+            standard_filter
+                .get(b"AuthEvent")
+                .unwrap()
+                .as_name()
+                .unwrap(),
+            b"DocOpen"
+        );
         let state = EncryptionState::decode(&encrypted, b"reader-pass").unwrap();
         assert_eq!(state.version(), 5);
         assert_eq!(state.revision(), 6);
@@ -197,7 +266,39 @@ mod tests {
             .contains(Permissions::PRINTABLE_IN_HIGH_QUALITY));
         assert!(!state.permissions().contains(Permissions::COPYABLE));
         assert!(state.permissions().contains(Permissions::ANNOTABLE));
-        encrypted.decrypt("reader-pass").unwrap();
+        let decrypted = Document::load_with_password(&path, "reader-pass").unwrap();
+        let page_id = *decrypted.get_pages().values().next().unwrap();
+        assert_eq!(
+            decrypted.get_page_content(page_id).unwrap(),
+            TEST_PAGE_CONTENT
+        );
+
+        std::fs::remove_file(path).unwrap();
+    }
+
+    #[test]
+    fn verifies_encryption_when_open_password_is_empty() {
+        let path = std::env::temp_dir().join(format!("storybook-pdf-test-{}.pdf", Uuid::new_v4()));
+        create_test_pdf(&path);
+        let options = PdfProtectionOptions {
+            printing: PrintPermission::None,
+            allow_copying: false,
+            allow_modification: false,
+            allow_annotations: true,
+            open_password: String::new(),
+        };
+
+        protect_pdf_at_path(&path, &options).unwrap();
+
+        let encrypted = Document::load(&path).unwrap();
+        assert!(!encrypted.is_encrypted());
+        assert!(encrypted.was_encrypted());
+        let state = encrypted.encryption_state.as_ref().unwrap();
+        assert_eq!(state.version(), 5);
+        assert_eq!(state.revision(), 6);
+        assert!(!state.permissions().contains(Permissions::PRINTABLE));
+        assert!(!state.permissions().contains(Permissions::COPYABLE));
+        assert!(state.permissions().contains(Permissions::ANNOTABLE));
 
         std::fs::remove_file(path).unwrap();
     }
