@@ -12,15 +12,15 @@ export function LanguageSwitcher({ compact = false, className = '' }: LanguageSw
 
   return (
     <label
-      className={`inline-flex items-center gap-1.5 text-muted-foreground ${className}`}
+      className={`inline-flex shrink-0 items-center gap-1.5 text-muted-foreground ${className}`}
       title={t('common.language')}
     >
-      <Languages size={compact ? 14 : 16} aria-hidden="true" />
+      <Languages size={compact ? 14 : 16} className="shrink-0" aria-hidden="true" />
       <span className="sr-only">{t('common.language')}</span>
       <select
         value={getAppLanguage()}
         onChange={(event) => void setAppLanguage(event.target.value as AppLanguage)}
-        className={`cursor-pointer border-0 bg-transparent text-foreground outline-none ${compact ? 'w-[62px] text-[11px]' : 'text-sm'}`}
+        className={`cursor-pointer border-0 bg-transparent text-foreground outline-none ${compact ? 'w-[74px] min-w-[74px] text-[11px]' : 'text-sm'}`}
         aria-label={t('common.language')}
       >
         <option value="zh-CN">{t('common.chinese')}</option>

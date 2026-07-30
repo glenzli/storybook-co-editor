@@ -128,7 +128,7 @@ export function EditorHeader({
               <FolderOpen size={14} />
           </button>
           <div className="w-px h-4 bg-border mx-1"></div>
-          <LanguageSwitcher compact className="max-w-[82px]" />
+          <LanguageSwitcher compact className="w-[96px]" />
           <LicenseNoticeButton compact className="text-muted-foreground hover:bg-muted hover:text-foreground" />
           <button onClick={closeProject} className="p-1.5 rounded-md hover:bg-red-500/10 text-red-500 transition-colors" title={t('header.closeProject')}>
               <XCircle size={14} />
