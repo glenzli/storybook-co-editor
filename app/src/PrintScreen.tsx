@@ -12,6 +12,8 @@ import { getDefaultExportFilename } from './utils/storyPageRenderer';
 import { applyPublicationMetadataToPdf } from './utils/publicationMetadata';
 import { buildExportPages, renderExportPageToCanvas } from './utils/exportPages';
 import { PublicationPagePreview } from './components/PublicationPagePreview';
+import { useTranslation } from 'react-i18next';
+import { localizeAppError } from './i18n';
 
 export interface ImposedSheet {
   id: string;
@@ -113,6 +115,8 @@ interface PrintScreenProps {
 }
 
 export default function PrintScreen({ requestPdfExport }: PrintScreenProps) {
+    const { t, i18n } = useTranslation();
+    const interfaceLanguage = i18n.resolvedLanguage;
     const { projectState, updateProjectState } = useProject();
 
     const settings = useMemo<PrintSettings>(() => {
@@ -139,17 +143,18 @@ export default function PrintScreen({ requestPdfExport }: PrintScreenProps) {
 
     const [isExporting, setIsExporting] = useState(false);
     const [exportProgress, setExportProgress] = useState(0);
-    const [exportStatusText, setExportStatusText] = useState('导出中...');
+    const [exportStatusText, setExportStatusText] = useState(() => t('print.exporting'));
 
     const [renderedSheetCount, setRenderedSheetCount] = useState(1);
 
     const exportPages = useMemo(() => {
+        void interfaceLanguage;
         if (!projectState) return [];
         const imageSources = projectState.visible_images.map(source => (
             source.startsWith('blank://') ? source : `http://127.0.0.1:14320/images/${source}`
         ));
         return buildExportPages(projectState, imageSources, 'print');
-    }, [projectState]);
+    }, [interfaceLanguage, projectState]);
 
     // Force landscape for saddle/butterfly
     const effectiveOrientation = (settings.binding_method === 'saddle' || settings.binding_method === 'butterfly')
@@ -162,16 +167,16 @@ export default function PrintScreen({ requestPdfExport }: PrintScreenProps) {
         setExportProgress(0);
 
         try {
-            setExportStatusText('加载字体...');
+            setExportStatusText(t('print.loadingFonts'));
             await waitForProjectFonts(projectState);
-            setExportStatusText('导出中...');
+            setExportStatusText(t('print.exporting'));
 
             document.body.classList.add('pdf-exporting');
             await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
 
             const targets = document.querySelectorAll('.sheet-export-target');
             if (targets.length === 0) {
-                throw new Error("No sheets to export");
+                throw new Error(t('print.noSheets'));
             }
 
             let pdf: jsPDF | null = null;
@@ -267,34 +272,34 @@ export default function PrintScreen({ requestPdfExport }: PrintScreenProps) {
             }
 
             if (!pdf) {
-                throw new Error("No valid pages were exported.");
+                throw new Error(t('print.noValidPages'));
             }
 
             if (projectState) applyPublicationMetadataToPdf(pdf, projectState);
 
             setExportProgress(95);
 
-            const filename = projectState ? getDefaultExportFilename(projectState) : '未命名';
+            const filename = projectState ? getDefaultExportFilename(projectState) : t('common.untitled');
 
             // Prompt user for save path
             const filePath = await save({
-                filters: [{ name: 'PDF Document', extensions: ['pdf'] }],
+                filters: [{ name: t('common.pdfDocument'), extensions: ['pdf'] }],
                 defaultPath: `${filename}.pdf`
             });
 
             if (filePath) {
                 const arrayBuffer = pdf.output('arraybuffer');
                 await writeFile(filePath, new Uint8Array(arrayBuffer));
-                alert(`成功导出 PDF 至：\n${filePath}`);
+                alert(t('print.exportSuccess', { path: filePath }));
             }
         } catch (err) {
             console.error('PDF export failed:', err);
-            alert('PDF 导出失败');
+            alert(t('print.exportFailure', { error: localizeAppError(err) }));
         } finally {
             document.body.classList.remove('pdf-exporting');
             setIsExporting(false);
             setExportProgress(0);
-            setExportStatusText('导出中...');
+            setExportStatusText(t('print.exporting'));
         }
     };
 
@@ -509,21 +514,21 @@ export default function PrintScreen({ requestPdfExport }: PrintScreenProps) {
             <aside className="w-80 min-w-[320px] bg-card border-r border-border flex flex-col z-20 shadow-xl overflow-y-auto">
                 <div className="p-4 border-b border-border flex items-center gap-2">
                     <Printer size={20} className="text-primary" />
-                    <h2 className="font-bold whitespace-nowrap">印前配置 (Pre-Press)</h2>
+                    <h2 className="font-bold whitespace-nowrap">{t('print.configuration')}</h2>
                 </div>
                 
                 <div className="p-4 flex flex-col gap-6 flex-1">
                     {/* Binding Method */}
                     <div className="flex flex-col gap-2">
-                        <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">装订方式</label>
+                        <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">{t('print.bindingMethod')}</label>
                         <select 
                             className="w-full bg-background border border-border rounded-md p-2 text-sm focus:ring-1 focus:ring-primary outline-none"
                             value={settings.binding_method}
                             onChange={(e) => updateSettings({ binding_method: e.target.value as PrintSettings['binding_method'] })}
                         >
-                            <option value="saddle">骑马钉</option>
-                            <option value="perfect">无线胶装</option>
-                            <option value="butterfly">蝴蝶对裱</option>
+                            <option value="saddle">{t('print.saddle')}</option>
+                            <option value="perfect">{t('print.perfect')}</option>
+                            <option value="butterfly">{t('print.butterfly')}</option>
                         </select>
                     </div>
 
@@ -531,18 +536,18 @@ export default function PrintScreen({ requestPdfExport }: PrintScreenProps) {
                         <div className="bg-yellow-500/10 border border-yellow-500/20 rounded-md p-3 flex gap-2 text-yellow-600 dark:text-yellow-400">
                             <AlertTriangle size={16} className="flex-shrink-0 mt-0.5" />
                             <div className="text-xs">
-                                <strong>页数提示</strong><br/>
-                                骑马钉要求总页数是 4 的倍数。当前有 {totalPages} 页，导出会自动在末尾填充空白页。
+                                <strong>{t('print.pageCountHint')}</strong><br/>
+                                {t('print.saddlePageWarning', { count: totalPages })}
                             </div>
                         </div>
                     )}
 
                     {/* Paper & Layout */}
                     <div className="flex flex-col gap-2">
-                        <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">尺寸规格</label>
+                        <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">{t('print.size')}</label>
                         <div className="grid grid-cols-2 gap-2">
                             <div>
-                                <span className="text-[10px] text-muted-foreground">打印纸张</span>
+                                <span className="text-[10px] text-muted-foreground">{t('print.paper')}</span>
                                 <select 
                                     className="w-full bg-background border border-border rounded-md p-2 text-sm focus:ring-1 focus:ring-primary outline-none"
                                     value={settings.paper_size}
@@ -554,41 +559,41 @@ export default function PrintScreen({ requestPdfExport }: PrintScreenProps) {
                                 </select>
                             </div>
                             <div>
-                                <span className="text-[10px] text-muted-foreground">纸张方向</span>
+                                <span className="text-[10px] text-muted-foreground">{t('print.orientation')}</span>
                                 <select 
                                     className={`w-full bg-background border border-border rounded-md p-2 text-sm focus:ring-1 focus:ring-primary outline-none ${(settings.binding_method === 'saddle' || settings.binding_method === 'butterfly') ? 'opacity-40 cursor-not-allowed' : ''}`}
                                     value={effectiveOrientation}
                                     onChange={(e) => updateSettings({ paper_orientation: e.target.value as PrintSettings['paper_orientation'] })}
                                     disabled={settings.binding_method === 'saddle' || settings.binding_method === 'butterfly'}
                                 >
-                                    <option value="portrait">纵向</option>
-                                    <option value="landscape">横向</option>
+                                    <option value="portrait">{t('print.portrait')}</option>
+                                    <option value="landscape">{t('print.landscape')}</option>
                                 </select>
-                                {(settings.binding_method === 'saddle' || settings.binding_method === 'butterfly') && <p className="text-[9px] text-amber-500 mt-0.5">该装订仅支持横向</p>}
+                                {(settings.binding_method === 'saddle' || settings.binding_method === 'butterfly') && <p className="text-[9px] text-amber-500 mt-0.5">{t('print.landscapeOnly')}</p>}
                             </div>
                         </div>
                         <div className={settings.binding_method !== 'perfect' ? 'opacity-40 pointer-events-none' : ''}>
-                            <span className="text-[10px] text-muted-foreground">纸张排版</span>
+                            <span className="text-[10px] text-muted-foreground">{t('print.layout')}</span>
                             <select 
                                 className="w-full bg-background border border-border rounded-md p-2 text-sm focus:ring-1 focus:ring-primary outline-none"
                                 value={settings.binding_method !== 'perfect' ? '2-up' : settings.layout_mode}
                                 onChange={(e) => updateSettings({ layout_mode: e.target.value as PrintSettings['layout_mode'] })}
                                 disabled={settings.binding_method !== 'perfect'}
                             >
-                                <option value="1-up">单页</option>
-                                <option value="2-up">双页拼版</option>
+                                <option value="1-up">{t('print.oneUp')}</option>
+                                <option value="2-up">{t('print.twoUp')}</option>
                             </select>
-                            {settings.binding_method !== 'perfect' && <p className="text-[9px] text-amber-500 mt-0.5">该装订仅支持 2-up</p>}
+                            {settings.binding_method !== 'perfect' && <p className="text-[9px] text-amber-500 mt-0.5">{t('print.twoUpOnly')}</p>}
                         </div>
                     </div>
 
                     {/* Margins */}
                     <div className="flex flex-col gap-2">
-                        <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">边距与留白</label>
+                        <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">{t('print.margins')}</label>
                         
                         <div className={`flex flex-col gap-1 transition-opacity duration-200 ${settings.binding_method !== 'perfect' ? 'opacity-40 pointer-events-none' : ''}`}>
                             <div className="flex justify-between">
-                                <span className="text-sm">内侧刷胶区留白</span>
+                                <span className="text-sm">{t('print.bindingMargin')}</span>
                                 <span className="text-xs font-mono">{settings.binding_margin_mm} mm</span>
                             </div>
                             <input type="range" min="10" max="30" step="1" className="w-full accent-primary" 
@@ -601,7 +606,7 @@ export default function PrintScreen({ requestPdfExport }: PrintScreenProps) {
                             (settings.binding_method === 'saddle' || settings.layout_mode === '1-up') ? 'opacity-40 pointer-events-none' : ''
                         }`}>
                             <div className="flex justify-between">
-                                <span className="text-sm">连体封面书脊厚度</span>
+                                <span className="text-sm">{t('print.spineWidth')}</span>
                                 <span className="text-xs font-mono">{settings.spine_mm} mm</span>
                             </div>
                             <input type="range" min="0" max="50" step="0.5" className="w-full accent-primary" 
@@ -612,7 +617,7 @@ export default function PrintScreen({ requestPdfExport }: PrintScreenProps) {
 
                         <div className="flex flex-col gap-1 mt-2">
                             <div className="flex justify-between">
-                                <span className="text-sm">硬件打印留白 (四周)</span>
+                                <span className="text-sm">{t('print.hardwareMargin')}</span>
                                 <span className="text-xs font-mono">{settings.hardware_margin_mm || 0} mm</span>
                             </div>
                             <input type="range" min="0" max="20" step="1" className="w-full accent-primary" 
@@ -624,10 +629,10 @@ export default function PrintScreen({ requestPdfExport }: PrintScreenProps) {
 
                     {/* Offset & Snap */}
                     <div className="flex flex-col gap-2">
-                        <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">内容偏移</label>
+                        <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">{t('print.contentOffset')}</label>
                         <div className="grid grid-cols-2 gap-2">
                             <div className="flex flex-col gap-1">
-                                <span className="text-[10px] text-muted-foreground">X 轴 (mm){settings.binding_method === 'perfect' ? ' — 相对胶区' : ''}</span>
+                                <span className="text-[10px] text-muted-foreground">{t('print.xAxis')}{settings.binding_method === 'perfect' ? ` - ${t('print.relativeToBinding')}` : ''}</span>
                                 <input type="number" step="1"
                                     min={(settings.auto_snap_content !== false && settings.binding_method === 'perfect') ? 0 : undefined}
                                     className="w-full bg-background border border-border rounded-md p-1.5 text-sm outline-none"
@@ -640,7 +645,7 @@ export default function PrintScreen({ requestPdfExport }: PrintScreenProps) {
                                 />
                             </div>
                             <div className="flex flex-col gap-1">
-                                <span className="text-[10px] text-muted-foreground">Y 轴 (mm)</span>
+                                <span className="text-[10px] text-muted-foreground">{t('print.yAxis')}</span>
                                 <input type="number" step="1" className="w-full bg-background border border-border rounded-md p-1.5 text-sm outline-none"
                                     value={settings.offset_y}
                                     onChange={e => updateSettings({ offset_y: parseFloat(e.target.value) || 0 })}
@@ -651,26 +656,26 @@ export default function PrintScreen({ requestPdfExport }: PrintScreenProps) {
 
                     {/* Options */}
                     <div className="flex flex-col gap-2">
-                        <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">选项</label>
+                        <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">{t('print.options')}</label>
                         
                         <label className={`flex items-center gap-2 cursor-pointer ${settings.binding_method !== 'perfect' ? 'opacity-40 pointer-events-none' : ''}`}>
                             <input type="checkbox" checked={settings.auto_snap_content !== false} onChange={e => updateSettings({ auto_snap_content: e.target.checked, offset_x: e.target.checked ? Math.max(0, settings.offset_x || 0) : settings.offset_x })} className="accent-primary w-4 h-4" />
-                            <span className="text-sm">内容避开刷胶区 (禁止重叠)</span>
+                            <span className="text-sm">{t('print.avoidBinding')}</span>
                         </label>
 
                         <label className="flex items-center gap-2 cursor-pointer mt-1">
                             <input type="checkbox" checked={settings.crop_marks} onChange={e => updateSettings({ crop_marks: e.target.checked })} className="accent-primary w-4 h-4" />
-                            <span className="text-sm">生成印刷裁剪线</span>
+                            <span className="text-sm">{t('print.cropMarks')}</span>
                         </label>
                         
                         <label className="flex items-center gap-2 cursor-pointer">
                             <input type="checkbox" checked={settings.double_sided} onChange={e => updateSettings({ double_sided: e.target.checked })} className="accent-primary w-4 h-4" />
-                            <span className="text-sm">双面打印 (背面隐藏裁剪线)</span>
+                            <span className="text-sm">{t('print.doubleSided')}</span>
                         </label>
                         
                         <label className="flex items-center gap-2 cursor-pointer">
                             <input type="checkbox" checked={settings.has_back_cover} onChange={e => updateSettings({ has_back_cover: e.target.checked })} className="accent-primary w-4 h-4" />
-                            <span className="text-sm">最后一张作为封底</span>
+                            <span className="text-sm">{t('print.backCover')}</span>
                         </label>
                     </div>
                 </div>
@@ -682,7 +687,7 @@ export default function PrintScreen({ requestPdfExport }: PrintScreenProps) {
                         className="w-full py-3 bg-primary text-primary-foreground rounded-md font-bold flex items-center justify-center gap-2 hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-opacity shadow-md"
                     >
                         {isExporting ? <RefreshCw size={18} className="animate-spin" /> : <Download size={18} />}
-                        {isExporting ? `${exportStatusText} ${exportProgress}%` : (renderedSheetCount < imposedSheets.length ? `渲染中...` : '生成高清 PDF')}
+                        {isExporting ? `${exportStatusText} ${exportProgress}%` : (renderedSheetCount < imposedSheets.length ? t('print.rendering') : t('print.generatePdf'))}
                     </button>
                 </div>
             </aside>
@@ -690,8 +695,8 @@ export default function PrintScreen({ requestPdfExport }: PrintScreenProps) {
             {/* Main Preview Area */}
             <main className="flex-1 p-8 overflow-y-auto bg-muted/50 flex flex-col items-center gap-12 pb-32">
                 <div className="text-center space-y-1">
-                    <h1 className="text-xl font-bold">物理印前预览 (Physical Pre-Press Preview)</h1>
-                    <p className="text-sm text-muted-foreground">此处模拟 {settings.paper_size} 纸张物理打印排版。蓝色虚线为折叠线或裁剪辅助线。</p>
+                    <h1 className="text-xl font-bold">{t('print.previewTitle')}</h1>
+                    <p className="text-sm text-muted-foreground">{t('print.previewDescription', { paper: settings.paper_size })}</p>
                 </div>
 
                 {renderedSheetCount < imposedSheets.length && (
@@ -699,9 +704,9 @@ export default function PrintScreen({ requestPdfExport }: PrintScreenProps) {
                         <div className="flex justify-between items-center text-sm font-medium">
                             <span className="flex items-center gap-2">
                                 <div className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin"></div>
-                                正在进行渐进式渲染...
+                                {t('print.progressiveRendering')}
                             </span>
-                            <span className="text-primary">{renderedSheetCount} / {imposedSheets.length} 页</span>
+                            <span className="text-primary">{t('print.pageProgress', { current: renderedSheetCount, total: imposedSheets.length })}</span>
                         </div>
                         <div className="w-full bg-muted overflow-hidden rounded-full h-2.5">
                             <div 
@@ -709,7 +714,7 @@ export default function PrintScreen({ requestPdfExport }: PrintScreenProps) {
                                 style={{ width: `${Math.round((renderedSheetCount / imposedSheets.length) * 100)}%` }}
                             />
                         </div>
-                        <p className="text-xs text-muted-foreground text-center mt-1">为防止主线程卡死，正在分批加载大尺寸排版视图</p>
+                        <p className="text-xs text-muted-foreground text-center mt-1">{t('print.batchRenderingDescription')}</p>
                     </div>
                 )}
 
@@ -774,13 +779,13 @@ export default function PrintScreen({ requestPdfExport }: PrintScreenProps) {
                     <div key={sheet.id} className="flex flex-col gap-4 items-center w-full">
                         <h3 className="text-sm font-semibold flex items-center gap-2 text-muted-foreground">
                             <FileText size={16} />
-                            {sheet.isCover ? '封面排版 (Cover Spread)' : `第 ${index} 张纸 (Sheet ${index})`}
+                            {sheet.isCover ? t('print.coverSpread') : t('print.sheet', { index })}
                         </h3>
                         
                         <div className="flex gap-12 flex-wrap justify-center w-full max-w-5xl">
                             {/* Front Side */}
                             <div className="flex flex-col items-center gap-2">
-                                <span className="text-xs font-mono text-muted-foreground hide-on-export">正面 (Front Side)</span>
+                                <span className="text-xs font-mono text-muted-foreground hide-on-export">{t('print.front')}</span>
                                 <div className="relative shadow-xl ring-1 ring-border/50 rounded-sm flex items-stretch overflow-hidden sheet-export-target"
                                      style={{ 
                                          width: `${w}px`, 
@@ -806,7 +811,7 @@ export default function PrintScreen({ requestPdfExport }: PrintScreenProps) {
                                             {!is1up && <div className="absolute top-0 bottom-0 left-1/2 -translate-x-1/2 w-px bg-blue-300/50 border-r border-dashed border-blue-400 z-20 hide-on-export" />}
                                             {sheet.isCover && settings.spine_mm > 0 && !is1up && (
                                                 <div className="absolute top-0 bottom-0 left-1/2 -translate-x-1/2 bg-yellow-200/40 border-x border-yellow-400/50 z-20 flex items-center justify-center overflow-hidden hide-on-export" style={{ width: `${settings.spine_mm * pxPerMm}px` }}>
-                                                    <span className="text-[8px] text-yellow-700 -rotate-90 whitespace-nowrap">书脊 {settings.spine_mm}mm</span>
+                                                    <span className="text-[8px] text-yellow-700 -rotate-90 whitespace-nowrap">{t('print.spine', { width: settings.spine_mm })}</span>
                                                 </div>
                                             )}
                                             
@@ -816,15 +821,15 @@ export default function PrintScreen({ requestPdfExport }: PrintScreenProps) {
                                                     {is1up ? (
                                                         <div className="absolute top-0 bottom-0 left-0 bg-blue-200/20 border-r border-blue-300/50 z-20 flex items-center justify-center overflow-hidden hide-on-export" 
                                                              style={{ width: `${settings.binding_margin_mm * pxPerMm}px` }}>
-                                                            <span className="text-[8px] text-blue-700 -rotate-90 whitespace-nowrap">刷胶 (仅预览)</span>
+                                                            <span className="text-[8px] text-blue-700 -rotate-90 whitespace-nowrap">{t('print.bindingPreview')}</span>
                                                         </div>
                                                     ) : (
                                                         <>
                                                             <div className="absolute top-0 bottom-0 left-1/2 -translate-x-full bg-blue-200/20 border-r border-blue-300/50 z-20 flex items-center justify-center overflow-hidden hide-on-export" style={{ width: `${settings.binding_margin_mm * pxPerMm}px` }}>
-                                                                <span className="text-[8px] text-blue-700 -rotate-90 whitespace-nowrap">刷胶 (仅预览)</span>
+                                                                <span className="text-[8px] text-blue-700 -rotate-90 whitespace-nowrap">{t('print.bindingPreview')}</span>
                                                             </div>
                                                             <div className="absolute top-0 bottom-0 right-1/2 translate-x-full bg-blue-200/20 border-l border-blue-300/50 z-20 flex items-center justify-center overflow-hidden hide-on-export" style={{ width: `${settings.binding_margin_mm * pxPerMm}px` }}>
-                                                                <span className="text-[8px] text-blue-700 -rotate-90 whitespace-nowrap">刷胶 (仅预览)</span>
+                                                                <span className="text-[8px] text-blue-700 -rotate-90 whitespace-nowrap">{t('print.bindingPreview')}</span>
                                                             </div>
                                                         </>
                                                     )}
@@ -851,7 +856,7 @@ export default function PrintScreen({ requestPdfExport }: PrintScreenProps) {
                                                         </span>
                                                     </div>
                                                 ) : (
-                                                    <span className="text-gray-300 font-mono text-sm hide-on-export">空白页</span>
+                                                    <span className="text-gray-300 font-mono text-sm hide-on-export">{t('print.blankPage')}</span>
                                                 )}
                                             </div>
                                             
@@ -874,7 +879,7 @@ export default function PrintScreen({ requestPdfExport }: PrintScreenProps) {
                                                         </span>
                                                     </div>
                                                 ) : (
-                                                    <span className="text-gray-300 font-mono text-sm hide-on-export">空白页</span>
+                                                    <span className="text-gray-300 font-mono text-sm hide-on-export">{t('print.blankPage')}</span>
                                                 )}
                                             </div>
                                             )}
@@ -949,7 +954,7 @@ export default function PrintScreen({ requestPdfExport }: PrintScreenProps) {
                             {/* Back Side */}
                             {sheet.back && (
                                 <div className="flex flex-col items-center gap-2 opacity-90 back-side-container">
-                                    <span className="text-xs font-mono text-muted-foreground hide-on-export">反面 (Back Side)</span>
+                                    <span className="text-xs font-mono text-muted-foreground hide-on-export">{t('print.back')}</span>
                                     <div className="relative shadow-xl ring-1 ring-border/50 rounded-sm flex items-stretch overflow-hidden sheet-export-target"
                                          style={{ 
                                              width: `${w}px`, 
@@ -979,15 +984,15 @@ export default function PrintScreen({ requestPdfExport }: PrintScreenProps) {
                                                         {is1up ? (
                                                             <div className="absolute top-0 bottom-0 right-0 bg-blue-200/20 border-l border-blue-300/50 z-20 flex items-center justify-center overflow-hidden hide-on-export" 
                                                                  style={{ width: `${settings.binding_margin_mm * pxPerMm}px` }}>
-                                                                <span className="text-[8px] text-blue-700 -rotate-90 whitespace-nowrap">刷胶 (仅预览)</span>
+                                                                <span className="text-[8px] text-blue-700 -rotate-90 whitespace-nowrap">{t('print.bindingPreview')}</span>
                                                             </div>
                                                         ) : (
                                                             <>
                                                                 <div className="absolute top-0 bottom-0 left-1/2 -translate-x-full bg-blue-200/20 border-r border-blue-300/50 z-20 flex items-center justify-center overflow-hidden hide-on-export" style={{ width: `${settings.binding_margin_mm * pxPerMm}px` }}>
-                                                                    <span className="text-[8px] text-blue-700 -rotate-90 whitespace-nowrap">刷胶 (仅预览)</span>
+                                                                    <span className="text-[8px] text-blue-700 -rotate-90 whitespace-nowrap">{t('print.bindingPreview')}</span>
                                                                 </div>
                                                                 <div className="absolute top-0 bottom-0 right-1/2 translate-x-full bg-blue-200/20 border-l border-blue-300/50 z-20 flex items-center justify-center overflow-hidden hide-on-export" style={{ width: `${settings.binding_margin_mm * pxPerMm}px` }}>
-                                                                    <span className="text-[8px] text-blue-700 -rotate-90 whitespace-nowrap">刷胶 (仅预览)</span>
+                                                                    <span className="text-[8px] text-blue-700 -rotate-90 whitespace-nowrap">{t('print.bindingPreview')}</span>
                                                                 </div>
                                                             </>
                                                         )}
@@ -1013,7 +1018,7 @@ export default function PrintScreen({ requestPdfExport }: PrintScreenProps) {
                                                             </span>
                                                         </div>
                                                     ) : (
-                                                        <span className="text-gray-300 font-mono text-sm hide-on-export">空白页</span>
+                                                        <span className="text-gray-300 font-mono text-sm hide-on-export">{t('print.blankPage')}</span>
                                                     )}
                                                 </div>
                                                 
@@ -1036,7 +1041,7 @@ export default function PrintScreen({ requestPdfExport }: PrintScreenProps) {
                                                             </span>
                                                         </div>
                                                     ) : (
-                                                        <span className="text-gray-300 font-mono text-sm hide-on-export">空白页</span>
+                                                        <span className="text-gray-300 font-mono text-sm hide-on-export">{t('print.blankPage')}</span>
                                                     )}
                                                 </div>
                                                 )}
@@ -1117,7 +1122,7 @@ export default function PrintScreen({ requestPdfExport }: PrintScreenProps) {
                 {renderedSheetCount < imposedSheets.length && (
                     <div className="flex flex-col items-center justify-center p-12 text-muted-foreground gap-4">
                         <RefreshCw size={32} className="animate-spin text-primary" />
-                        <p>正在拼版渲染第 {renderedSheetCount + 1} / {imposedSheets.length} 张纸张...</p>
+                        <p>{t('print.imposing', { current: renderedSheetCount + 1, total: imposedSheets.length })}</p>
                     </div>
                 )}
             </main>

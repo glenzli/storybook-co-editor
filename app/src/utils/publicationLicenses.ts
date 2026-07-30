@@ -12,6 +12,19 @@ export type PublicationLicensePresetId =
   | 'cc0-1.0'
   | 'custom';
 
+export const PUBLICATION_LICENSE_TRANSLATION_KEYS: Record<PublicationLicensePresetId, string> = {
+  none: 'none',
+  'all-rights-reserved': 'allRightsReserved',
+  'cc-by-nc-nd-4.0': 'ccByNcNd',
+  'cc-by-nc-sa-4.0': 'ccByNcSa',
+  'cc-by-4.0': 'ccBy',
+  'cc-by-sa-4.0': 'ccBySa',
+  'cc-by-nc-4.0': 'ccByNc',
+  'cc-by-nd-4.0': 'ccByNd',
+  'cc0-1.0': 'cc0',
+  custom: 'custom',
+};
+
 export interface PublicationLicensePreset {
   id: PublicationLicensePresetId;
   label: string;

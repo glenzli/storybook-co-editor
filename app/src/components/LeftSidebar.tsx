@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import { DndContext, closestCenter, PointerSensor, KeyboardSensor, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy, sortableKeyboardCoordinates } from '@dnd-kit/sortable';
 import { LayoutTemplate, Archive, Sun, Moon, ChevronLeft, ChevronRight, FilePlus, ArrowUpToLine, ArrowDownToLine, Trash2, Download, Copy } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { SortableImageItem, type TextOverlayInfo } from './SortableImageItem';
 import type { ImageAdjustments } from '../ProjectContext';
 
@@ -48,6 +49,7 @@ export function LeftSidebar({
   textOverlays,
   canvasSize
 }: LeftSidebarProps) {
+  const { t } = useTranslation();
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
@@ -112,16 +114,16 @@ export function LeftSidebar({
         <div className="p-4 border-b border-border flex items-center justify-between w-full shrink-0">
           <div className="flex items-center gap-2">
             <LayoutTemplate size={20} className="text-primary" />
-            <h2 className="font-bold whitespace-nowrap">绘本分页</h2>
+            <h2 className="font-bold whitespace-nowrap">{t('sidebar.pages')}</h2>
           </div>
           <div className="flex gap-1">
-            <button onClick={handleInsertBlank} title="插入空白页" className="p-2 rounded-full hover:bg-muted text-muted-foreground transition-colors">
+            <button onClick={handleInsertBlank} title={t('sidebar.insertBlank')} className="p-2 rounded-full hover:bg-muted text-muted-foreground transition-colors">
               <FilePlus size={16} />
             </button>
-            <button onClick={handleOpenTrash} title="回收站" className="p-2 rounded-full hover:bg-muted text-muted-foreground transition-colors">
+            <button onClick={handleOpenTrash} title={t('sidebar.trash')} className="p-2 rounded-full hover:bg-muted text-muted-foreground transition-colors">
               <Archive size={16} />
             </button>
-            <button onClick={() => setIsDark(!isDark)} className="p-2 rounded-full hover:bg-muted text-muted-foreground transition-colors">
+            <button onClick={() => setIsDark(!isDark)} title={t(isDark ? 'sidebar.lightMode' : 'sidebar.darkMode')} className="p-2 rounded-full hover:bg-muted text-muted-foreground transition-colors">
               {isDark ? <Sun size={16} /> : <Moon size={16} />}
             </button>
           </div>
@@ -129,7 +131,7 @@ export function LeftSidebar({
         <div className="flex-1 overflow-y-auto p-4 space-y-4 w-full relative">
           {images.length === 0 ? (
             <div className="text-muted-foreground text-sm text-center mt-10">
-              暂无页面。<br/>请在浏览器插件中发送图片。
+              {t('sidebar.noPages')}<br/>{t('sidebar.sendFromExtension')}
             </div>
           ) : (
             <DndContext 
@@ -180,7 +182,7 @@ export function LeftSidebar({
             }}
           >
             <ArrowUpToLine size={14} />
-            移动到顶部
+            {t('sidebar.moveTop')}
           </button>
           <button 
             className="w-full px-3 py-1.5 text-left flex items-center gap-2 hover:bg-muted transition-colors disabled:opacity-50"
@@ -191,7 +193,7 @@ export function LeftSidebar({
             }}
           >
             <ArrowDownToLine size={14} />
-            移动到底部
+            {t('sidebar.moveBottom')}
           </button>
           <button 
             className="w-full px-3 py-1.5 text-left flex items-center gap-2 hover:bg-muted transition-colors"
@@ -201,7 +203,7 @@ export function LeftSidebar({
             }}
           >
             <Copy size={14} />
-            复制图片
+            {t('sidebar.copyImage')}
           </button>
           <div className="h-px bg-border my-1" />
           <button 
@@ -212,7 +214,7 @@ export function LeftSidebar({
             }}
           >
             <Download size={14} />
-            导出原图
+            {t('sidebar.exportOriginal')}
           </button>
           <button 
             className="w-full px-3 py-1.5 text-left flex items-center gap-2 hover:bg-red-500/10 text-red-500 transition-colors"
@@ -222,7 +224,7 @@ export function LeftSidebar({
             }}
           >
             <Trash2 size={14} />
-            删除
+            {t('common.delete')}
           </button>
         </div>
       )}
@@ -230,6 +232,7 @@ export function LeftSidebar({
       {/* Left Sidebar Toggle Button */}
       <button 
         onClick={() => setIsLeftOpen(!isLeftOpen)}
+        title={t(isLeftOpen ? 'sidebar.collapse' : 'sidebar.expand')}
         style={{ left: isLeftOpen ? sidebarWidth : 0 }}
         className={`absolute top-1/2 -translate-y-1/2 z-30 bg-card border border-border rounded-r-md shadow-md p-1 hover:bg-muted ${!isDraggingState ? 'transition-all duration-300' : ''}`}
       >

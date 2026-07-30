@@ -24,11 +24,13 @@
     "colorthief": "^3.3.1",
     "html-to-image": "^1.11.13",
     "html2canvas": "^1.4.1",
+    "i18next": "^26.3.6",
     "jspdf": "^4.2.1",
     "lucide-react": "^1.17.0",
     "react": "^19.2.6",
     "react-colorful": "^5.7.0",
     "react-dom": "^19.2.6",
+    "react-i18next": "^17.0.11",
     "react-router-dom": "^7.17.0",
     "tailwind-merge": "^3.6.0",
     "tailwindcss-animate": "^1.0.7"

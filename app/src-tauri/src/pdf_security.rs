@@ -7,6 +7,14 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use uuid::Uuid;
 
+fn coded_error(code: &str) -> String {
+    code.to_string()
+}
+
+fn coded_error_with_detail(code: &str, detail: impl std::fmt::Display) -> String {
+    format!("{code}|{detail}")
+}
+
 #[derive(Clone, Copy, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum PrintPermission {
@@ -53,15 +61,15 @@ fn sibling_temp_path(path: &Path, label: &str) -> Result<PathBuf, String> {
     let file_name = path
         .file_name()
         .and_then(|name| name.to_str())
-        .ok_or_else(|| "PDF 输出路径无效。".to_string())?;
+        .ok_or_else(|| coded_error("PDF_SECURITY_INVALID_OUTPUT_PATH"))?;
     Ok(path.with_file_name(format!(".{file_name}.storybook-{label}-{}", Uuid::new_v4())))
 }
 
 fn replace_with_verified_file(original_path: &Path, protected_path: &Path) -> Result<(), String> {
     std::fs::remove_file(original_path)
-        .map_err(|error| format!("无法移除临时明文 PDF：{error}"))?;
+        .map_err(|error| coded_error_with_detail("PDF_SECURITY_REMOVE_PLAINTEXT_FAILED", error))?;
     std::fs::rename(protected_path, original_path)
-        .map_err(|error| format!("无法安装已验证的加密 PDF：{error}"))
+        .map_err(|error| coded_error_with_detail("PDF_SECURITY_INSTALL_VERIFIED_FAILED", error))
 }
 
 fn complete_aes256_encryption_dictionary(document: &mut Document) -> Result<(), String> {
@@ -69,13 +77,13 @@ fn complete_aes256_encryption_dictionary(document: &mut Document) -> Result<(), 
         .trailer
         .get(b"Encrypt")
         .and_then(Object::as_reference)
-        .map_err(|error| format!("无法定位 PDF 加密字典：{error}"))?;
+        .map_err(|error| coded_error_with_detail("PDF_SECURITY_LOCATE_DICTIONARY_FAILED", error))?;
     let encryption_dictionary = document
         .objects
         .get_mut(&encryption_id)
-        .ok_or_else(|| "无法读取 PDF 加密字典。".to_string())?
+        .ok_or_else(|| coded_error("PDF_SECURITY_DICTIONARY_MISSING"))?
         .as_dict_mut()
-        .map_err(|error| format!("PDF 加密字典格式无效：{error}"))?;
+        .map_err(|error| coded_error_with_detail("PDF_SECURITY_INVALID_DICTIONARY", error))?;
 
     // lopdf 0.39 omits these declarations, which external readers need to decrypt AESV3 streams.
     encryption_dictionary.set("Length", 256);
@@ -84,7 +92,7 @@ fn complete_aes256_encryption_dictionary(document: &mut Document) -> Result<(), 
         .and_then(Object::as_dict_mut)
         .and_then(|filters| filters.get_mut(b"StdCF"))
         .and_then(Object::as_dict_mut)
-        .map_err(|error| format!("PDF AES-256 过滤器格式无效：{error}"))?;
+        .map_err(|error| coded_error_with_detail("PDF_SECURITY_INVALID_AES_FILTER", error))?;
     standard_filter.set("Length", 32);
     standard_filter.set("AuthEvent", Object::Name(b"DocOpen".to_vec()));
 
@@ -92,10 +100,10 @@ fn complete_aes256_encryption_dictionary(document: &mut Document) -> Result<(), 
 }
 
 fn protect_pdf_at_path(path: &Path, options: &PdfProtectionOptions) -> Result<(), String> {
-    let mut document =
-        Document::load(path).map_err(|error| format!("无法读取待加密 PDF：{error}"))?;
+    let mut document = Document::load(path)
+        .map_err(|error| coded_error_with_detail("PDF_SECURITY_READ_INPUT_FAILED", error))?;
     if document.is_encrypted() {
-        return Err("PDF 已经加密，无法重复应用发布限制。".to_string());
+        return Err(coded_error("PDF_SECURITY_ALREADY_ENCRYPTED"));
     }
 
     document.version = "2.0".to_string();
@@ -118,44 +126,48 @@ fn protect_pdf_at_path(path: &Path, options: &PdfProtectionOptions) -> Result<()
         permissions,
     };
     let encryption_state = EncryptionState::try_from(encryption)
-        .map_err(|error| format!("无法建立 AES-256 加密状态：{error}"))?;
+        .map_err(|error| coded_error_with_detail("PDF_SECURITY_CREATE_STATE_FAILED", error))?;
     let expected_permissions = encryption_state.permissions();
     document
         .encrypt(&encryption_state)
-        .map_err(|error| format!("无法加密 PDF：{error}"))?;
+        .map_err(|error| coded_error_with_detail("PDF_SECURITY_ENCRYPT_FAILED", error))?;
     complete_aes256_encryption_dictionary(&mut document)?;
 
     let protected_path = sibling_temp_path(path, "protected")?;
     let result = (|| {
         document
             .save(&protected_path)
-            .map_err(|error| format!("无法写入临时加密 PDF：{error}"))?;
+            .map_err(|error| coded_error_with_detail("PDF_SECURITY_WRITE_TEMP_FAILED", error))?;
 
         let mut verification = Document::load(&protected_path)
-            .map_err(|error| format!("无法重新读取加密 PDF：{error}"))?;
+            .map_err(|error| coded_error_with_detail("PDF_SECURITY_REOPEN_FAILED", error))?;
         let (version, revision, actual_permissions) = if verification.is_encrypted() {
             let decoded = EncryptionState::decode(&verification, options.open_password.as_bytes())
-                .map_err(|error| format!("加密校验失败：{error}"))?;
+                .map_err(|error| {
+                    coded_error_with_detail("PDF_SECURITY_VERIFICATION_FAILED", error)
+                })?;
             let properties = (decoded.version(), decoded.revision(), decoded.permissions());
             verification
                 .decrypt(&options.open_password)
-                .map_err(|error| format!("打开密码校验失败：{error}"))?;
+                .map_err(|error| {
+                    coded_error_with_detail("PDF_SECURITY_PASSWORD_VERIFICATION_FAILED", error)
+                })?;
             properties
         } else if let Some(decoded) = verification.encryption_state.as_ref() {
             // lopdf automatically decrypts files whose user password is empty.
             (decoded.version(), decoded.revision(), decoded.permissions())
         } else {
-            return Err("加密校验失败：输出文件未标记为加密。".to_string());
+            return Err(coded_error("PDF_SECURITY_OUTPUT_NOT_ENCRYPTED"));
         };
 
         if version != 5 || revision != 6 {
-            return Err(format!(
-                "加密校验失败：预期 V=5/R=6，实际 V={}/R={}。",
-                version, revision
+            return Err(coded_error_with_detail(
+                "PDF_SECURITY_VERSION_MISMATCH",
+                format!("expected V=5/R=6, actual V={version}/R={revision}"),
             ));
         }
         if actual_permissions != expected_permissions {
-            return Err("加密校验失败：PDF 权限与发布设置不一致。".to_string());
+            return Err(coded_error("PDF_SECURITY_PERMISSIONS_MISMATCH"));
         }
 
         replace_with_verified_file(path, &protected_path)

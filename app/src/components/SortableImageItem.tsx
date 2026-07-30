@@ -2,6 +2,7 @@ import { memo } from 'react';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { Trash2 } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { useThumbnail } from '../hooks/useThumbnail';
 import type { ProAdjustments } from '../utils/imageProcessor';
 import type { ImageAdjustments } from '../ProjectContext';
@@ -33,6 +34,7 @@ interface SortableImageItemProps {
 
 
 export const SortableImageItem = memo(function SortableImageItem({ id, idx, isSelected, onSelect, onDelete, onContextMenu, hasTitle, imageAdjustment, textOverlays, canvasSize }: SortableImageItemProps) {
+  const { t } = useTranslation();
   const {
     attributes,
     listeners,
@@ -173,7 +175,7 @@ export const SortableImageItem = memo(function SortableImageItem({ id, idx, isSe
       <button 
         onClick={(e) => { e.stopPropagation(); onDelete(id); }}
         className="absolute top-1 right-1 p-1.5 bg-red-500/80 hover:bg-red-500 text-white rounded-md opacity-0 group-hover:opacity-100 transition-opacity z-10 backdrop-blur-sm"
-        title="删除图片"
+        title={t('sidebar.deleteImage')}
       >
         <Trash2 size={12} />
       </button>

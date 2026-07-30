@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { BookMarked, ExternalLink, Info, Plus, Trash2, X } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import type {
   ProjectState,
   PublicationContributor,
@@ -9,6 +10,7 @@ import type {
 import { createPublicationMetadataDraft, normalizePublicationMetadata } from '../utils/publicationMetadata';
 import {
   getPublicationLicensePreset,
+  PUBLICATION_LICENSE_TRANSLATION_KEYS,
   PUBLICATION_LICENSE_PRESETS,
   resolvePublicationLicensePreset,
   type PublicationLicensePresetId,
@@ -26,12 +28,12 @@ type MetadataTab = 'basic' | 'rights' | 'identifiers';
 const inputClass = 'w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground outline-none transition-colors focus:border-primary';
 const labelClass = 'text-xs font-medium text-muted-foreground';
 
-const CONTRIBUTOR_ROLES: Array<{ value: PublicationContributor['role']; label: string }> = [
-  { value: 'author', label: '作者' },
-  { value: 'illustrator', label: '绘者' },
-  { value: 'editor', label: '编辑' },
-  { value: 'translator', label: '译者' },
-  { value: 'other', label: '其他' },
+const CONTRIBUTOR_ROLES: PublicationContributor['role'][] = [
+  'author',
+  'illustrator',
+  'editor',
+  'translator',
+  'other',
 ];
 
 const IDENTIFIER_SCHEMES: PublicationIdentifier['scheme'][] = ['ISBN', 'DOI', 'URL', 'CUSTOM'];
@@ -42,6 +44,7 @@ export function PublicationMetadataDialog({
   onClose,
   onSave,
 }: PublicationMetadataDialogProps) {
+  const { t } = useTranslation();
   const [activeTab, setActiveTab] = useState<MetadataTab>('basic');
   const [draft, setDraft] = useState<PublicationMetadata>(() => createPublicationMetadataDraft(projectState));
   const [keywordText, setKeywordText] = useState('');
@@ -139,18 +142,18 @@ export function PublicationMetadataDialog({
         <header className="flex items-center justify-between border-b border-border px-5 py-4">
           <div className="flex items-center gap-2">
             <BookMarked size={18} className="text-primary" />
-            <h2 id="publication-metadata-title" className="text-base font-semibold text-foreground">出版与版权</h2>
+            <h2 id="publication-metadata-title" className="text-base font-semibold text-foreground">{t('publication.title')}</h2>
           </div>
-          <button type="button" onClick={onClose} className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground" title="关闭" aria-label="关闭">
+          <button type="button" onClick={onClose} className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground" title={t('common.close')} aria-label={t('common.close')}>
             <X size={16} />
           </button>
         </header>
 
         <div className="flex border-b border-border px-5">
           {([
-            ['basic', '基本信息'],
-            ['rights', '版权与许可'],
-            ['identifiers', '标识符'],
+            ['basic', t('publication.tabs.basic')],
+            ['rights', t('publication.tabs.rights')],
+            ['identifiers', t('publication.tabs.identifiers')],
           ] as Array<[MetadataTab, string]>).map(([tab, label]) => (
             <button
               key={tab}
@@ -167,28 +170,28 @@ export function PublicationMetadataDialog({
           {activeTab === 'basic' && (
             <div className="grid gap-5">
               <label className="grid gap-1.5">
-                <span className={labelClass}>作品标题</span>
+                <span className={labelClass}>{t('publication.fields.workTitle')}</span>
                 <input className={inputClass} value={draft.title || ''} onChange={event => updateDraft({ title: event.target.value })} />
               </label>
 
               <section className="grid gap-2">
                 <div className="flex items-center justify-between">
-                  <span className={labelClass}>创作者与参与者</span>
+                  <span className={labelClass}>{t('publication.fields.contributors')}</span>
                   <button
                     type="button"
                     onClick={() => updateDraft({ contributors: [...(draft.contributors || []), { role: 'author', name: '' }] })}
                     className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs text-primary transition-colors hover:bg-muted"
                   >
-                    <Plus size={13} /> 添加
+                    <Plus size={13} /> {t('publication.add')}
                   </button>
                 </div>
                 {(draft.contributors || []).map((contributor, index) => (
                   <div key={`${contributor.role}-${index}`} className="grid grid-cols-[120px_1fr_32px] gap-2">
                     <select className={inputClass} value={contributor.role} onChange={event => updateContributor(index, { role: event.target.value as PublicationContributor['role'] })}>
-                      {CONTRIBUTOR_ROLES.map(role => <option key={role.value} value={role.value}>{role.label}</option>)}
+                      {CONTRIBUTOR_ROLES.map(role => <option key={role} value={role}>{t(`publication.roles.${role}`)}</option>)}
                     </select>
                     <input className={inputClass} value={contributor.name} onChange={event => updateContributor(index, { name: event.target.value })} />
-                    <button type="button" onClick={() => removeContributor(index)} className="flex h-9 w-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-red-500/10 hover:text-red-500" title="删除参与者" aria-label="删除参与者">
+                    <button type="button" onClick={() => removeContributor(index)} className="flex h-9 w-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-red-500/10 hover:text-red-500" title={t('publication.deleteContributor')} aria-label={t('publication.deleteContributor')}>
                       <Trash2 size={15} />
                     </button>
                   </div>
@@ -197,27 +200,27 @@ export function PublicationMetadataDialog({
 
               <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
                 <label className="grid gap-1.5">
-                  <span className={labelClass}>语言</span>
-                  <input className={inputClass} value={draft.language || ''} onChange={event => updateDraft({ language: event.target.value })} placeholder="zh-CN" />
+                  <span className={labelClass}>{t('publication.fields.language')}</span>
+                  <input className={inputClass} value={draft.language || ''} onChange={event => updateDraft({ language: event.target.value })} placeholder={t('publication.fields.languagePlaceholder')} />
                 </label>
                 <label className="grid gap-1.5">
-                  <span className={labelClass}>出版者</span>
+                  <span className={labelClass}>{t('publication.fields.publisher')}</span>
                   <input className={inputClass} value={draft.publisher || ''} onChange={event => updateDraft({ publisher: event.target.value })} />
                 </label>
                 <label className="grid gap-1.5">
-                  <span className={labelClass}>发布日期</span>
+                  <span className={labelClass}>{t('publication.fields.publicationDate')}</span>
                   <input type="date" className={inputClass} value={draft.publication_date || ''} onChange={event => updateDraft({ publication_date: event.target.value })} />
                 </label>
               </div>
 
               <label className="grid gap-1.5">
-                <span className={labelClass}>内容简介</span>
+                <span className={labelClass}>{t('publication.fields.description')}</span>
                 <textarea className={`${inputClass} min-h-24 resize-y`} value={draft.description || ''} onChange={event => updateDraft({ description: event.target.value })} />
               </label>
 
               <label className="grid gap-1.5">
-                <span className={labelClass}>关键词</span>
-                <input className={inputClass} value={keywordText} onChange={event => setKeywordText(event.target.value)} placeholder="绘本, 儿童文学" />
+                <span className={labelClass}>{t('publication.fields.keywords')}</span>
+                <input className={inputClass} value={keywordText} onChange={event => setKeywordText(event.target.value)} placeholder={t('publication.fields.keywordsPlaceholder')} />
               </label>
             </div>
           )}
@@ -225,12 +228,12 @@ export function PublicationMetadataDialog({
           {activeTab === 'rights' && (
             <div className="grid gap-5">
               <section className="grid gap-2">
-                <span className={labelClass}>版权页</span>
+                <span className={labelClass}>{t('publication.fields.copyrightPage')}</span>
                 <div className="grid grid-cols-3 overflow-hidden rounded-md border border-border">
                   {([
-                    ['none', '不生成'],
-                    ['electronic', '仅电子版'],
-                    ['all', '电子与印刷版'],
+                    ['none', t('publication.copyrightModes.none')],
+                    ['electronic', t('publication.copyrightModes.electronic')],
+                    ['all', t('publication.copyrightModes.all')],
                   ] as Array<[NonNullable<PublicationMetadata['copyright_page_mode']>, string]>).map(([mode, label]) => (
                     <button
                       key={mode}
@@ -250,30 +253,32 @@ export function PublicationMetadataDialog({
 
               <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                 <label className="grid gap-1.5">
-                  <span className={labelClass}>版权持有人</span>
+                  <span className={labelClass}>{t('publication.fields.copyrightHolder')}</span>
                   <input className={inputClass} value={draft.copyright_holder || ''} onChange={event => updateDraft({ copyright_holder: event.target.value })} />
                 </label>
                 <label className="grid gap-1.5">
-                  <span className={labelClass}>版权年份</span>
+                  <span className={labelClass}>{t('publication.fields.copyrightYear')}</span>
                   <input className={inputClass} value={draft.copyright_year || ''} onChange={event => updateDraft({ copyright_year: event.target.value })} inputMode="numeric" />
                 </label>
               </div>
 
               <label className="grid gap-1.5">
-                <span className={labelClass}>版权声明</span>
+                <span className={labelClass}>{t('publication.fields.copyrightNotice')}</span>
                 <textarea className={`${inputClass} min-h-28 resize-y`} value={draft.copyright_notice || ''} onChange={event => updateDraft({ copyright_notice: event.target.value })} />
               </label>
 
               <section className="grid gap-3">
                 <label className="grid gap-1.5">
-                  <span className={labelClass}>许可方式</span>
+                  <span className={labelClass}>{t('publication.fields.license')}</span>
                   <select
                     className={inputClass}
                     value={selectedLicense.id}
                     onChange={event => selectLicense(event.target.value as PublicationLicensePresetId)}
                   >
                     {PUBLICATION_LICENSE_PRESETS.map(preset => (
-                      <option key={preset.id} value={preset.id}>{preset.label}</option>
+                      <option key={preset.id} value={preset.id}>
+                        {t(`publication.licenses.${PUBLICATION_LICENSE_TRANSLATION_KEYS[preset.id]}.label`)}
+                      </option>
                     ))}
                   </select>
                 </label>
@@ -281,16 +286,16 @@ export function PublicationMetadataDialog({
                 {selectedLicense.id === 'custom' && (
                   <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                     <label className="grid gap-1.5">
-                      <span className={labelClass}>自定义许可名称</span>
+                      <span className={labelClass}>{t('publication.fields.customLicenseName')}</span>
                       <input
                         className={inputClass}
                         value={draft.license_name || ''}
                         onChange={event => updateDraft({ license_name: event.target.value })}
-                        placeholder="许可协议或权利声明"
+                        placeholder={t('publication.fields.customLicenseNamePlaceholder')}
                       />
                     </label>
                     <label className="grid gap-1.5">
-                      <span className={labelClass}>许可或权利声明 URL</span>
+                      <span className={labelClass}>{t('publication.fields.customLicenseUrl')}</span>
                       <input
                         type="url"
                         className={inputClass}
@@ -303,7 +308,9 @@ export function PublicationMetadataDialog({
                 )}
 
                 <div className="flex items-start justify-between gap-4 rounded-md border border-border bg-muted/40 px-3 py-2.5">
-                  <p className="text-xs leading-relaxed text-muted-foreground">{selectedLicense.summary}</p>
+                  <p className="text-xs leading-relaxed text-muted-foreground">
+                    {t(`publication.licenses.${PUBLICATION_LICENSE_TRANSLATION_KEYS[selectedLicense.id]}.summary`)}
+                  </p>
                   {selectedLicense.url && (
                     <a
                       href={selectedLicense.url}
@@ -311,7 +318,7 @@ export function PublicationMetadataDialog({
                       rel="noreferrer"
                       className="inline-flex shrink-0 items-center gap-1 text-xs text-primary hover:underline"
                     >
-                      官方条款
+                      {t('publication.officialTerms')}
                       <ExternalLink size={12} />
                     </a>
                   )}
@@ -321,7 +328,7 @@ export function PublicationMetadataDialog({
                   <div className="flex items-start gap-2 rounded-md border border-amber-500/35 bg-amber-500/10 px-3 py-2.5 text-xs leading-relaxed text-foreground">
                     <Info size={15} className="mt-0.5 shrink-0 text-amber-600 dark:text-amber-400" />
                     <p>
-                      请确认你有权许可作品中的相关内容。开放许可一旦随作品分发，已经获得的授权通常不能撤回；电子 PDF 的权限限制也应与所选条款保持一致。
+                      {t('publication.openLicenseWarning')}
                     </p>
                   </div>
                 )}
@@ -332,22 +339,22 @@ export function PublicationMetadataDialog({
           {activeTab === 'identifiers' && (
             <section className="grid gap-3">
               <div className="flex items-center justify-between">
-                <span className={labelClass}>作品标识符</span>
+                <span className={labelClass}>{t('publication.fields.workIdentifiers')}</span>
                 <button
                   type="button"
                   onClick={() => updateDraft({ identifiers: [...(draft.identifiers || []), { scheme: 'DOI', value: '' }] })}
                   className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs text-primary transition-colors hover:bg-muted"
                 >
-                  <Plus size={13} /> 添加
+                  <Plus size={13} /> {t('publication.add')}
                 </button>
               </div>
               {(draft.identifiers || []).map((identifier, index) => (
                 <div key={`${identifier.scheme}-${index}`} className="grid grid-cols-[120px_1fr_32px] gap-2">
                   <select className={inputClass} value={identifier.scheme} onChange={event => updateIdentifier(index, { scheme: event.target.value as PublicationIdentifier['scheme'] })}>
-                    {IDENTIFIER_SCHEMES.map(scheme => <option key={scheme} value={scheme}>{scheme === 'CUSTOM' ? '其他' : scheme}</option>)}
+                    {IDENTIFIER_SCHEMES.map(scheme => <option key={scheme} value={scheme}>{scheme === 'CUSTOM' ? t('publication.roles.other') : scheme}</option>)}
                   </select>
                   <input className={inputClass} value={identifier.value} onChange={event => updateIdentifier(index, { value: event.target.value })} />
-                  <button type="button" onClick={() => removeIdentifier(index)} className="flex h-9 w-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-red-500/10 hover:text-red-500" title="删除标识符" aria-label="删除标识符">
+                  <button type="button" onClick={() => removeIdentifier(index)} className="flex h-9 w-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-red-500/10 hover:text-red-500" title={t('publication.deleteIdentifier')} aria-label={t('publication.deleteIdentifier')}>
                     <Trash2 size={15} />
                   </button>
                 </div>
@@ -357,8 +364,8 @@ export function PublicationMetadataDialog({
         </div>
 
         <footer className="flex justify-end gap-2 border-t border-border px-5 py-4">
-          <button type="button" onClick={onClose} className="rounded-md border border-border px-4 py-2 text-sm text-foreground transition-colors hover:bg-muted">取消</button>
-          <button type="button" onClick={handleSave} className="rounded-md bg-primary px-4 py-2 text-sm text-primary-foreground transition-colors hover:bg-primary/90">保存</button>
+          <button type="button" onClick={onClose} className="rounded-md border border-border px-4 py-2 text-sm text-foreground transition-colors hover:bg-muted">{t('common.cancel')}</button>
+          <button type="button" onClick={handleSave} className="rounded-md bg-primary px-4 py-2 text-sm text-primary-foreground transition-colors hover:bg-primary/90">{t('publication.save')}</button>
         </footer>
       </section>
     </div>
@@ -373,6 +380,7 @@ interface MissingPublicationMetadataDialogProps {
 }
 
 export function MissingPublicationMetadataDialog({ open, onClose, onConfigure, onContinue }: MissingPublicationMetadataDialogProps) {
+  const { t } = useTranslation();
   if (!open) return null;
 
   return (
@@ -380,15 +388,15 @@ export function MissingPublicationMetadataDialog({ open, onClose, onConfigure, o
       <section className="w-full max-w-md rounded-lg border border-border bg-background shadow-2xl" onClick={event => event.stopPropagation()} role="alertdialog" aria-modal="true" aria-labelledby="missing-metadata-title">
         <header className="flex items-center gap-2 border-b border-border px-5 py-4">
           <BookMarked size={18} className="text-primary" />
-          <h2 id="missing-metadata-title" className="text-base font-semibold text-foreground">出版信息尚未填写</h2>
+          <h2 id="missing-metadata-title" className="text-base font-semibold text-foreground">{t('publication.missingTitle')}</h2>
         </header>
         <div className="px-5 py-4 text-sm leading-relaxed text-muted-foreground">
-          当前项目没有保存出版与版权信息。你可以先填写，也可以继续导出并使用项目标题和脚本作者作为基础元信息。
+          {t('publication.missingDescription')}
         </div>
         <footer className="flex justify-end gap-2 border-t border-border px-5 py-4">
-          <button type="button" onClick={onClose} className="rounded-md px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground">取消</button>
-          <button type="button" onClick={onContinue} className="rounded-md border border-border px-3 py-2 text-sm text-foreground transition-colors hover:bg-muted">仍然导出</button>
-          <button type="button" onClick={onConfigure} className="rounded-md bg-primary px-3 py-2 text-sm text-primary-foreground transition-colors hover:bg-primary/90">去填写</button>
+          <button type="button" onClick={onClose} className="rounded-md px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground">{t('common.cancel')}</button>
+          <button type="button" onClick={onContinue} className="rounded-md border border-border px-3 py-2 text-sm text-foreground transition-colors hover:bg-muted">{t('publication.continueExport')}</button>
+          <button type="button" onClick={onConfigure} className="rounded-md bg-primary px-3 py-2 text-sm text-primary-foreground transition-colors hover:bg-primary/90">{t('publication.configure')}</button>
         </footer>
       </section>
     </div>

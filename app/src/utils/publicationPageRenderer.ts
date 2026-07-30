@@ -1,4 +1,5 @@
 import type { ProjectState, PublicationContributor } from '../ProjectContext';
+import i18n, { getPublicationLanguage } from '../i18n';
 import { getFontFamilyStack, getPublicationFontFamily } from './fonts';
 import { hasPublicationMetadata } from './publicationMetadata';
 
@@ -13,19 +14,13 @@ export interface PublicationPage {
   width: number;
   height: number;
   fontFamily: string;
+  heading: string;
+  remainingMetadata: string;
   title: string;
   contributors: PublicationPageEntry[];
   details: PublicationPageEntry[];
   rights: string[];
 }
-
-const ROLE_LABELS: Record<PublicationContributor['role'], string> = {
-  author: '作者',
-  illustrator: '绘者',
-  editor: '编辑',
-  translator: '译者',
-  other: '参与者',
-};
 
 function trimmed(value: string | undefined): string {
   return value?.trim() || '';
@@ -43,6 +38,8 @@ export function shouldIncludeCopyrightPage(
 
 export function buildPublicationPage(projectState: ProjectState): PublicationPage {
   const metadata = projectState.publication_metadata;
+  const language = getPublicationLanguage(metadata?.language);
+  const t = i18n.getFixedT(language);
   const contributorGroups = new Map<PublicationContributor['role'], string[]>();
 
   metadata?.contributors?.forEach(contributor => {
@@ -54,21 +51,24 @@ export function buildPublicationPage(projectState: ProjectState): PublicationPag
   });
 
   const contributors = [...contributorGroups.entries()].map(([role, names]) => ({
-    label: ROLE_LABELS[role],
-    value: names.join('、'),
+    label: t(`publication.roles.${role === 'other' ? 'contributor' : role}`),
+    value: names.join(language === 'zh-CN' ? '、' : ', '),
   }));
   const details: PublicationPageEntry[] = [];
 
-  if (trimmed(metadata?.publisher)) details.push({ label: '出版者', value: trimmed(metadata?.publisher) });
-  if (trimmed(metadata?.publication_date)) details.push({ label: '发布日期', value: trimmed(metadata?.publication_date) });
-  if (trimmed(metadata?.language)) details.push({ label: '语言', value: trimmed(metadata?.language) });
+  if (trimmed(metadata?.publisher)) details.push({ label: t('publication.fields.publisher'), value: trimmed(metadata?.publisher) });
+  if (trimmed(metadata?.publication_date)) details.push({ label: t('publication.fields.publicationDate'), value: trimmed(metadata?.publication_date) });
+  if (trimmed(metadata?.language)) details.push({ label: t('publication.fields.language'), value: trimmed(metadata?.language) });
   const identifiers = metadata?.identifiers?.filter(identifier => trimmed(identifier.value)) ?? [];
   identifiers.slice(0, 6).forEach(identifier => {
     const value = trimmed(identifier.value);
-    if (value) details.push({ label: identifier.scheme === 'CUSTOM' ? '标识符' : identifier.scheme, value });
+    if (value) details.push({ label: identifier.scheme === 'CUSTOM' ? t('publication.identifier') : identifier.scheme, value });
   });
   if (identifiers.length > 6) {
-    details.push({ label: '其他', value: `另有 ${identifiers.length - 6} 项标识符已写入 PDF metadata` });
+    details.push({
+      label: t('publication.roles.other'),
+      value: t('publication.additionalIdentifiers', { count: identifiers.length - 6 }),
+    });
   }
 
   const derivedCopyright = trimmed(metadata?.copyright_holder) || trimmed(metadata?.copyright_year)
@@ -84,6 +84,8 @@ export function buildPublicationPage(projectState: ProjectState): PublicationPag
     width: projectState.canvas_width || 1024,
     height: projectState.canvas_height || 1024,
     fontFamily: getPublicationFontFamily(projectState),
+    heading: t('publication.pageHeading'),
+    remainingMetadata: t('publication.remainingMetadata'),
     title: trimmed(metadata?.title) || projectState.project_name,
     contributors,
     details,
@@ -136,7 +138,7 @@ export function renderPublicationPageToCanvas(page: PublicationPage): HTMLCanvas
   canvas.width = page.width;
   canvas.height = page.height;
   const ctx = canvas.getContext('2d');
-  if (!ctx) throw new Error('Canvas 2D is unavailable.');
+  if (!ctx) throw new Error(i18n.t('errors.canvasUnavailable'));
 
   const scale = Math.max(page.width, page.height) / 1024;
   const marginX = Math.max(48 * scale, page.width * 0.085);
@@ -162,7 +164,7 @@ export function renderPublicationPageToCanvas(page: PublicationPage): HTMLCanvas
   let y = page.height * 0.1;
   ctx.fillStyle = '#555555';
   ctx.font = `500 ${headingFontSize}px ${fontFamily}`;
-  ctx.fillText('出版与版权', marginX, y);
+  ctx.fillText(page.heading, marginX, y);
   y += bodyLineHeight * 1.35;
 
   ctx.fillStyle = '#111111';
@@ -232,7 +234,7 @@ export function renderPublicationPageToCanvas(page: PublicationPage): HTMLCanvas
   if (wasTruncated) {
     ctx.fillStyle = '#777777';
     ctx.font = `${smallFontSize}px ${fontFamily}`;
-    ctx.fillText('其余出版信息已写入 PDF metadata', marginX, Math.min(y, contentBottom));
+    ctx.fillText(page.remainingMetadata, marginX, Math.min(y, contentBottom));
   }
 
   ctx.fillStyle = '#666666';

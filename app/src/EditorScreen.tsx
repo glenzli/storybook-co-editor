@@ -8,6 +8,7 @@ import { writeImage } from '@tauri-apps/plugin-clipboard-manager';
 import { Image as TauriImage } from '@tauri-apps/api/image';
 import { Image as ImageIcon, Info, XOctagon, RefreshCw, Trash2, ArchiveRestore, ZoomIn } from 'lucide-react';
 import { getPaletteSync } from 'colorthief';
+import { useTranslation } from 'react-i18next';
 import {
   useProject,
   type ElectronicPdfSettings,
@@ -42,6 +43,7 @@ import { hasPublicationMetadata } from './utils/publicationMetadata';
 import { ElectronicPdfExportDialog } from './components/ElectronicPdfExportDialog';
 import type { ElectronicPdfExportSecrets } from './utils/electronicPdfSettings';
 import { writeElectronicPdf } from './utils/pdfExportFinalizer';
+import { localizeAppError } from './i18n';
 
 const logger = createLogger('App');
 
@@ -58,6 +60,7 @@ interface BatchEvent {
 }
 
 export default function EditorScreen() {
+  const { t } = useTranslation();
   const { activeWorkspaceId, projectState, updateProjectState, appendSourceUrlMap, saveProject, saveProjectAs, closeProject, currentProjectPath, isDirty, undo, redo, canUndo, canRedo, isSaving, saveProgress } = useProject();
   const [images, setImages] = useState<string[]>([]);
   const [selectedIdx, setSelectedIdx] = useState<number | null>(null);
@@ -112,11 +115,7 @@ export default function EditorScreen() {
 
 
 
-  const defaultScript = `[Cover]
-从前有个美丽的森林...
-
-[1]
-森林里住着一只小狐狸。`;
+  const defaultScript = t('editor.defaultScript');
 
   const [globalScript, setGlobalScript] = useState(defaultScript);
   const publicationProjectState = useMemo(
@@ -539,14 +538,14 @@ export default function EditorScreen() {
     };
 
     if (exportState.visible_images.length === 0) {
-      alert('项目中没有可导出的页面。');
+      alert(t('export.noPages'));
       return;
     }
 
     try {
       const filePath = await save({
-        filters: [{ name: 'PDF Document', extensions: ['pdf'] }],
-        defaultPath: `${getDefaultExportFilename(exportState, '-电子版')}.pdf`,
+        filters: [{ name: t('common.pdfDocument'), extensions: ['pdf'] }],
+        defaultPath: `${getDefaultExportFilename(exportState, t('export.electronicSuffix'))}.pdf`,
       });
       if (!filePath) return;
 
@@ -554,15 +553,14 @@ export default function EditorScreen() {
       await waitForProjectFonts(exportState);
       const pdfBytes = await generateElectronicPdf(exportState, setElectronicPdfProgress);
       await writeElectronicPdf(filePath, pdfBytes, electronicPdfSettings, secrets);
-      alert(`成功导出电子 PDF 至：\n${filePath}`);
+      alert(t('export.electronicSuccess', { path: filePath }));
     } catch (error) {
       logger.error('Electronic PDF export failed', error);
-      const message = error instanceof Error ? error.message : String(error);
-      alert(`电子 PDF 导出失败：${message}`);
+      alert(t('export.electronicFailure', { error: localizeAppError(error) }));
     } finally {
       setElectronicPdfProgress(null);
     }
-  }, [electronicPdfProgress, globalScript, images, projectState]);
+  }, [electronicPdfProgress, globalScript, images, projectState, t]);
 
   const requestPdfExport = useCallback((exportAction: () => void) => {
     if (!projectState) return;
@@ -581,14 +579,14 @@ export default function EditorScreen() {
 
   const handleExportImage = useCallback(async (id: string, idx: number) => {
       if (id.startsWith('blank://')) {
-          alert('空白页不能直接导出，请在右侧先添加内容或直接删除。');
+          alert(t('export.blankPageExport'));
           return;
       }
       try {
           const ext = id.split('.').pop()?.toLowerCase() || 'jpg';
           const defaultPath = `page_${idx}.${ext}`;
           const filePath = await save({
-              filters: [{ name: 'Image', extensions: ['jpg', 'jpeg', 'png', 'webp'] }],
+              filters: [{ name: t('common.imageFile'), extensions: ['jpg', 'jpeg', 'png', 'webp'] }],
               defaultPath
           });
           if (filePath) {
@@ -599,13 +597,13 @@ export default function EditorScreen() {
           }
       } catch(e) {
           console.error("Failed to export image", e);
-          alert('导出失败: ' + (typeof e === 'string' ? e : (e as Error)?.message || String(e)));
+          alert(t('export.imageFailure', { error: localizeAppError(e) }));
       }
-  }, []);
+  }, [t]);
 
   const handleCopyToClipboard = useCallback(async (id: string) => {
       if (id.startsWith('blank://')) {
-          alert('空白页不能复制。');
+          alert(t('export.blankPageCopy'));
           return;
       }
       try {
@@ -621,7 +619,7 @@ export default function EditorScreen() {
           canvas.width = img.naturalWidth;
           canvas.height = img.naturalHeight;
           const ctx = canvas.getContext('2d');
-          if (!ctx) throw new Error("No 2d context");
+          if (!ctx) throw new Error(t('errors.canvasUnavailable'));
           ctx.drawImage(img, 0, 0);
           
           const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
@@ -633,13 +631,13 @@ export default function EditorScreen() {
               await writeImage(tauriImg);
           } catch (err) {
               console.error("Tauri clipboard write failed:", err);
-              alert('复制到剪切板失败，请检查桌面端权限。');
+              alert(t('export.clipboardPermissionFailure'));
           }
       } catch(e) {
           console.error("Failed to copy image", e);
-          alert('复制失败: ' + (typeof e === 'string' ? e : (e as Error)?.message || String(e)));
+          alert(t('export.copyFailure', { error: localizeAppError(e) }));
       }
-  }, []);
+  }, [t]);
 
   const handleDelete = useCallback((idToRemove: string) => {
       setTrashedImages(prev => {
@@ -856,7 +854,7 @@ export default function EditorScreen() {
             ) : (
               <div className="text-muted-foreground flex flex-col items-center gap-4">
                 <ImageIcon size={64} className="opacity-30" />
-                <p className="text-lg">等待接收画作...</p>
+                <p className="text-lg">{t('editor.waitingForArtwork')}</p>
               </div>
             )}
           </main>
@@ -892,7 +890,7 @@ export default function EditorScreen() {
                     <span>{imgMeta.sizeMB}</span>
                  </>
              ) : (
-                 <span>就绪</span>
+                 <span>{t('editor.ready')}</span>
              )}
              {activeTab === 'edit' && (
                <div className="flex items-center gap-2 ml-4 border-l border-border pl-4">
@@ -920,9 +918,9 @@ export default function EditorScreen() {
                        setCanvasScale(Math.min(availW / canvasW, availH / canvasH));
                      }
                    }}
-                   title="适应窗口"
+                   title={t('editor.fitWindow')}
                  >
-                   适应
+                   {t('editor.fit')}
                  </button>
                </div>
              )}
@@ -933,16 +931,16 @@ export default function EditorScreen() {
                   <div className="flex items-center gap-3 bg-primary/10 text-primary px-3 py-1 rounded-full border border-primary/20">
                       <span className="font-bold flex items-center gap-2">
                           <RefreshCw size={12} className="animate-spin" />
-                          正在接收网页图片... {receivingState.current} / {receivingState.total}
+                          {t('editor.receivingImages', receivingState)}
                       </span>
-                      <button onClick={cancelReceive} className="hover:text-red-500 transition-colors ml-2" title="中断接收">
+                      <button onClick={cancelReceive} className="hover:text-red-500 transition-colors ml-2" title={t('editor.cancelReceive')}>
                           <XOctagon size={14} />
                       </button>
                   </div>
               )}
               <div className="flex items-center gap-4 text-xs font-mono text-muted-foreground/80">
                   <span className="font-bold text-foreground/50">STORYBOOK CO-EDITOR v1.1.4</span>
-                  <span>本地桥接已连接</span>
+                  <span>{t('editor.bridgeConnected')}</span>
               </div>
           </div>
       </footer>
@@ -954,16 +952,16 @@ export default function EditorScreen() {
             <div className="p-4 border-b border-border flex justify-between items-center">
               <div className="flex items-center gap-2 text-red-500">
                 <Trash2 size={20} />
-                <h2 className="font-bold text-lg">回收站 ({trashedImages.length})</h2>
+                <h2 className="font-bold text-lg">{t('editor.trashWithCount', { count: trashedImages.length })}</h2>
               </div>
-              <button onClick={() => setShowTrashModal(false)} className="p-2 hover:bg-muted rounded-full">
+              <button onClick={() => setShowTrashModal(false)} className="p-2 hover:bg-muted rounded-full" title={t('editor.closeTrash')} aria-label={t('editor.closeTrash')}>
                 <XOctagon size={20} className="text-muted-foreground" />
               </button>
             </div>
             <div className="p-6 flex-1 overflow-y-auto">
               {trashedImages.length === 0 ? (
                 <div className="flex items-center justify-center h-full text-muted-foreground">
-                  回收站是空的
+                  {t('editor.trashEmpty')}
                 </div>
               ) : (
                 <div className="grid grid-cols-4 gap-4">
@@ -973,7 +971,7 @@ export default function EditorScreen() {
                       <button 
                         onClick={() => handleRestoreTrash(url)}
                         className="absolute inset-0 m-auto w-10 h-10 bg-emerald-500 text-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity shadow-lg"
-                        title="还原图片"
+                        title={t('editor.restoreImage')}
                       >
                         <ArchiveRestore size={20} />
                       </button>

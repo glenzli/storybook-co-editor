@@ -1,5 +1,6 @@
 import { jsPDF } from 'jspdf';
 import type { ProjectState } from '../ProjectContext';
+import i18n from '../i18n';
 import { buildExportPages, renderExportPageToCanvas } from './exportPages';
 import { applyPublicationMetadataToPdf } from './publicationMetadata';
 
@@ -27,7 +28,7 @@ export async function generateElectronicPdf(
     source.startsWith('blank://') ? source : `http://127.0.0.1:14320/images/${source}`
   ));
   const pages = buildExportPages(projectState, imageSources, 'electronic');
-  if (pages.length === 0) throw new Error('项目中没有可导出的页面。');
+  if (pages.length === 0) throw new Error(i18n.t('export.noPages'));
 
   let pdf: jsPDF | null = null;
 
@@ -56,7 +57,7 @@ export async function generateElectronicPdf(
     onProgress?.({ current: index + 1, total: pages.length });
   }
 
-  if (!pdf) throw new Error('项目中没有可导出的页面。');
+  if (!pdf) throw new Error(i18n.t('export.noPages'));
 
   applyPublicationMetadataToPdf(pdf, projectState);
 

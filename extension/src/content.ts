@@ -1,3 +1,5 @@
+import { tr } from './i18n';
+
 console.log('Storybook Co-Editor Web Clipper initialized.');
 
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
@@ -168,7 +170,7 @@ if (isSupportedUrl(window.location.href)) {
 
         const label = document.createElement('div');
         label.style.cssText = `font-size:10px; font-weight:600; color:${theme.fgMuted}; letter-spacing:0.5px; text-transform:uppercase;`;
-        label.innerText = '参考图';
+        label.innerText = tr('reference');
         refIndicator.appendChild(label);
 
         const imgWrap = document.createElement('div');
@@ -244,39 +246,41 @@ if (isSupportedUrl(window.location.href)) {
     }
 
     function updateOverlayButtons() {
-        btnAction.innerText = referenceUrl ? '✨ 对齐样式' : '🎯 参考';
+        btnAction.innerText = referenceUrl ? `✨ ${tr('alignStyle')}` : `🎯 ${tr('referenceAction')}`;
         applyOverlayTheme();
     }
 
     function getSendResultFeedback(response: { success?: boolean; status?: string; error?: string } | undefined) {
         if (!response?.success) {
             return {
-                buttonText: '❌ 失败',
-                toastText: response?.error ? `发送失败：${response.error}` : '发送失败，请确认桌面端已打开'
+                buttonText: `❌ ${tr('failed')}`,
+                toastText: response?.error
+                    ? tr('sendFailedDetail', { error: response.error })
+                    : tr('sendFailedDesktop')
             };
         }
 
         if (response.status === 'trashed') {
             return {
-                buttonText: '🗑️ 在回收站',
-                toastText: '这张图片已在 app 回收站中，请先在 app 里恢复或清理后再发送'
+                buttonText: `🗑️ ${tr('inTrash')}`,
+                toastText: tr('inTrashToast')
             };
         }
 
         if (response.status === 'duplicate') {
             return {
-                buttonText: '↩️ 已存在',
-                toastText: '这张图片已经在当前项目中'
+                buttonText: `↩️ ${tr('duplicate')}`,
+                toastText: tr('duplicateToast')
             };
         }
 
         return {
-            buttonText: '✅ 成功',
-            toastText: '图片已发送到 Storybook Co-Editor'
+            buttonText: `✅ ${tr('success')}`,
+            toastText: tr('successToast')
         };
     }
 
-    btnSend.innerText = '📸 发送';
+    btnSend.innerText = `📸 ${tr('send')}`;
     updateOverlayButtons();
 
     window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', applyOverlayTheme);
@@ -349,27 +353,17 @@ if (isSupportedUrl(window.location.href)) {
         referenceUrl = currentTargetImage.src;
         renderRefIndicator();
         updateOverlayButtons();
-        btnAction.innerText = '✅ 已设为参考';
+        btnAction.innerText = `✅ ${tr('setAsReference')}`;
         setTimeout(() => updateOverlayButtons(), 1000);
     };
 
     // ── Align Style Prompt ──
-    const STYLE_PROMPT = `请仔细对比以下两张图片。
-
-图1是【参考图 / 风格基准】，图2是【目标图 / 需要调整的图】。
-
-请执行以下任务：
-1. 分析图2相对于图1，在以下维度上存在哪些具体差异：画风笔触、色调色温、光影氛围、线条质感、材质纹理、整体视觉风格
-2. 基于你的分析结果，编写一段精确的图像生成 Prompt，要求：
-   - 完整保留图2的构图、主体内容和叙事场景
-   - 将图2的视觉风格完全对齐到图1
-   - Prompt 需要足够具体和详细，可直接用于图像生成
-3. 使用你编写的 Prompt，直接重新生成图2`;
+    const STYLE_PROMPT = tr('stylePrompt');
 
     const handleAlignStyle = async () => {
         if (!currentTargetImage || !referenceUrl) return;
         const targetUrl = currentTargetImage.src;
-        btnAction.innerText = '准备中...';
+        btnAction.innerText = tr('preparing');
 
         try {
             const [refBlob, targetBlob] = await Promise.all([
@@ -408,22 +402,22 @@ if (isSupportedUrl(window.location.href)) {
                     dt.items.add(targetFile);
                     fileInput.files = dt.files;
                     fileInput.dispatchEvent(new Event('change', { bubbles: true }));
-                    btnAction.innerText = '✅ 已填入';
-                    showToast('✅ Prompt 和图片已填入对话框，请检查后发送');
+                    btnAction.innerText = `✅ ${tr('filled')}`;
+                    showToast(`✅ ${tr('filledToast')}`);
                 } else {
-                    btnAction.innerText = '✅ 文字已填入';
-                    showToast('📝 Prompt 已填入，请手动上传两张图片（先参考图，后目标图）');
+                    btnAction.innerText = `✅ ${tr('textFilled')}`;
+                    showToast(`📝 ${tr('textFilledToast')}`);
                 }
             } else {
                 // Fallback: copy prompt to clipboard
                 try { await navigator.clipboard.writeText(STYLE_PROMPT); } catch {}
-                btnAction.innerText = '📋 已复制';
-                showToast('📋 Prompt 已复制到剪切板，请粘贴到对话框并上传两张图片');
+                btnAction.innerText = `📋 ${tr('copied')}`;
+                showToast(`📋 ${tr('copiedToast')}`);
             }
         } catch (e) {
             console.error('Align style failed:', e);
-            btnAction.innerText = '❌ 失败';
-            showToast('操作失败，请重试');
+            btnAction.innerText = `❌ ${tr('failed')}`;
+            showToast(tr('operationFailed'));
         }
 
         setTimeout(() => updateOverlayButtons(), 2500);
@@ -438,11 +432,11 @@ if (isSupportedUrl(window.location.href)) {
     btnSend.addEventListener('click', async () => {
         if (!currentTargetImage) return;
         const imageUrl = currentTargetImage.src;
-        btnSend.innerText = '提取中...';
+        btnSend.innerText = tr('extracting');
 
         try {
             const base64_data = await blobToBase64(await fetchImageBlob(imageUrl));
-            btnSend.innerText = '发送中...';
+            btnSend.innerText = tr('sending');
 
             await new Promise((resolve) => {
                 chrome.runtime.sendMessage({ action: 'startBatch', payload: { total: 1 } }, resolve);
@@ -457,13 +451,13 @@ if (isSupportedUrl(window.location.href)) {
                     btnSend.innerText = feedback.buttonText;
                     showToast(feedback.toastText);
                     if (!effectiveResponse?.success) console.error('Error:', effectiveResponse?.error);
-                    setTimeout(() => { btnSend.innerText = '📸 发送'; overlay.style.display = 'none'; }, 2000);
+                    setTimeout(() => { btnSend.innerText = `📸 ${tr('send')}`; overlay.style.display = 'none'; }, 2000);
                 }
             );
         } catch (e) {
             console.error('Failed to extract image:', e);
-            btnSend.innerText = '❌ 失败';
-            setTimeout(() => { btnSend.innerText = '📸 发送'; }, 2000);
+            btnSend.innerText = `❌ ${tr('failed')}`;
+            setTimeout(() => { btnSend.innerText = `📸 ${tr('send')}`; }, 2000);
         }
     });
 }

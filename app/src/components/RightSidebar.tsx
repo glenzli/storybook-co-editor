@@ -1,10 +1,12 @@
 import { useState, useEffect, useRef } from 'react';
 import { PenTool, Type, Maximize2, ChevronDown, ChevronRight, ChevronLeft, LayoutTemplate, Pipette, Trash2, Copy, ClipboardPaste } from 'lucide-react';
 import { HexColorPicker } from 'react-colorful';
+import { useTranslation } from 'react-i18next';
 import type { ImageAdjustments, ProjectState, SelectiveColor, TextSettings } from '../ProjectContext';
 import { BUILT_IN_FONT_OPTIONS } from '../utils/fonts';
 
 function DebouncedTextarea({ value, onChange, onCursorChange, className }: { value: string, onChange: (v: string) => void, onCursorChange?: (idx: number | null) => void, className?: string }) {
+  const { t } = useTranslation();
   const [localValue, setLocalValue] = useState(value);
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -108,10 +110,10 @@ function DebouncedTextarea({ value, onChange, onCursorChange, className }: { val
       {/* Validation Errors */}
       {errors.length > 0 && (
         <div className="bg-red-500/10 border border-red-500/30 rounded-md p-2 max-h-32 overflow-y-auto shrink-0 flex flex-col gap-1">
-          <span className="text-xs font-bold text-red-500 mb-0.5">⚠️ 标签格式有误</span>
+          <span className="text-xs font-bold text-red-500 mb-0.5">{t('rightSidebar.invalidTags')}</span>
           <ul className="text-xs text-red-500/80 space-y-0.5">
             {errors.map((err, idx) => (
-              <li key={idx}>第 {err.line} 行：无法识别的标签 <code className="bg-red-500/20 px-1 rounded">{err.tag}</code></li>
+              <li key={idx}>{t('rightSidebar.invalidTagLine', { line: err.line })} <code className="bg-red-500/20 px-1 rounded">{err.tag}</code></li>
             ))}
           </ul>
         </div>
@@ -242,6 +244,7 @@ function SliderControl({
   className?: string,
   valueFormat?: (v: number) => string
 }) {
+  const { t } = useTranslation();
   const [isEditing, setIsEditing] = useState(false);
   const [editValue, setEditValue] = useState(valueFormat(value));
 
@@ -297,7 +300,7 @@ function SliderControl({
               setEditValue(valueFormat(value));
               setIsEditing(true);
             }}
-            title="点击修改"
+            title={t('rightSidebar.clickToEdit')}
           >
             {valueFormat(value)}{unit}
           </span>
@@ -312,7 +315,7 @@ function SliderControl({
         value={value} 
         onChange={(e) => onChange(parseFloat(e.target.value))} 
         onDoubleClick={handleDoubleClick}
-        title="双击恢复默认"
+        title={t('rightSidebar.doubleClickReset')}
       />
     </div>
   );
@@ -323,7 +326,7 @@ function ColorPickerPanel({
   value, 
   onChange, 
   allowTransparent = false,
-  title = "颜色",
+  title,
   className = ""
 }: { 
   colors: string[], 
@@ -333,6 +336,7 @@ function ColorPickerPanel({
   title?: React.ReactNode,
   className?: string
 }) {
+  const { t } = useTranslation();
   const [isOpen, setIsOpen] = useState(false);
   const popoverRef = useRef<HTMLDivElement>(null);
   const { open: openEyedropper } = useEyedropper();
@@ -354,7 +358,7 @@ function ColorPickerPanel({
 
   return (
     <div className={`flex flex-col gap-1.5 ${className}`}>
-      {title && <label className="text-xs text-muted-foreground">{title}</label>}
+      <label className="text-xs text-muted-foreground">{title ?? t('rightSidebar.color')}</label>
       <div className="flex gap-1.5 items-center flex-wrap">
         {allowTransparent && (
           <button 
@@ -365,7 +369,7 @@ function ColorPickerPanel({
               backgroundSize: '8px 8px',
               backgroundPosition: '0 0, 0 4px, 4px -4px, -4px 0px'
             }}
-            title="透明背景"
+            title={t('rightSidebar.transparent')}
           />
         )}
         {['#ffffff','#000000', ...colors].map((c, i) => (
@@ -381,7 +385,7 @@ function ColorPickerPanel({
           <button
             onClick={() => setIsOpen(!isOpen)}
             className="w-5 h-5 rounded-full border-2 border-border cursor-pointer transition-transform hover:scale-125 flex items-center justify-center bg-[conic-gradient(red,yellow,lime,aqua,blue,magenta,red)] overflow-hidden"
-            title="自定义颜色"
+            title={t('rightSidebar.customColor')}
           >
             <div className="w-3 h-3 rounded-full border border-black/10" style={{ backgroundColor: value === 'transparent' ? '#ffffff' : value }} />
           </button>
@@ -400,7 +404,7 @@ function ColorPickerPanel({
             </div>
           )}
         </div>
-        <button onClick={handlePickColor} className="w-5 h-5 flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors hover:scale-110" title="屏幕取色 (Esc 取消)">
+        <button onClick={handlePickColor} className="w-5 h-5 flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors hover:scale-110" title={t('rightSidebar.pickColor')}>
           <Pipette size={14} />
         </button>
       </div>
@@ -419,6 +423,7 @@ function SyncTextSettingsDialog({
   effectiveOffsetY: number,
   onSync: (opts: { color: boolean, offsetX: boolean, offsetY: boolean }) => void
 }) {
+  const { t } = useTranslation();
   const [isOpen, setIsOpen] = useState(false);
   const [syncColor, setSyncColor] = useState(true);
   const [syncOffsetX, setSyncOffsetX] = useState(true);
@@ -429,29 +434,29 @@ function SyncTextSettingsDialog({
       <button 
         onClick={() => setIsOpen(true)}
         className="mt-4 w-full text-xs py-1.5 border border-border rounded text-muted-foreground hover:bg-muted hover:text-foreground transition-colors flex items-center justify-center gap-1"
-        title="将当前页的文本颜色和偏移量同步给所有内容页"
+        title={t('rightSidebar.syncDescription')}
       >
-        <span>同步设置到所有内容页</span>
+        <span>{t('rightSidebar.syncTitle')}</span>
       </button>
     );
   }
 
   return (
     <div className="mt-4 p-2.5 border border-primary/30 bg-primary/5 rounded-md flex flex-col gap-2.5 shadow-sm">
-      <div className="text-xs font-bold text-foreground">同步设置到所有内容页</div>
+      <div className="text-xs font-bold text-foreground">{t('rightSidebar.syncTitle')}</div>
       <label className="flex items-center gap-2 text-xs text-muted-foreground cursor-pointer hover:text-foreground transition-colors">
         <input type="checkbox" checked={syncColor} onChange={(e) => setSyncColor(e.target.checked)} className="accent-primary w-3.5 h-3.5" />
         <span className="flex items-center gap-1">
-          同步颜色 <span className="w-3 h-3 rounded-full border border-border inline-block ml-1" style={{ backgroundColor: effectiveColor }}></span>
+          {t('rightSidebar.syncColor')} <span className="w-3 h-3 rounded-full border border-border inline-block ml-1" style={{ backgroundColor: effectiveColor }}></span>
         </span>
       </label>
       <label className="flex items-center gap-2 text-xs text-muted-foreground cursor-pointer hover:text-foreground transition-colors">
         <input type="checkbox" checked={syncOffsetX} onChange={(e) => setSyncOffsetX(e.target.checked)} className="accent-primary w-3.5 h-3.5" />
-        同步水平偏移 ({effectiveOffsetX}px)
+        {t('rightSidebar.syncOffsetX', { value: effectiveOffsetX })}
       </label>
       <label className="flex items-center gap-2 text-xs text-muted-foreground cursor-pointer hover:text-foreground transition-colors">
         <input type="checkbox" checked={syncOffsetY} onChange={(e) => setSyncOffsetY(e.target.checked)} className="accent-primary w-3.5 h-3.5" />
-        同步垂直偏移 ({effectiveOffsetY}px)
+        {t('rightSidebar.syncOffsetY', { value: effectiveOffsetY })}
       </label>
       <div className="flex gap-2 mt-1">
         <button 
@@ -461,13 +466,13 @@ function SyncTextSettingsDialog({
           }}
           className="flex-1 bg-primary text-primary-foreground text-xs py-1.5 rounded hover:bg-primary/90 font-medium transition-colors"
         >
-          确定同步
+          {t('rightSidebar.confirmSync')}
         </button>
         <button 
           onClick={() => setIsOpen(false)}
           className="flex-1 border border-border text-foreground text-xs py-1.5 rounded hover:bg-muted transition-colors"
         >
-          取消
+          {t('common.cancel')}
         </button>
       </div>
     </div>
@@ -493,6 +498,7 @@ export function RightSidebar({
   xyBounds,
   authorBounds
 }: RightSidebarProps) {
+  const { t } = useTranslation();
   const [rightTab, setRightTab] = useState<'script' | 'style'>('script');
   const [openSections, setOpenSections] = useState<Record<string, boolean>>({ canvas: false, author: true, text: true, image: true });
 
@@ -582,6 +588,7 @@ export function RightSidebar({
           {/* Right Sidebar Toggle Button */}
           <button 
             onClick={() => setIsRightOpen(!isRightOpen)}
+            title={t(isRightOpen ? 'rightSidebar.collapse' : 'rightSidebar.expand')}
             style={{ right: isRightOpen ? sidebarWidth : 0 }}
             className={`absolute top-1/2 -translate-y-1/2 z-30 bg-card border border-border rounded-l-md shadow-md p-1 hover:bg-muted ${!isDraggingState ? 'transition-all duration-300' : ''}`}
           >
@@ -609,7 +616,7 @@ export function RightSidebar({
                 }`}
               >
                 <PenTool size={14} />
-                剧本
+                {t('rightSidebar.script')}
               </button>
               <button
                 onClick={() => setRightTab('style')}
@@ -620,7 +627,7 @@ export function RightSidebar({
                 }`}
               >
                 <Type size={14} />
-                样式
+                {t('rightSidebar.style')}
               </button>
             </div>
 
@@ -629,7 +636,7 @@ export function RightSidebar({
             {rightTab === 'script' && (
             <div className="p-4 flex-1 flex flex-col gap-3 w-full overflow-hidden">
               <p className="text-xs text-muted-foreground flex-shrink-0">
-                使用 [Cover] 和 [1], [2] 标记将剧本与图片关联。第一张图默认为封面。
+                {t('rightSidebar.scriptHelp')}
               </p>
               <DebouncedTextarea 
                 className="flex-1 w-full bg-background border border-border rounded-md p-3 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary resize-none transition-all font-mono min-h-0"
@@ -650,7 +657,7 @@ export function RightSidebar({
                 <button onClick={() => setOpenSections(s => ({...s, canvas: !s.canvas}))} className="flex items-center justify-between w-full py-1.5 hover:text-foreground transition-colors">
                   <div className="flex items-center gap-2">
                     <Maximize2 size={14} className="text-emerald-500" />
-                    <span className="font-bold text-sm">画布设置</span>
+                    <span className="font-bold text-sm">{t('rightSidebar.canvas')}</span>
                   </div>
                   <ChevronDown size={14} className={`text-muted-foreground transition-transform ${openSections.canvas ? 'rotate-180' : ''}`} />
                 </button>
@@ -658,12 +665,17 @@ export function RightSidebar({
                 <div className="flex flex-col gap-3 pt-2">
                 {imgMeta && (canvasW !== imgMeta.width || canvasH !== imgMeta.height) && (
                   <div className="text-xs bg-amber-500/10 border border-amber-500/30 text-amber-600 dark:text-amber-400 rounded-md px-2 py-1.5">
-                    ⚠️ 当前图片 {imgMeta.width}×{imgMeta.height} ≠ 画布 {canvasW}×{canvasH}
+                    {t('rightSidebar.canvasMismatch', {
+                      imageWidth: imgMeta.width,
+                      imageHeight: imgMeta.height,
+                      canvasWidth: canvasW,
+                      canvasHeight: canvasH,
+                    })}
                   </div>
                 )}
                 <div className="flex items-center gap-2">
                   <div className="flex flex-col gap-1 flex-1">
-                    <label className="text-xs text-muted-foreground">宽度</label>
+                    <label className="text-xs text-muted-foreground">{t('rightSidebar.width')}</label>
                     <input 
                       type="number" 
                       className="w-full bg-background border border-border rounded-md p-1.5 text-sm text-center font-mono focus:ring-1 focus:ring-primary outline-none"
@@ -673,7 +685,7 @@ export function RightSidebar({
                   </div>
                   <span className="text-muted-foreground mt-5">×</span>
                   <div className="flex flex-col gap-1 flex-1">
-                    <label className="text-xs text-muted-foreground">高度</label>
+                    <label className="text-xs text-muted-foreground">{t('rightSidebar.height')}</label>
                     <input 
                       type="number" 
                       className="w-full bg-background border border-border rounded-md p-1.5 text-sm text-center font-mono focus:ring-1 focus:ring-primary outline-none"
@@ -691,7 +703,7 @@ export function RightSidebar({
                   }}
                   disabled={!imgMeta}
                 >
-                  🎯 匹配当前图片 {imgMeta ? `(${imgMeta.width}×${imgMeta.height})` : ''}
+                  {t('rightSidebar.matchImage')} {imgMeta ? `(${imgMeta.width}×${imgMeta.height})` : ''}
                 </button>
                 </div>
                 )}
@@ -703,15 +715,15 @@ export function RightSidebar({
                 <button onClick={() => setOpenSections(s => ({...s, author: !s.author}))} className="flex items-center justify-between w-full py-1.5 hover:text-foreground transition-colors">
                   <div className="flex items-center gap-2">
                     <PenTool size={14} className="text-violet-500" />
-                    <span className="font-bold text-sm">作者署名</span>
+                    <span className="font-bold text-sm">{t('rightSidebar.author')}</span>
                   </div>
                   <ChevronDown size={14} className={`text-muted-foreground transition-transform ${openSections.author ? 'rotate-180' : ''}`} />
                 </button>
                 {openSections.author && (
                 <div className="flex flex-col gap-3 pt-2">
                 <div className="text-xs text-muted-foreground bg-muted/30 p-2 rounded border border-border/50">
-                  💡 提示：在左侧剧本中使用 <code>[Author]</code> 标签添加作者信息。<br/>
-                  例如：<code>[Author] 编绘：AI</code>
+                  {t('rightSidebar.authorHint')}<br/>
+                  {t('rightSidebar.authorExample')}
                 </div>
                 {(() => {
                   const ats = projectState?.author_text_settings || { font_size: 16, text_color: '#ffffff', font_family: 'serif', has_shadow: true, offset_x: 0, offset_y: 0 };
@@ -719,22 +731,22 @@ export function RightSidebar({
                   return (
                     <>
                       <div className="flex flex-col gap-1.5">
-                        <label className="text-xs text-muted-foreground">字体</label>
+                        <label className="text-xs text-muted-foreground">{t('rightSidebar.font')}</label>
                         <select 
                           className="w-full bg-background border border-border rounded-md p-2 text-sm focus:ring-1 focus:ring-primary outline-none"
                           value={ats.font_family || 'serif'}
                           onChange={(e) => updateAts({ font_family: e.target.value })}
                         >
-                          <optgroup label="本地内置字体">
+                          <optgroup label={t('rightSidebar.bundledFonts')}>
                             {BUILT_IN_FONT_OPTIONS.map((font) => (
-                              <option key={font.value} value={font.value}>{font.label}</option>
+                              <option key={font.value} value={font.value}>{t(`rightSidebar.fonts.${font.translationKey}`)}</option>
                             ))}
                           </optgroup>
                         </select>
                       </div>
 
                       <SliderControl
-                        label="字号"
+                        label={t('rightSidebar.fontSize')}
                         value={ats.font_size || 16}
                         min={8}
                         max={100}
@@ -752,14 +764,14 @@ export function RightSidebar({
                           className="flex-1 pr-4 border-r border-border"
                         />
                         <div className="flex flex-col gap-1.5 pl-4 items-center justify-center">
-                          <label className="text-xs text-muted-foreground">描边</label>
+                          <label className="text-xs text-muted-foreground">{t('rightSidebar.stroke')}</label>
                           <input type="checkbox" className="accent-primary w-4 h-4"
                             checked={ats.has_shadow ?? true}
                             onChange={(e) => updateAts({ has_shadow: e.target.checked })}
                           />
                         </div>
                         <div className="flex flex-col gap-1.5 pl-4 items-center justify-center">
-                          <label className="text-xs text-muted-foreground">底板</label>
+                          <label className="text-xs text-muted-foreground">{t('rightSidebar.backdrop')}</label>
                           <input type="checkbox" className="accent-primary w-4 h-4"
                             checked={ats.has_backdrop ?? false}
                             onChange={(e) => updateAts({ has_backdrop: e.target.checked })}
@@ -769,7 +781,7 @@ export function RightSidebar({
 
                       <div className="flex flex-col gap-3 mt-2 border-t border-border pt-2">
                         <SliderControl
-                          label="水平偏移"
+                          label={t('rightSidebar.horizontalOffset')}
                           value={ats.offset_x || 0}
                           min={authorBounds.minX}
                           max={authorBounds.maxX}
@@ -778,7 +790,7 @@ export function RightSidebar({
                           onChange={(val) => updateAts({ offset_x: val })}
                         />
                         <SliderControl
-                          label="垂直偏移"
+                          label={t('rightSidebar.verticalOffset')}
                           value={ats.offset_y || 0}
                           min={authorBounds.minY}
                           max={authorBounds.maxY}
@@ -801,7 +813,11 @@ export function RightSidebar({
                   <div className="flex items-center gap-2">
                     <Type size={14} className="text-primary" />
                     <span className="font-bold text-sm">
-                      {selectedIdx === 0 ? "封面文字" : (/(?:\[(Title|扉页)\])/i.test(projectState?.global_script || '') && selectedIdx === 1) ? "扉页文字" : "正文文字"}
+                      {selectedIdx === 0
+                        ? t('rightSidebar.coverText')
+                        : (/(?:\[(Title|扉页)\])/i.test(projectState?.global_script || '') && selectedIdx === 1)
+                          ? t('rightSidebar.titleText')
+                          : t('rightSidebar.bodyText')}
                     </span>
                   </div>
                   <ChevronDown size={14} className={`text-muted-foreground transition-transform ${openSections.text ? 'rotate-180' : ''}`} />
@@ -869,19 +885,19 @@ export function RightSidebar({
                   return (
                     <>
                       <div className="flex flex-col gap-1.5">
-                        <label className="text-xs text-muted-foreground">字体</label>
+                        <label className="text-xs text-muted-foreground">{t('rightSidebar.font')}</label>
                         <select 
                           className="w-full bg-background border border-border rounded-md p-2 text-sm focus:ring-1 focus:ring-primary outline-none"
                           value={settings.font_family}
                           onChange={(e) => updateSharedSettings({ font_family: e.target.value })}
                         >
-                          <optgroup label="本地内置字体">
+                          <optgroup label={t('rightSidebar.bundledFonts')}>
                               {BUILT_IN_FONT_OPTIONS.map((font) => (
-                                <option key={font.value} value={font.value}>{font.label}</option>
+                                <option key={font.value} value={font.value}>{t(`rightSidebar.fonts.${font.translationKey}`)}</option>
                               ))}
                           </optgroup>
                           {systemFonts.length > 0 && (
-                              <optgroup label="本地系统字体">
+                              <optgroup label={t('rightSidebar.systemFonts')}>
                                   {systemFonts.map(f => <option key={f} value={f}>{f}</option>)}
                               </optgroup>
                           )}
@@ -889,7 +905,7 @@ export function RightSidebar({
                       </div>
 
                       <SliderControl
-                        label="字号"
+                        label={t('rightSidebar.fontSize')}
                         value={settings.font_size}
                         min={12}
                         max={100}
@@ -905,10 +921,10 @@ export function RightSidebar({
                             value={effectiveColor}
                             onChange={(c) => updatePageOverride({ text_color: c })}
                             className="flex-1 pr-4 border-r border-border"
-                            title={<>颜色{!isCover && <span className="text-primary/60 ml-1">(本页)</span>}</>}
+                            title={<>{t('rightSidebar.color')}{!isCover && <span className="text-primary/60 ml-1">({t('rightSidebar.currentPage')})</span>}</>}
                           />
                           <div className="flex flex-col gap-1.5 pl-4 items-center justify-center">
-                              <label className="text-xs text-muted-foreground">描边</label>
+                              <label className="text-xs text-muted-foreground">{t('rightSidebar.stroke')}</label>
                               <input 
                                 type="checkbox" 
                                 checked={settings.has_shadow ?? true}
@@ -917,7 +933,7 @@ export function RightSidebar({
                               />
                           </div>
                           <div className="flex flex-col gap-1.5 pl-4 items-center justify-center">
-                              <label className="text-xs text-muted-foreground">底板</label>
+                              <label className="text-xs text-muted-foreground">{t('rightSidebar.backdrop')}</label>
                               <input 
                                 type="checkbox" 
                                 checked={settings.has_backdrop ?? false}
@@ -930,11 +946,11 @@ export function RightSidebar({
                       <div className="flex flex-col gap-3 mt-2 border-t border-border pt-2">
                         {!isCover && (
                           <div className="text-[10px] text-muted-foreground/60 text-center">
-                            ↕ 偏移为本页独立设置
+                            {t('rightSidebar.pageOffset')}
                           </div>
                         )}
                         <SliderControl
-                          label="水平偏移"
+                          label={t('rightSidebar.horizontalOffset')}
                           value={effectiveOffsetX}
                           min={xyBounds.minX}
                           max={xyBounds.maxX}
@@ -943,7 +959,7 @@ export function RightSidebar({
                           onChange={(val) => updatePageOverride({ offset_x: val })}
                         />
                         <SliderControl
-                          label="垂直偏移"
+                          label={t('rightSidebar.verticalOffset')}
                           value={effectiveOffsetY}
                           min={xyBounds.minY}
                           max={xyBounds.maxY}
@@ -986,7 +1002,7 @@ export function RightSidebar({
                 <button onClick={() => setOpenSections(s => ({...s, image: !s.image}))} className="flex items-center justify-between w-full py-1.5 hover:text-foreground transition-colors">
                   <div className="flex items-center gap-2">
                     <LayoutTemplate size={14} className="text-emerald-500" />
-                    <span className="font-bold text-sm">图像微调 (本页)</span>
+                    <span className="font-bold text-sm">{t('rightSidebar.imageAdjustments')}</span>
                   </div>
                   <ChevronDown size={14} className={`text-muted-foreground transition-transform ${openSections.image ? 'rotate-180' : ''}`} />
                 </button>
@@ -1048,7 +1064,7 @@ export function RightSidebar({
                             className="flex-1 flex items-center justify-center gap-1.5 py-1 text-xs border border-border rounded bg-muted/50 hover:bg-muted hover:text-foreground transition-colors"
                           >
                             <Copy size={12} />
-                            复制微调参数
+                            {t('rightSidebar.copyAdjustments')}
                           </button>
                           <button 
                             onClick={handlePasteAdj} 
@@ -1056,7 +1072,7 @@ export function RightSidebar({
                             className="flex-1 flex items-center justify-center gap-1.5 py-1 text-xs border border-border rounded bg-muted/50 hover:bg-muted hover:text-foreground transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                           >
                             <ClipboardPaste size={12} />
-                            粘贴
+                            {t('rightSidebar.paste')}
                           </button>
                         </div>
                         <ColorPickerPanel 
@@ -1065,7 +1081,7 @@ export function RightSidebar({
                           onChange={(c) => updateAdj({ bg_color: c })}
                           allowTransparent={true}
                           className="border-b border-border pb-2"
-                          title="画布底色"
+                          title={t('rightSidebar.canvasColor')}
                         />
                         <div className="mt-2 border-b border-border pb-3">
                           <ColorPickerPanel 
@@ -1074,10 +1090,10 @@ export function RightSidebar({
                             onChange={(c) => updateAdj({ remove_bg_color: c })}
                             allowTransparent={false}
                             className="pb-2"
-                            title="抠除底色"
+                            title={t('rightSidebar.removeColor')}
                           />
                           <SliderControl
-                            label="抠除强度"
+                            label={t('rightSidebar.removalStrength')}
                             value={removeWhiteBg}
                             min={0}
                             max={100}
@@ -1087,7 +1103,7 @@ export function RightSidebar({
                           />
                         </div>
                         <SliderControl
-                          label="缩放比例"
+                          label={t('rightSidebar.scale')}
                           value={scale}
                           min={0.1}
                           max={3.0}
@@ -1098,7 +1114,7 @@ export function RightSidebar({
                           onChange={(val) => updateAdj({ scale: val })}
                         />
                         <SliderControl
-                          label="水平偏移"
+                          label={t('rightSidebar.horizontalOffset')}
                           value={offsetX}
                           min={-100}
                           max={100}
@@ -1109,7 +1125,7 @@ export function RightSidebar({
                           className="mt-2"
                         />
                         <SliderControl
-                          label="垂直偏移"
+                          label={t('rightSidebar.verticalOffset')}
                           value={offsetY}
                           min={-100}
                           max={100}
@@ -1120,9 +1136,9 @@ export function RightSidebar({
                           className="mt-2"
                         />
                         <div className="my-2 border-t border-border pt-3">
-                          <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 block">调色</label>
+                          <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 block">{t('rightSidebar.colorAdjustment')}</label>
                           <SliderControl
-                            label="亮度"
+                            label={t('rightSidebar.brightness')}
                             value={brightness}
                             min={-100}
                             max={100}
@@ -1131,7 +1147,7 @@ export function RightSidebar({
                             onChange={(val) => updateAdj({ brightness: val })}
                           />
                           <SliderControl
-                            label="曝光"
+                            label={t('rightSidebar.exposure')}
                             value={exposure}
                             min={-100}
                             max={100}
@@ -1141,7 +1157,7 @@ export function RightSidebar({
                             className="mt-2"
                           />
                           <SliderControl
-                            label="高光"
+                            label={t('rightSidebar.highlights')}
                             value={highlights}
                             min={-100}
                             max={100}
@@ -1151,7 +1167,7 @@ export function RightSidebar({
                             className="mt-2"
                           />
                           <SliderControl
-                            label="阴影"
+                            label={t('rightSidebar.shadows')}
                             value={shadows}
                             min={-100}
                             max={100}
@@ -1161,7 +1177,7 @@ export function RightSidebar({
                             className="mt-2"
                           />
                           <SliderControl
-                            label="对比度"
+                            label={t('rightSidebar.contrast')}
                             value={contrast}
                             min={-100}
                             max={100}
@@ -1171,7 +1187,7 @@ export function RightSidebar({
                             className="mt-2"
                           />
                           <SliderControl
-                            label="饱和度"
+                            label={t('rightSidebar.saturation')}
                             value={saturate}
                             min={-100}
                             max={100}
@@ -1181,7 +1197,7 @@ export function RightSidebar({
                             className="mt-2"
                           />
                           <SliderControl
-                            label="色温"
+                            label={t('rightSidebar.temperature')}
                             value={temperature}
                             min={-100}
                             max={100}
@@ -1191,7 +1207,7 @@ export function RightSidebar({
                             className="mt-2"
                           />
                           <SliderControl
-                            label="色调"
+                            label={t('rightSidebar.tint')}
                             value={tint}
                             min={-100}
                             max={100}
@@ -1204,11 +1220,11 @@ export function RightSidebar({
 
                         <div className="my-2 border-t border-border pt-3">
                             <div className="flex items-center justify-between mb-2">
-                              <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">局部色彩 (HSL)</label>
+                              <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">{t('rightSidebar.selectiveColor')}</label>
                               <button 
                                 onClick={() => handleAddSelectiveColor(pageKey)}
                                 className="w-5 h-5 flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors hover:scale-110" 
-                                title="点击屏幕吸取颜色"
+                                title={t('rightSidebar.addSelectiveColor')}
                               >
                                 <Pipette size={14} />
                               </button>
@@ -1218,7 +1234,7 @@ export function RightSidebar({
                               {(() => {
                                 const scs = projectState?.image_adjustments?.[pageKey]?.selective_colors || [];
                                 if (scs.length === 0) {
-                                  return <div className="text-xs text-muted-foreground text-center py-2 bg-muted/30 rounded border border-dashed border-border">未添加局部颜色</div>;
+                                  return <div className="text-xs text-muted-foreground text-center py-2 bg-muted/30 rounded border border-dashed border-border">{t('rightSidebar.noSelectiveColors')}</div>;
                                 }
                                 return scs.map(sc => (
                                   <div key={sc.id} className="p-2 border border-border rounded bg-muted/10 relative group">
@@ -1233,7 +1249,7 @@ export function RightSidebar({
                                       <span className="text-[10px] text-muted-foreground font-mono bg-muted px-1 rounded">{sc.target_hue}°</span>
                                     </div>
                                     <SliderControl
-                                      label="色相偏移"
+                                      label={t('rightSidebar.hueShift')}
                                       value={sc.d_hue}
                                       min={-180}
                                       max={180}
@@ -1242,7 +1258,7 @@ export function RightSidebar({
                                       onChange={(val) => handleUpdateSelectiveColor(pageKey, sc.id, { d_hue: val })}
                                     />
                                     <SliderControl
-                                      label="局部饱和度"
+                                      label={t('rightSidebar.localSaturation')}
                                       value={sc.d_sat}
                                       min={-100}
                                       max={100}
@@ -1252,7 +1268,7 @@ export function RightSidebar({
                                       className="mt-1"
                                     />
                                     <SliderControl
-                                      label="局部明度"
+                                      label={t('rightSidebar.localLightness')}
                                       value={sc.d_lum}
                                       min={-100}
                                       max={100}
@@ -1262,7 +1278,7 @@ export function RightSidebar({
                                       className="mt-1"
                                     />
                                     <SliderControl
-                                      label="影响范围"
+                                      label={t('rightSidebar.influenceRange')}
                                       value={sc.range ?? 25}
                                       min={5}
                                       max={90}
@@ -1278,7 +1294,7 @@ export function RightSidebar({
                           </div>
                         {(scale !== 1 || offsetX !== 0 || offsetY !== 0 || brightness !== 0 || exposure !== 0 || highlights !== 0 || shadows !== 0 || contrast !== 0 || saturate !== 0 || temperature !== 0 || tint !== 0 || bgColor !== 'transparent' || removeWhiteBg !== 0) && (
                           <button onClick={resetAdj} className="mt-2 text-xs text-red-400 hover:text-red-500 text-right w-full">
-                            恢复默认设置
+                            {t('rightSidebar.reset')}
                           </button>
                         )}
                       </>

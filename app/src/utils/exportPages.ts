@@ -17,13 +17,17 @@ export type ExportPage =
   | { kind: 'story'; exportIndex: number; width: number; height: number; story: StoryPage }
   | { kind: 'copyright'; exportIndex: number; width: number; height: number; publication: PublicationPage };
 
+type UnindexedExportPage =
+  | Omit<Extract<ExportPage, { kind: 'story' }>, 'exportIndex'>
+  | Omit<Extract<ExportPage, { kind: 'copyright' }>, 'exportIndex'>;
+
 export function buildExportPages(
   projectState: ProjectState,
   imageSources: string[] | undefined,
   target: PublicationPageTarget,
 ): ExportPage[] {
   const storyPages = buildStoryPages(projectState, imageSources);
-  const pages: Array<Omit<ExportPage, 'exportIndex'>> = storyPages.map(story => ({
+  const pages: UnindexedExportPage[] = storyPages.map(story => ({
     kind: 'story',
     width: story.width,
     height: story.height,

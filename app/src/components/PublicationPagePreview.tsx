@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
 import { renderPublicationPageToCanvas, type PublicationPage } from '../utils/publicationPageRenderer';
 
 interface PublicationPagePreviewProps {
@@ -6,6 +7,7 @@ interface PublicationPagePreviewProps {
 }
 
 export function PublicationPagePreview({ page }: PublicationPagePreviewProps) {
+  const { t } = useTranslation();
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
   useEffect(() => {
@@ -18,5 +20,5 @@ export function PublicationPagePreview({ page }: PublicationPagePreviewProps) {
     ctx.drawImage(preview, 0, 0);
   }, [page]);
 
-  return <canvas ref={canvasRef} className="h-full w-full bg-white" aria-label="版权页预览" />;
+  return <canvas ref={canvasRef} className="h-full w-full bg-white" aria-label={t('publication.preview')} />;
 }

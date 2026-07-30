@@ -6,6 +6,8 @@ import { listen } from '@tauri-apps/api/event';
 import { load } from '@tauri-apps/plugin-store';
 import { open, save } from '@tauri-apps/plugin-dialog';
 import { useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
+import { localizeAppError } from './i18n';
 
 export interface TextSettings {
     font_size?: number;
@@ -190,6 +192,7 @@ export function migrateProjectState(rawState: unknown): ProjectState {
 }
 
 export const ProjectProvider = ({ children }: { children: ReactNode }) => {
+    const { t } = useTranslation();
     const [activeWorkspaceId, setActiveWorkspaceId] = useState<string | null>(null);
     const [projectState, setProjectState] = useState<ProjectState | null>(null);
     const [recentProjects, setRecentProjects] = useState<RecentProject[]>([]);
@@ -269,7 +272,7 @@ export const ProjectProvider = ({ children }: { children: ReactNode }) => {
     const openProject = async () => {
         try {
             const filePath = await open({
-                filters: [{ name: 'Storybook Co-Editor Project', extensions: ['scproj'] }]
+                filters: [{ name: t('common.projectFile'), extensions: ['scproj'] }]
             });
             if (filePath && typeof filePath === 'string') {
                 const info = await invoke<ProjectInfo>('open_project', { archivePath: filePath });
@@ -281,7 +284,7 @@ export const ProjectProvider = ({ children }: { children: ReactNode }) => {
             }
         } catch (e) {
             console.error("Failed to open project", e);
-            alert("无法打开项目: " + (typeof e === 'string' ? e : (e as Error)?.message || String(e)));
+            alert(t('project.openFailure', { error: localizeAppError(e) }));
         }
     };
 
@@ -295,7 +298,7 @@ export const ProjectProvider = ({ children }: { children: ReactNode }) => {
             navigate('/editor');
         } catch (e) {
             console.error("Failed to open recent project", e);
-            alert("无法打开最近的项目: " + (typeof e === 'string' ? e : (e as Error)?.message || String(e)));
+            alert(t('project.openRecentFailure', { error: localizeAppError(e) }));
         }
     };
 
@@ -305,7 +308,7 @@ export const ProjectProvider = ({ children }: { children: ReactNode }) => {
         setSaveProgress({ current: 0, total: 1 });
         try {
             const filePath = await save({
-                filters: [{ name: 'Storybook Co-Editor Project', extensions: ['scproj'] }]
+                filters: [{ name: t('common.projectFile'), extensions: ['scproj'] }]
             });
             if (filePath) {
                 const filename = filePath.split(/[/\\]/).pop() || 'Untitled';
@@ -325,7 +328,7 @@ export const ProjectProvider = ({ children }: { children: ReactNode }) => {
             }
         } catch (e) {
             console.error("Failed to save project as", e);
-            alert("另存为项目失败: " + (typeof e === 'string' ? e : (e as Error)?.message || String(e)));
+            alert(t('project.saveAsFailure', { error: localizeAppError(e) }));
         } finally {
             setIsSaving(false);
             setSaveProgress(null);
@@ -357,7 +360,7 @@ export const ProjectProvider = ({ children }: { children: ReactNode }) => {
             }
         } catch (e) {
             console.error("Failed to save project", e);
-            alert("保存项目失败: " + (typeof e === 'string' ? e : (e as Error)?.message || String(e)));
+            alert(t('project.saveFailure', { error: localizeAppError(e) }));
         } finally {
             setIsSaving(false);
             setSaveProgress(null);

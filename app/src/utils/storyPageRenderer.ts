@@ -1,4 +1,5 @@
 import type { ImageAdjustments, ProjectState, TextSettings } from '../ProjectContext';
+import i18n from '../i18n';
 import { applyProAdjustments, type ProAdjustments } from './imageProcessor';
 import { getFontFamilyStack } from './fonts';
 
@@ -312,7 +313,7 @@ export async function renderStoryPageToCanvas(page: StoryPage): Promise<HTMLCanv
   canvas.width = page.width;
   canvas.height = page.height;
   const ctx = canvas.getContext('2d', { willReadFrequently: true });
-  if (!ctx) throw new Error('Canvas 2D is unavailable.');
+  if (!ctx) throw new Error(i18n.t('errors.canvasUnavailable'));
 
   ctx.fillStyle = page.image.backgroundColor === 'transparent' ? '#ffffff' : page.image.backgroundColor;
   ctx.fillRect(0, 0, page.width, page.height);
@@ -323,7 +324,7 @@ export async function renderStoryPageToCanvas(page: StoryPage): Promise<HTMLCanv
     processed.width = image.naturalWidth;
     processed.height = image.naturalHeight;
     const processedCtx = processed.getContext('2d', { willReadFrequently: true });
-    if (!processedCtx) throw new Error('Canvas 2D is unavailable.');
+    if (!processedCtx) throw new Error(i18n.t('errors.canvasUnavailable'));
     processedCtx.drawImage(image, 0, 0);
 
     if (hasPixelAdjustments(page.image.adjustments)) {
@@ -360,6 +361,6 @@ export function getDefaultExportFilename(projectState: ProjectState, suffix = ''
     filename = projectState.project_name;
   }
 
-  const safeName = (filename || '未命名').replace(/[/\\?%*:|"<>]/g, '-');
+  const safeName = (filename || i18n.t('common.untitled')).replace(/[/\\?%*:|"<>]/g, '-');
   return `${safeName}${suffix}`;
 }

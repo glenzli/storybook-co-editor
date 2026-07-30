@@ -11,15 +11,15 @@ export const BUNDLED_FONT_FAMILIES = [
 ] as const;
 
 export const BUILT_IN_FONT_OPTIONS = [
-  { value: 'serif', label: '系统衬线体 (Serif)' },
-  { value: 'sans', label: '系统无衬线体 (Sans)' },
-  { value: 'LXGW WenKai', label: '霞鹜文楷 (清爽手写)' },
-  { value: 'Smiley Sans', label: '得意黑 (灵活标题)' },
-  { value: 'ZCOOL QingKe HuangYou', label: '站酷庆科黄油体 (方正标题)' },
-  { value: 'ZCOOL XiaoWei', label: '站酷小薇体 (秀雅标题)' },
-  { value: 'ZCOOL KuaiLe', label: '站酷快乐体 (卡通粗体)' },
-  { value: 'Noto Serif SC', label: '思源宋体 (端庄)' },
-  { value: 'Noto Sans SC', label: '思源黑体 (现代)' },
+  { value: 'serif', translationKey: 'serif' },
+  { value: 'sans', translationKey: 'sans' },
+  { value: 'LXGW WenKai', translationKey: 'lxgwWenkai' },
+  { value: 'Smiley Sans', translationKey: 'smileySans' },
+  { value: 'ZCOOL QingKe HuangYou', translationKey: 'zcoolQingKeHuangYou' },
+  { value: 'ZCOOL XiaoWei', translationKey: 'zcoolXiaoWei' },
+  { value: 'ZCOOL KuaiLe', translationKey: 'zcoolKuaiLe' },
+  { value: 'Noto Serif SC', translationKey: 'notoSerifSc' },
+  { value: 'Noto Sans SC', translationKey: 'notoSansSc' },
 ] as const;
 
 const quoteFontFamily = (family: string) => `"${family.replace(/"/g, '\\"')}"`;

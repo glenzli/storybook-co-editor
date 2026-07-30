@@ -1,9 +1,12 @@
 import { BookOpen, FolderOpen, Plus, Clock } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { useProject } from './ProjectContext';
 import { LicenseNoticeButton } from './components/LicenseNoticeButton';
+import { LanguageSwitcher } from './components/LanguageSwitcher';
 
 
 export default function WelcomeScreen() {
+    const { t } = useTranslation();
     const { createNewProject, openProject, openRecentProject, recentProjects } = useProject();
 
     const handleOpenRecent = async (path: string) => {
@@ -33,8 +36,8 @@ export default function WelcomeScreen() {
                                 <Plus size={24} />
                             </div>
                             <div className="text-left">
-                                <h3 className="font-bold text-lg">新建项目</h3>
-                                <p className="text-primary-foreground/80 text-sm">创建一个空白的绘本排版项目</p>
+                                <h3 className="font-bold text-lg">{t('welcome.newProject')}</h3>
+                                <p className="text-primary-foreground/80 text-sm">{t('welcome.newProjectDescription')}</p>
                             </div>
                         </button>
 
@@ -46,8 +49,8 @@ export default function WelcomeScreen() {
                                 <FolderOpen size={24} className="text-foreground/80" />
                             </div>
                             <div className="text-left">
-                                <h3 className="font-bold text-lg text-foreground">打开项目</h3>
-                                <p className="text-muted-foreground text-sm">打开本地的 .scproj 项目文件</p>
+                                <h3 className="font-bold text-lg text-foreground">{t('welcome.openProject')}</h3>
+                                <p className="text-muted-foreground text-sm">{t('welcome.openProjectDescription')}</p>
                             </div>
                         </button>
                     </div>
@@ -57,13 +60,13 @@ export default function WelcomeScreen() {
                 <div className="bg-card border border-border rounded-xl p-6 shadow-sm min-h-[400px] flex flex-col">
                     <div className="flex items-center gap-2 mb-6 text-foreground/80">
                         <Clock size={20} />
-                        <h2 className="font-bold text-lg">最近使用的项目</h2>
+                        <h2 className="font-bold text-lg">{t('welcome.recentProjects')}</h2>
                     </div>
 
                     <div className="flex-1 overflow-y-auto pr-2 flex flex-col gap-2">
                         {recentProjects.length === 0 ? (
                             <div className="flex-1 flex items-center justify-center text-muted-foreground text-sm">
-                                暂无最近项目
+                                {t('welcome.noRecentProjects')}
                             </div>
                         ) : (
                             recentProjects.map((project, idx) => (
@@ -73,7 +76,7 @@ export default function WelcomeScreen() {
                                     className="flex flex-col items-start p-3 rounded-lg hover:bg-muted transition-colors text-left group border border-transparent hover:border-border"
                                 >
                                     <span className="font-medium text-foreground group-hover:text-primary transition-colors truncate w-full">
-                                        {project.name || "Untitled"}
+                                        {project.name || t('common.untitled')}
                                     </span>
                                     <span className="text-xs text-muted-foreground truncate w-full mt-1" title={project.path}>
                                         {project.path}
@@ -84,6 +87,9 @@ export default function WelcomeScreen() {
                     </div>
                 </div>
 
+            </div>
+            <div className="absolute right-5 top-5">
+                <LanguageSwitcher />
             </div>
             <div className="absolute bottom-5 right-5">
                 <LicenseNoticeButton className="text-muted-foreground hover:bg-muted hover:text-foreground" />
