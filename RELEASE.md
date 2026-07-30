@@ -20,7 +20,8 @@ rg -n '"version": "1.1.4"|version = "1.1.4"|v1.1.4' \
   extension/package.json \
   extension/public/manifest.json \
   app/src/EditorScreen.tsx \
-  README.md
+  README.md \
+  README.en.md
 ```
 
 3. Build release artifacts.

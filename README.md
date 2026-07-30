@@ -1,6 +1,10 @@
 # Storybook Co-Editor
 
 <p align="center">
+  <strong>简体中文</strong> · <a href="./README.en.md">English</a>
+</p>
+
+<p align="center">
   <img src="docs/images/banner.png" alt="Storybook Co-Editor banner" width="100%" />
 </p>
 
@@ -19,6 +23,7 @@ Storybook Co-Editor 是一套面向 AI 绘本和网页绘本内容的本地协�
 - 当前版本：`1.1.4`
 - 下载发布版：[GitLab Releases](https://gitlab.com/glenzli/storybook-co-editor/-/releases)
 - 项目格式：`.scproj`
+- 界面语言：简体中文、English
 - 本地桥接：`http://127.0.0.1:14320`
 
 ## 预览
@@ -107,6 +112,7 @@ flowchart LR
 - `.scproj` 是 zip 项目包，包含 `project.json`、图片资源和回收站。
 - 出版与版权信息、电子 PDF 权限偏好作为可选的项目级数据保存在 `.scproj` 中。
 - 支持最近项目、保存、另存为、自动保存、撤销和重做。
+- 桌面端支持简体中文和英文实时切换并记忆选择；Chrome 扩展跟随浏览器语言。
 - 所有编辑在本地完成，不依赖远程服务。
 
 PDF 权限用于表达发布者的使用限制，不等同于 DRM；截图或专用工具仍可能绕过限制。项目不会保存 PDF 打开密码。
@@ -233,6 +239,6 @@ release/RELEASE_NOTES_v1.1.4.md
 - Extension: Chrome Manifest V3, TypeScript, Vite
 - Export: html2canvas, jsPDF, lopdf
 
-## License
+## 许可证与第三方资源
 
-Storybook Co-Editor application code is licensed under MIT. Bundled fonts are licensed separately under the SIL Open Font License 1.1; see [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+Storybook Co-Editor 应用代码使用 MIT License。内置字体使用各自的 SIL Open Font License 1.1，完整文本会随源码和发布包分发，也可以在应用内的“许可与致谢”中查看。详见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
