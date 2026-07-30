@@ -66,6 +66,21 @@ export function getFontFamilyStack(fontFamily?: string): string {
   return `${quoteFontFamily(ff)}, "Noto Sans SC", "PingFang SC", "Helvetica Neue", Arial, sans-serif`;
 }
 
+const PUBLICATION_TEXT_FAMILIES = new Set([
+  'serif',
+  'sans',
+  'LXGW WenKai',
+  'Noto Serif SC',
+  'Noto Sans SC',
+]);
+
+export function getPublicationFontFamily(projectState: ProjectState): string {
+  const innerFontFamily = projectState.inner_text_settings?.font_family || 'serif';
+  return PUBLICATION_TEXT_FAMILIES.has(innerFontFamily)
+    ? innerFontFamily
+    : 'Noto Sans SC';
+}
+
 function getBundledFontWeights(fontFamily: string): number[] {
   if (fontFamily === 'Noto Sans SC' || fontFamily === 'Noto Serif SC') {
     return [400, 700];
@@ -88,8 +103,10 @@ function collectSettingFamilies(projectState: ProjectState | null | undefined): 
     projectState?.inner_text_settings,
     projectState?.author_text_settings,
   ];
+  const families = settings.map(setting => setting?.font_family || 'serif');
+  if (projectState) families.push(getPublicationFontFamily(projectState));
 
-  return [...new Set(settings.map(s => s?.font_family || 'serif'))];
+  return [...new Set(families)];
 }
 
 export async function waitForProjectFonts(projectState: ProjectState | null | undefined): Promise<void> {

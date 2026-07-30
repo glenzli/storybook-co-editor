@@ -1,4 +1,5 @@
 import type { ProjectState, PublicationContributor } from '../ProjectContext';
+import { getFontFamilyStack, getPublicationFontFamily } from './fonts';
 import { hasPublicationMetadata } from './publicationMetadata';
 
 export type PublicationPageTarget = 'electronic' | 'print';
@@ -11,6 +12,7 @@ export interface PublicationPageEntry {
 export interface PublicationPage {
   width: number;
   height: number;
+  fontFamily: string;
   title: string;
   contributors: PublicationPageEntry[];
   details: PublicationPageEntry[];
@@ -81,6 +83,7 @@ export function buildPublicationPage(projectState: ProjectState): PublicationPag
   return {
     width: projectState.canvas_width || 1024,
     height: projectState.canvas_height || 1024,
+    fontFamily: getPublicationFontFamily(projectState),
     title: trimmed(metadata?.title) || projectState.project_name,
     contributors,
     details,
@@ -135,13 +138,19 @@ export function renderPublicationPageToCanvas(page: PublicationPage): HTMLCanvas
   const ctx = canvas.getContext('2d');
   if (!ctx) throw new Error('Canvas 2D is unavailable.');
 
-  const scale = Math.min(page.width, page.height) / 1024;
+  const scale = Math.max(page.width, page.height) / 1024;
   const marginX = Math.max(48 * scale, page.width * 0.085);
   const maxWidth = page.width - marginX * 2;
   const contentRows = page.contributors.length + page.details.length + page.rights.length * 2;
-  const bodyFontSize = Math.max(14 * scale, Math.min(22 * scale, page.height * 0.48 / Math.max(contentRows, 9)));
-  const bodyLineHeight = bodyFontSize * 1.55;
-  const titleFontSize = Math.max(30 * scale, Math.min(52 * scale, bodyFontSize * 2.25));
+  const bodyFontSize = Math.max(
+    11 * scale,
+    Math.min(14 * scale, page.height * 0.42 / Math.max(contentRows, 12)),
+  );
+  const bodyLineHeight = bodyFontSize * 1.45;
+  const titleFontSize = Math.min(22 * scale, bodyFontSize * 1.5);
+  const headingFontSize = Math.max(9 * scale, bodyFontSize * 0.78);
+  const smallFontSize = Math.max(8 * scale, bodyFontSize * 0.68);
+  const fontFamily = getFontFamilyStack(page.fontFamily);
   const footerY = page.height - page.height * 0.07;
   const contentBottom = footerY - bodyLineHeight * 1.8;
 
@@ -150,24 +159,24 @@ export function renderPublicationPageToCanvas(page: PublicationPage): HTMLCanvas
   ctx.textAlign = 'left';
   ctx.textBaseline = 'top';
 
-  let y = page.height * 0.09;
-  ctx.fillStyle = '#147d75';
-  ctx.font = `600 ${Math.max(13 * scale, bodyFontSize * 0.7)}px sans-serif`;
+  let y = page.height * 0.1;
+  ctx.fillStyle = '#555555';
+  ctx.font = `500 ${headingFontSize}px ${fontFamily}`;
   ctx.fillText('出版与版权', marginX, y);
-  y += bodyLineHeight * 1.2;
+  y += bodyLineHeight * 1.35;
 
-  ctx.fillStyle = '#171717';
-  ctx.font = `600 ${titleFontSize}px sans-serif`;
+  ctx.fillStyle = '#111111';
+  ctx.font = `600 ${titleFontSize}px ${fontFamily}`;
   y = drawWrappedText(ctx, page.title, marginX, y, maxWidth, titleFontSize * 1.22, 3);
-  y += bodyLineHeight * 0.9;
+  y += bodyLineHeight;
 
-  ctx.fillStyle = '#147d75';
-  ctx.fillRect(marginX, y, Math.min(maxWidth, 120 * scale), Math.max(2, 3 * scale));
-  y += bodyLineHeight * 1.2;
+  ctx.fillStyle = '#b8b8b8';
+  ctx.fillRect(marginX, y, maxWidth, Math.max(1, scale * 0.75));
+  y += bodyLineHeight * 1.1;
 
   const entries = [...page.contributors, ...page.details];
   const labelWidth = Math.min(maxWidth * 0.25, 150 * scale);
-  ctx.font = `${bodyFontSize}px sans-serif`;
+  ctx.font = `${bodyFontSize}px ${fontFamily}`;
   let wasTruncated = false;
 
   for (const entry of entries) {
@@ -179,9 +188,9 @@ export function renderPublicationPageToCanvas(page: PublicationPage): HTMLCanvas
       wasTruncated = true;
       break;
     }
-    ctx.fillStyle = '#686868';
+    ctx.fillStyle = '#5a5a5a';
     ctx.fillText(entry.label, marginX, y);
-    ctx.fillStyle = '#202020';
+    ctx.fillStyle = '#111111';
     const nextY = drawWrappedText(
       ctx,
       entry.value,
@@ -202,19 +211,19 @@ export function renderPublicationPageToCanvas(page: PublicationPage): HTMLCanvas
 
   if (!wasTruncated && page.rights.length > 0) {
     y += bodyLineHeight * 0.65;
-    ctx.fillStyle = '#d9d9d9';
+    ctx.fillStyle = '#c8c8c8';
     ctx.fillRect(marginX, y, maxWidth, Math.max(1, scale));
     y += bodyLineHeight;
 
     for (let index = 0; index < page.rights.length; index += 1) {
       const right = page.rights[index];
-      ctx.font = `${index === 0 ? 600 : 400} ${bodyFontSize}px sans-serif`;
+      ctx.font = `${index === 0 ? 600 : 400} ${bodyFontSize}px ${fontFamily}`;
       const rightLineCount = Math.min(4, wrapText(ctx, right, maxWidth).length);
       if (y + Math.max(1, rightLineCount) * bodyLineHeight > contentBottom) {
         wasTruncated = true;
         break;
       }
-      ctx.fillStyle = index === 0 ? '#202020' : '#555555';
+      ctx.fillStyle = index === 0 ? '#111111' : '#444444';
       y = drawWrappedText(ctx, right, marginX, y, maxWidth, bodyLineHeight, 4);
       y += bodyLineHeight * 0.35;
     }
@@ -222,12 +231,12 @@ export function renderPublicationPageToCanvas(page: PublicationPage): HTMLCanvas
 
   if (wasTruncated) {
     ctx.fillStyle = '#777777';
-    ctx.font = `${Math.max(11 * scale, bodyFontSize * 0.62)}px sans-serif`;
+    ctx.font = `${smallFontSize}px ${fontFamily}`;
     ctx.fillText('其余出版信息已写入 PDF metadata', marginX, Math.min(y, contentBottom));
   }
 
-  ctx.fillStyle = '#777777';
-  ctx.font = `${Math.max(11 * scale, bodyFontSize * 0.62)}px sans-serif`;
+  ctx.fillStyle = '#666666';
+  ctx.font = `${smallFontSize}px ${fontFamily}`;
   ctx.fillText('Storybook Co-Editor', marginX, footerY);
 
   return canvas;
