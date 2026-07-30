@@ -145,6 +145,82 @@ pub struct ImageAdjustments {
     pub remove_bg_color: Option<String>,
 }
 
+#[derive(Serialize, Deserialize, Clone, Default)]
+pub struct PublicationContributor {
+    #[serde(default)]
+    pub role: String,
+    #[serde(default)]
+    pub name: String,
+}
+
+#[derive(Serialize, Deserialize, Clone, Default)]
+pub struct PublicationIdentifier {
+    #[serde(default)]
+    pub scheme: String,
+    #[serde(default)]
+    pub value: String,
+}
+
+#[derive(Serialize, Deserialize, Clone, Default)]
+pub struct PublicationMetadata {
+    #[serde(default)]
+    pub version: Option<u32>,
+    #[serde(default)]
+    pub title: String,
+    #[serde(default)]
+    pub contributors: Vec<PublicationContributor>,
+    #[serde(default)]
+    pub language: String,
+    #[serde(default)]
+    pub description: String,
+    #[serde(default)]
+    pub keywords: Vec<String>,
+    #[serde(default)]
+    pub publisher: String,
+    #[serde(default)]
+    pub publication_date: String,
+    #[serde(default)]
+    pub copyright_holder: String,
+    #[serde(default)]
+    pub copyright_year: String,
+    #[serde(default)]
+    pub copyright_notice: String,
+    #[serde(default)]
+    pub license_name: String,
+    #[serde(default)]
+    pub license_url: String,
+    #[serde(default)]
+    pub identifiers: Vec<PublicationIdentifier>,
+    #[serde(default)]
+    pub copyright_page_mode: String,
+}
+
+#[derive(Serialize, Deserialize, Clone)]
+#[serde(default)]
+pub struct ElectronicPdfSettings {
+    pub version: Option<u32>,
+    pub preset: String,
+    pub encryption_enabled: bool,
+    pub printing: String,
+    pub allow_copying: bool,
+    pub allow_modification: bool,
+    pub allow_annotations: bool,
+}
+
+impl Default for ElectronicPdfSettings {
+    fn default() -> Self {
+        Self {
+            version: Some(1),
+            preset: "screen".to_string(),
+            encryption_enabled: true,
+            printing: "none".to_string(),
+            allow_copying: false,
+            allow_modification: false,
+            allow_annotations: true,
+        }
+    }
+}
+
 #[derive(Serialize, Deserialize, Clone)]
 pub struct ProjectState {
     #[serde(default)]
@@ -174,6 +250,10 @@ pub struct ProjectState {
     pub author_text_settings: TextSettings,
     #[serde(default)]
     pub page_text_overrides: HashMap<String, PageTextOverride>,
+    #[serde(default)]
+    pub publication_metadata: Option<PublicationMetadata>,
+    #[serde(default)]
+    pub electronic_pdf_settings: Option<ElectronicPdfSettings>,
 }
 
 impl Default for ProjectState {
@@ -204,6 +284,8 @@ impl Default for ProjectState {
                 ..TextSettings::default()
             },
             page_text_overrides: HashMap::new(),
+            publication_metadata: None,
+            electronic_pdf_settings: None,
         }
     }
 }

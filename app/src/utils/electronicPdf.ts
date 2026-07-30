@@ -1,6 +1,7 @@
 import { jsPDF } from 'jspdf';
 import type { ProjectState } from '../ProjectContext';
-import { buildStoryPages, parseStoryScript, renderStoryPageToCanvas } from './storyPageRenderer';
+import { buildExportPages, renderExportPageToCanvas } from './exportPages';
+import { applyPublicationMetadataToPdf } from './publicationMetadata';
 
 export interface ElectronicPdfProgress {
   current: number;
@@ -14,6 +15,10 @@ function getPdfPageSize(width: number, height: number): [number, number] {
   return [width * scale, height * scale];
 }
 
+export function getElectronicPdfPageCount(projectState: ProjectState): number {
+  return buildExportPages(projectState, projectState.visible_images, 'electronic').length;
+}
+
 export async function generateElectronicPdf(
   projectState: ProjectState,
   onProgress?: (progress: ElectronicPdfProgress) => void,
@@ -21,14 +26,14 @@ export async function generateElectronicPdf(
   const imageSources = projectState.visible_images.map(source => (
     source.startsWith('blank://') ? source : `http://127.0.0.1:14320/images/${source}`
   ));
-  const pages = buildStoryPages(projectState, imageSources);
+  const pages = buildExportPages(projectState, imageSources, 'electronic');
   if (pages.length === 0) throw new Error('项目中没有可导出的页面。');
 
   let pdf: jsPDF | null = null;
 
   for (let index = 0; index < pages.length; index += 1) {
     const page = pages[index];
-    const canvas = await renderStoryPageToCanvas(page);
+    const canvas = await renderExportPageToCanvas(page);
     const [pageWidth, pageHeight] = getPdfPageSize(page.width, page.height);
     const orientation = pageWidth > pageHeight ? 'landscape' : 'portrait';
 
@@ -43,18 +48,17 @@ export async function generateElectronicPdf(
       pdf.addPage([pageWidth, pageHeight], orientation);
     }
 
-    pdf.addImage(canvas.toDataURL('image/jpeg', 0.92), 'JPEG', 0, 0, pageWidth, pageHeight, undefined, 'FAST');
+    if (page.kind === 'copyright') {
+      pdf.addImage(canvas.toDataURL('image/png'), 'PNG', 0, 0, pageWidth, pageHeight, undefined, 'FAST');
+    } else {
+      pdf.addImage(canvas.toDataURL('image/jpeg', 0.92), 'JPEG', 0, 0, pageWidth, pageHeight, undefined, 'FAST');
+    }
     onProgress?.({ current: index + 1, total: pages.length });
   }
 
   if (!pdf) throw new Error('项目中没有可导出的页面。');
 
-  const parsed = parseStoryScript(projectState.global_script || '');
-  pdf.setProperties({
-    title: projectState.project_name,
-    author: parsed.author,
-    creator: 'Storybook Co-Editor',
-  });
+  applyPublicationMetadataToPdf(pdf, projectState);
 
   return new Uint8Array(pdf.output('arraybuffer'));
 }

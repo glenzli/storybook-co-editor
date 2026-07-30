@@ -8,7 +8,12 @@ import { writeImage } from '@tauri-apps/plugin-clipboard-manager';
 import { Image as TauriImage } from '@tauri-apps/api/image';
 import { Image as ImageIcon, Info, XOctagon, RefreshCw, Trash2, ArchiveRestore, ZoomIn } from 'lucide-react';
 import { getPaletteSync } from 'colorthief';
-import { useProject, type ImageAdjustments, type ProjectState } from './ProjectContext';
+import {
+  useProject,
+  type ElectronicPdfSettings,
+  type ImageAdjustments,
+  type ProjectState,
+} from './ProjectContext';
 import { ProImage } from './components/ProImage';
 import { arrayMove } from '@dnd-kit/sortable';
 import { createLogger } from './utils/logger';
@@ -24,7 +29,19 @@ import {
   getStrokeColor,
   parseStoryScript,
 } from './utils/storyPageRenderer';
-import { generateElectronicPdf, type ElectronicPdfProgress } from './utils/electronicPdf';
+import {
+  generateElectronicPdf,
+  getElectronicPdfPageCount,
+  type ElectronicPdfProgress,
+} from './utils/electronicPdf';
+import {
+  MissingPublicationMetadataDialog,
+  PublicationMetadataDialog,
+} from './components/PublicationMetadataDialog';
+import { hasPublicationMetadata } from './utils/publicationMetadata';
+import { ElectronicPdfExportDialog } from './components/ElectronicPdfExportDialog';
+import type { ElectronicPdfExportSecrets } from './utils/electronicPdfSettings';
+import { writeElectronicPdf } from './utils/pdfExportFinalizer';
 
 const logger = createLogger('App');
 
@@ -73,6 +90,10 @@ export default function EditorScreen() {
   // Tabs
   const [activeTab, setActiveTab] = useState<'edit' | 'print'>('edit');
   const [electronicPdfProgress, setElectronicPdfProgress] = useState<ElectronicPdfProgress | null>(null);
+  const [isElectronicPdfExportOpen, setIsElectronicPdfExportOpen] = useState(false);
+  const [isPublicationMetadataOpen, setIsPublicationMetadataOpen] = useState(false);
+  const [isMissingMetadataPromptOpen, setIsMissingMetadataPromptOpen] = useState(false);
+  const pendingPdfExportRef = useRef<(() => void) | null>(null);
 
 
 
@@ -98,6 +119,10 @@ export default function EditorScreen() {
 森林里住着一只小狐狸。`;
 
   const [globalScript, setGlobalScript] = useState(defaultScript);
+  const publicationProjectState = useMemo(
+    () => projectState ? { ...projectState, global_script: globalScript } : null,
+    [projectState, globalScript],
+  );
 
   useEffect(() => {
     const root = window.document.documentElement;
@@ -498,7 +523,10 @@ export default function EditorScreen() {
       });
   }, [shiftProjectDictionaries]);
 
-  const handleExportElectronicPdf = useCallback(async () => {
+  const performElectronicPdfExport = useCallback(async (
+    electronicPdfSettings: ElectronicPdfSettings,
+    secrets: ElectronicPdfExportSecrets,
+  ) => {
     if (!projectState || electronicPdfProgress) return;
 
     const exportState: ProjectState = {
@@ -507,6 +535,7 @@ export default function EditorScreen() {
       visible_images: images.map(source => (
         source.startsWith('blank://') ? source : source.split('/').pop()!
       )),
+      electronic_pdf_settings: electronicPdfSettings,
     };
 
     if (exportState.visible_images.length === 0) {
@@ -521,10 +550,10 @@ export default function EditorScreen() {
       });
       if (!filePath) return;
 
-      setElectronicPdfProgress({ current: 0, total: exportState.visible_images.length });
+      setElectronicPdfProgress({ current: 0, total: getElectronicPdfPageCount(exportState) });
       await waitForProjectFonts(exportState);
       const pdfBytes = await generateElectronicPdf(exportState, setElectronicPdfProgress);
-      await writeFile(filePath, pdfBytes);
+      await writeElectronicPdf(filePath, pdfBytes, electronicPdfSettings, secrets);
       alert(`成功导出电子 PDF 至：\n${filePath}`);
     } catch (error) {
       logger.error('Electronic PDF export failed', error);
@@ -534,6 +563,21 @@ export default function EditorScreen() {
       setElectronicPdfProgress(null);
     }
   }, [electronicPdfProgress, globalScript, images, projectState]);
+
+  const requestPdfExport = useCallback((exportAction: () => void) => {
+    if (!projectState) return;
+    if (!hasPublicationMetadata(projectState.publication_metadata)) {
+      pendingPdfExportRef.current = exportAction;
+      setIsMissingMetadataPromptOpen(true);
+      return;
+    }
+    exportAction();
+  }, [projectState]);
+
+  const handleExportElectronicPdf = useCallback(() => {
+    if (electronicPdfProgress) return;
+    requestPdfExport(() => setIsElectronicPdfExportOpen(true));
+  }, [electronicPdfProgress, requestPdfExport]);
 
   const handleExportImage = useCallback(async (id: string, idx: number) => {
       if (id.startsWith('blank://')) {
@@ -730,6 +774,8 @@ export default function EditorScreen() {
         saveProgress={saveProgress}
         exportElectronicPdf={handleExportElectronicPdf}
         electronicPdfProgress={electronicPdfProgress}
+        openPublicationMetadata={() => setIsPublicationMetadataOpen(true)}
+        hasPublicationMetadata={hasPublicationMetadata(projectState?.publication_metadata)}
       />
 
       {/* Main Area */}
@@ -834,7 +880,7 @@ export default function EditorScreen() {
           />
       </div>
       ) : (
-        <PrintScreen />
+        <PrintScreen requestPdfExport={requestPdfExport} />
       )}
 
       {/* Bottom Status Bar */}
@@ -939,6 +985,46 @@ export default function EditorScreen() {
           </div>
         </div>
       )}
+
+      {publicationProjectState && (
+        <PublicationMetadataDialog
+          open={isPublicationMetadataOpen}
+          projectState={publicationProjectState}
+          onClose={() => setIsPublicationMetadataOpen(false)}
+          onSave={(publicationMetadata) => updateProjectState({ publication_metadata: publicationMetadata })}
+        />
+      )}
+
+      <ElectronicPdfExportDialog
+        open={isElectronicPdfExportOpen}
+        settings={projectState?.electronic_pdf_settings}
+        publicationMetadata={projectState?.publication_metadata}
+        onClose={() => setIsElectronicPdfExportOpen(false)}
+        onExport={(settings, secrets) => {
+          setIsElectronicPdfExportOpen(false);
+          updateProjectState({ electronic_pdf_settings: settings });
+          void performElectronicPdfExport(settings, secrets);
+        }}
+      />
+
+      <MissingPublicationMetadataDialog
+        open={isMissingMetadataPromptOpen}
+        onClose={() => {
+          pendingPdfExportRef.current = null;
+          setIsMissingMetadataPromptOpen(false);
+        }}
+        onConfigure={() => {
+          pendingPdfExportRef.current = null;
+          setIsMissingMetadataPromptOpen(false);
+          setIsPublicationMetadataOpen(true);
+        }}
+        onContinue={() => {
+          const exportAction = pendingPdfExportRef.current;
+          pendingPdfExportRef.current = null;
+          setIsMissingMetadataPromptOpen(false);
+          exportAction?.();
+        }}
+      />
 
     </div>
   );

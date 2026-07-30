@@ -8,7 +8,10 @@ import html2canvas from 'html2canvas';
 import { jsPDF } from 'jspdf';
 import { waitForProjectFonts } from './utils/fonts';
 import { StoryTextOverlay } from './components/StoryTextOverlay';
-import { buildStoryPages, getDefaultExportFilename, renderStoryPageToCanvas } from './utils/storyPageRenderer';
+import { getDefaultExportFilename } from './utils/storyPageRenderer';
+import { applyPublicationMetadataToPdf } from './utils/publicationMetadata';
+import { buildExportPages, renderExportPageToCanvas } from './utils/exportPages';
+import { PublicationPagePreview } from './components/PublicationPagePreview';
 
 export interface ImposedSheet {
   id: string;
@@ -17,11 +20,10 @@ export interface ImposedSheet {
   back?: { left: number | null, right: number | null };
 }
 
-function calculateImposition(images: string[], settings: PrintSettings): ImposedSheet[] {
-  if (images.length === 0) return [];
+function calculateImposition(total: number, settings: PrintSettings): ImposedSheet[] {
+  if (total === 0) return [];
   const sheets: ImposedSheet[] = [];
 
-  const total = images.length;
   if (settings.layout_mode === '1-up' && settings.binding_method === 'perfect') {
       for (let i = 0; i < total; i+=2) {
           sheets.push({
@@ -106,7 +108,11 @@ function calculateImposition(images: string[], settings: PrintSettings): Imposed
   return sheets;
 }
 
-export default function PrintScreen() {
+interface PrintScreenProps {
+    requestPdfExport?: (exportAction: () => void) => void;
+}
+
+export default function PrintScreen({ requestPdfExport }: PrintScreenProps) {
     const { projectState, updateProjectState } = useProject();
 
     const settings = useMemo<PrintSettings>(() => {
@@ -137,12 +143,12 @@ export default function PrintScreen() {
 
     const [renderedSheetCount, setRenderedSheetCount] = useState(1);
 
-    const storyPages = useMemo(() => {
+    const exportPages = useMemo(() => {
         if (!projectState) return [];
         const imageSources = projectState.visible_images.map(source => (
             source.startsWith('blank://') ? source : `http://127.0.0.1:14320/images/${source}`
         ));
-        return buildStoryPages(projectState, imageSources);
+        return buildExportPages(projectState, imageSources, 'print');
     }, [projectState]);
 
     // Force landscape for saddle/butterfly
@@ -204,8 +210,8 @@ export default function PrintScreen() {
 
             for (let pagePosition = 0; pagePosition < pageIndexes.length; pagePosition += 1) {
                 const pageIndex = pageIndexes[pagePosition];
-                const page = storyPages[pageIndex];
-                if (page) renderedPages.set(pageIndex, await renderStoryPageToCanvas(page));
+                const page = exportPages[pageIndex];
+                if (page) renderedPages.set(pageIndex, await renderExportPageToCanvas(page));
                 setExportProgress(80 + Math.round(((pagePosition + 1) / pageIndexes.length) * 10));
             }
 
@@ -264,6 +270,8 @@ export default function PrintScreen() {
                 throw new Error("No valid pages were exported.");
             }
 
+            if (projectState) applyPublicationMetadataToPdf(pdf, projectState);
+
             setExportProgress(95);
 
             const filename = projectState ? getDefaultExportFilename(projectState) : '未命名';
@@ -294,15 +302,14 @@ export default function PrintScreen() {
         updateProjectState({ print_settings: { ...settings, ...updates } });
     };
 
-    const totalPages = projectState?.visible_images.length || 0;
+    const totalPages = exportPages.length;
     
     // Saddle stitch warning
     const showSaddleWarning = settings.binding_method === 'saddle' && totalPages % 4 !== 0;
 
     const imposedSheets = useMemo(() => {
-        if (!projectState?.visible_images) return [];
-        return calculateImposition(projectState.visible_images, settings);
-    }, [projectState?.visible_images, settings]);
+        return calculateImposition(exportPages.length, settings);
+    }, [exportPages.length, settings]);
 
     // Do not abruptly reset renderedSheetCount to 1 on setting changes (like crop marks),
     // to prevent React from unmounting all ProImage canvases and causing a massive freeze.
@@ -419,9 +426,8 @@ export default function PrintScreen() {
     
     const renderPageCanvas = (pageIdx: number, slotW: number, slotH: number, objPos: string) => {
         if (pageIdx === null || pageIdx === undefined) return null;
-        const imgFile = projectState?.visible_images[pageIdx];
-        const page = storyPages[pageIdx];
-        if (!imgFile || !page) return null;
+        const page = exportPages[pageIdx];
+        if (!page) return null;
         
         // Scale canvas to fit slot
         const S = Math.min(slotW / canvasW, slotH / canvasH);
@@ -450,15 +456,19 @@ export default function PrintScreen() {
                 overflow: 'hidden',
                 position: 'relative',
             }}>
+                {page.kind === 'copyright' && <PublicationPagePreview page={page.publication} />}
                 {/* Image fills canvas with overflow handling */}
-                {(() => {
-                    const imageLayer = page.image;
+                {page.kind === 'story' && (() => {
+                    const storyIndex = page.story.index;
+                    const imgFile = projectState?.visible_images[storyIndex];
+                    if (!imgFile) return null;
+                    const imageLayer = page.story.image;
                     
                     let cw: string | undefined = undefined;
                     let ch: string | undefined = undefined;
                     let effectiveOffsetX = imageLayer.offsetX;
                     let effectiveOffsetY = imageLayer.offsetY;
-                    const dim = imageDims[pageIdx];
+                    const dim = imageDims[storyIndex];
                     if (dim) {
                         const s = Math.min(scaledW / dim.w, scaledH / dim.h);
                         // Bake scale into explicit width/height to bypass html2canvas transform bugs
@@ -472,7 +482,7 @@ export default function PrintScreen() {
                     return (
                         <div className="absolute inset-0 overflow-hidden flex items-center justify-center" style={{ backgroundColor: imageLayer.backgroundColor }}>
                             <ProImage 
-                                onLoad={(img) => handleImageLoad(pageIdx, img)}
+                                onLoad={(img) => handleImageLoad(storyIndex, img)}
                                 src={imgFile.startsWith('blank://') ? "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" : `http://127.0.0.1:14320/images/${imgFile}`}
                                 className={`${!dim ? 'w-full h-full object-contain' : ''} ${imgFile.startsWith('blank://') ? 'bg-white' : ''}`}
                                 style={{ 
@@ -485,7 +495,7 @@ export default function PrintScreen() {
                         </div>
                     );
                 })()}
-                {page.textLayers.map(layer => (
+                {page.kind === 'story' && page.story.textLayers.map(layer => (
                     <StoryTextOverlay key={layer.id} layer={layer} scale={S} hideOnPdfExport />
                 ))}
             </div>
@@ -667,7 +677,7 @@ export default function PrintScreen() {
 
                 <div className="p-4 border-t border-border">
                     <button 
-                        onClick={generatePDF}
+                        onClick={() => requestPdfExport ? requestPdfExport(() => { void generatePDF(); }) : void generatePDF()}
                         disabled={isExporting || renderedSheetCount < imposedSheets.length}
                         className="w-full py-3 bg-primary text-primary-foreground rounded-md font-bold flex items-center justify-center gap-2 hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-opacity shadow-md"
                     >

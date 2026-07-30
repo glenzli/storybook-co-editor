@@ -96,13 +96,20 @@ flowchart LR
 - 支持骑马钉、无线胶装、蝴蝶对裱等常见装订方式。
 - 支持 1-up / 2-up 拼版、正反面预览、裁切线、胶区留白和硬件边距。
 - 支持按项目画布比例逐页导出电子 PDF，不包含拼版、裁切线和装订留白。
+- 支持填写作品标题、参与者、版权与许可、ISBN、DOI、URL 等出版信息，并写入电子及印刷 PDF 的 Info 与 XMP metadata。
+- 可按电子版或电子与印刷版生成版权页，版权页与故事页共用导出页序。
+- 电子 PDF 提供屏幕发布、个人阅读和开放阅读预设，也可独立设置打印、复制、修改和批注权限。
+- 受限电子 PDF 使用 PDF 2.0 AES-256 权限加密，可选打开密码；密码仅用于本次导出，不写入项目。
 - 编辑预览、电子 PDF 和印刷 PDF 共用逻辑页面渲染规则。
 
 **项目管理**
 
 - `.scproj` 是 zip 项目包，包含 `project.json`、图片资源和回收站。
+- 出版与版权信息、电子 PDF 权限偏好作为可选的项目级数据保存在 `.scproj` 中。
 - 支持最近项目、保存、另存为、自动保存、撤销和重做。
 - 所有编辑在本地完成，不依赖远程服务。
+
+PDF 权限用于表达发布者的使用限制，不等同于 DRM；截图或专用工具仍可能绕过限制。项目不会保存 PDF 打开密码。
 
 ## 下载安装
 
@@ -224,7 +231,7 @@ release/RELEASE_NOTES_v1.1.4.md
 - Desktop: Tauri 2, Rust, Axum, Tokio
 - Frontend: React 19, Vite, TypeScript, Tailwind CSS
 - Extension: Chrome Manifest V3, TypeScript, Vite
-- Export: html2canvas, jsPDF
+- Export: html2canvas, jsPDF, lopdf
 
 ## License
 

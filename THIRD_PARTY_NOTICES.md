@@ -17,3 +17,9 @@ The application source license is in `LICENSE`. The bundled fonts below are lice
 | Noto Sans SC / 思源黑体 | SIL Open Font License 1.1 | https://github.com/google/fonts/tree/main/ofl/notosanssc | `app/src/assets/fonts/google/OFL-Noto-Sans-SC.txt` |
 
 Full license texts are bundled in the source tree, shown in the app under "许可与致谢", copied into release archives, and exported to `release/licenses/` by `release.sh`.
+
+## Core Components
+
+| Component | License | Source | Bundled license |
+| --- | --- | --- | --- |
+| lopdf | MIT License | https://github.com/J-F-Liu/lopdf | `app/src/assets/licenses/lopdf-MIT.txt` |

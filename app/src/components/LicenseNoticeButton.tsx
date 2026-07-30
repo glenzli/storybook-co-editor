@@ -1,10 +1,62 @@
 import { useEffect, useState } from 'react';
 import { ExternalLink, FileText, Info, X } from 'lucide-react';
-import { APP_LICENSE_NOTICE, FONT_LICENSE_NOTICES } from '../utils/licenseNotices';
+import {
+  APP_LICENSE_NOTICE,
+  DEPENDENCY_LICENSE_NOTICES,
+  FONT_LICENSE_NOTICES,
+  type FontLicenseNotice,
+} from '../utils/licenseNotices';
 
 interface LicenseNoticeButtonProps {
   compact?: boolean;
   className?: string;
+}
+
+function LicenseNoticeCards({ notices }: { notices: FontLicenseNotice[] }) {
+  return (
+    <div className="mt-4 flex flex-col gap-3">
+      {notices.map((notice) => (
+        <article key={notice.id} className="rounded-md border border-border bg-card p-3">
+          <div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <h4 className="text-sm font-medium text-foreground">
+                {notice.label}
+                <span className="ml-2 text-xs text-muted-foreground">{notice.name}</span>
+              </h4>
+              <p className="text-xs text-muted-foreground">{notice.license}</p>
+            </div>
+            <a
+              href={notice.sourceUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
+            >
+              上游来源
+              <ExternalLink size={12} />
+            </a>
+          </div>
+
+          <div className="mt-2 grid gap-1 text-xs text-muted-foreground">
+            <div>
+              资源：<code className="break-all rounded bg-muted px-1 py-0.5">{notice.bundledFiles}</code>
+            </div>
+            <div>
+              许可证：<code className="break-all rounded bg-muted px-1 py-0.5">{notice.licenseFile}</code>
+            </div>
+          </div>
+
+          <details className="mt-2">
+            <summary className="cursor-pointer text-xs font-medium text-foreground hover:text-primary">
+              查看许可证全文
+            </summary>
+            <pre className="mt-2 max-h-56 overflow-auto whitespace-pre-wrap break-words rounded-md bg-muted p-3 text-[11px] leading-relaxed text-muted-foreground">
+              {notice.licenseText}
+            </pre>
+          </details>
+        </article>
+      ))}
+    </div>
+  );
 }
 
 export function LicenseNoticeButton({ compact = false, className = '' }: LicenseNoticeButtonProps) {
@@ -82,53 +134,20 @@ export function LicenseNoticeButton({ compact = false, className = '' }: License
               </section>
 
               <section className="pt-4">
+                <h3 className="text-sm font-semibold text-foreground">核心第三方组件</h3>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  以下组件直接参与应用的本地处理和导出流程。
+                </p>
+                <LicenseNoticeCards notices={DEPENDENCY_LICENSE_NOTICES} />
+              </section>
+
+              <section className="mt-5 border-t border-border pt-4">
                 <h3 className="text-sm font-semibold text-foreground">内置字体</h3>
                 <p className="mt-1 text-sm text-muted-foreground">
                   以下字体随应用本地打包，用于编辑预览和 PDF 导出。完整许可证文本已随应用和发布产物一起提供。
                 </p>
 
-                <div className="mt-4 flex flex-col gap-3">
-                  {FONT_LICENSE_NOTICES.map((notice) => (
-                    <article key={notice.id} className="rounded-md border border-border bg-card p-3">
-                      <div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between">
-                        <div>
-                          <h4 className="text-sm font-medium text-foreground">
-                            {notice.label}
-                            <span className="ml-2 text-xs text-muted-foreground">{notice.name}</span>
-                          </h4>
-                          <p className="text-xs text-muted-foreground">{notice.license}</p>
-                        </div>
-                        <a
-                          href={notice.sourceUrl}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
-                        >
-                          上游来源
-                          <ExternalLink size={12} />
-                        </a>
-                      </div>
-
-                      <div className="mt-2 grid gap-1 text-xs text-muted-foreground">
-                        <div>
-                          资源：<code className="break-all rounded bg-muted px-1 py-0.5">{notice.bundledFiles}</code>
-                        </div>
-                        <div>
-                          许可证：<code className="break-all rounded bg-muted px-1 py-0.5">{notice.licenseFile}</code>
-                        </div>
-                      </div>
-
-                      <details className="mt-2">
-                        <summary className="cursor-pointer text-xs font-medium text-foreground hover:text-primary">
-                          查看许可证全文
-                        </summary>
-                        <pre className="mt-2 max-h-56 overflow-auto whitespace-pre-wrap break-words rounded-md bg-muted p-3 text-[11px] leading-relaxed text-muted-foreground">
-                          {notice.licenseText}
-                        </pre>
-                      </details>
-                    </article>
-                  ))}
-                </div>
+                <LicenseNoticeCards notices={FONT_LICENSE_NOTICES} />
               </section>
             </div>
           </section>

@@ -3,8 +3,8 @@ name = "app"
 version = "1.1.4"
 description = "A Tauri App"
 authors = ["you"]
-license = ""
-repository = ""
+license = "MIT"
+repository = "https://gitlab.com/glenzli/storybook-co-editor"
 edition = "2021"
 rust-version = "1.77.2"
 
@@ -39,5 +39,7 @@ walkdir = "2.5.0"
 font-kit = "0.14.3"
 printpdf = "0.9.1"
 image = "0.25.6"
+lopdf = { version = "0.39.0", default-features = false }
+rand = "0.9.4"
 tauri-plugin-fs = "2.5.1"
 tauri-plugin-clipboard-manager = "2"

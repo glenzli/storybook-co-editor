@@ -1,4 +1,4 @@
-import { FileBox, Undo2, Redo2, Save, FolderOpen, XCircle, Loader2, FileDown } from 'lucide-react';
+import { FileBox, Undo2, Redo2, Save, FolderOpen, XCircle, Loader2, FileDown, BookMarked } from 'lucide-react';
 import type { ProjectState } from '../ProjectContext';
 import { LicenseNoticeButton } from './LicenseNoticeButton';
 
@@ -19,6 +19,8 @@ interface EditorHeaderProps {
   saveProgress?: { current: number, total: number } | null;
   exportElectronicPdf: () => void;
   electronicPdfProgress?: { current: number, total: number } | null;
+  openPublicationMetadata: () => void;
+  hasPublicationMetadata: boolean;
 }
 
 export function EditorHeader({
@@ -38,6 +40,8 @@ export function EditorHeader({
   saveProgress,
   exportElectronicPdf,
   electronicPdfProgress,
+  openPublicationMetadata,
+  hasPublicationMetadata,
 }: EditorHeaderProps) {
   return (
     <header className="h-12 bg-card border-b border-border flex items-center justify-between px-4 text-sm flex-shrink-0 relative z-30 shadow-sm">
@@ -76,6 +80,15 @@ export function EditorHeader({
       </div>
 
       <div className="flex items-center justify-end gap-1 w-1/3">
+          <button
+            type="button"
+            onClick={openPublicationMetadata}
+            className={`p-1.5 rounded-md transition-colors ${hasPublicationMetadata ? 'text-primary hover:bg-muted' : 'text-muted-foreground hover:bg-muted hover:text-foreground'}`}
+            title="出版与版权"
+            aria-label="出版与版权"
+          >
+              <BookMarked size={14} />
+          </button>
           <button
             onClick={exportElectronicPdf}
             disabled={Boolean(electronicPdfProgress)}

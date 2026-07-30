@@ -47,7 +47,12 @@ RELEASE_NOTES_v1.1.4.md
 - Create a new project and confirm the footer says the local bridge is connected.
 - Load the extension from `extension/dist` in `chrome://extensions`.
 - Send one image from a supported page to the desktop app.
-- Export a small electronic PDF from the editor header.
+- Open the publication metadata dialog, save a title and identifier, then reopen it to confirm persistence.
+- Select each copyright-page mode and confirm the electronic and print page counts update as expected.
+- Clear publication metadata and confirm both PDF exports offer configure, continue, and cancel actions.
+- Export an electronic PDF with the screen-publishing preset and confirm printing, copying, and modification are disallowed.
+- Export an electronic PDF with an open password and confirm the correct password opens it.
+- Export an unencrypted electronic PDF with the open-reading preset.
 - Export a small print PDF from the print tab.
 
 5. Create and push the version tag.

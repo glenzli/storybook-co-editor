@@ -5,6 +5,7 @@ import lxgwWenKaiLicense from '../assets/fonts/lxgw/OFL-LXGW-WenKai.txt?raw';
 import smileySansLicense from '../assets/fonts/display/OFL-Smiley-Sans.txt?raw';
 import zcoolQingKeHuangYouLicense from '../assets/fonts/display/OFL-ZCOOL-QingKe-HuangYou.txt?raw';
 import zcoolXiaoWeiLicense from '../assets/fonts/display/OFL-ZCOOL-XiaoWei.txt?raw';
+import lopdfLicense from '../assets/licenses/lopdf-MIT.txt?raw';
 
 export interface FontLicenseNotice {
   id: string;
@@ -21,8 +22,21 @@ export const APP_LICENSE_NOTICE = {
   name: 'Storybook Co-Editor',
   license: 'MIT License',
   licenseFile: 'LICENSE',
-  note: '应用本体许可证文本随发行包提供；第三方字体按各自许可证分发。',
+  note: '应用本体许可证文本随发行包提供；第三方组件和字体按各自许可证分发。',
 } as const;
+
+export const DEPENDENCY_LICENSE_NOTICES: FontLicenseNotice[] = [
+  {
+    id: 'lopdf',
+    name: 'lopdf',
+    label: 'lopdf PDF 文档库',
+    license: 'MIT License',
+    sourceUrl: 'https://github.com/J-F-Liu/lopdf',
+    bundledFiles: '桌面端 Rust 二进制',
+    licenseFile: 'app/src/assets/licenses/lopdf-MIT.txt',
+    licenseText: lopdfLicense,
+  },
+];
 
 export const FONT_LICENSE_NOTICES: FontLicenseNotice[] = [
   {

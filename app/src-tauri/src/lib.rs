@@ -1,3 +1,4 @@
+mod pdf_security;
 mod project_manager;
 
 use axum::{
@@ -701,6 +702,7 @@ pub fn run() {
             project_manager::close_project,
             project_manager::update_project_state,
             project_manager::get_system_fonts,
+            pdf_security::protect_pdf,
             greet
         ])
         .run(tauri::generate_context!())

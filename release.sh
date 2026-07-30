@@ -47,10 +47,13 @@ find "$RELEASE_DIR" -mindepth 1 -maxdepth 1 -exec rm -rf {} +
 echo "📄 Copying license notices..."
 LICENSE_DIR="$RELEASE_DIR/licenses"
 FONT_LICENSE_DIR="$LICENSE_DIR/fonts"
+DEPENDENCY_LICENSE_DIR="$LICENSE_DIR/dependencies"
 mkdir -p "$FONT_LICENSE_DIR"
+mkdir -p "$DEPENDENCY_LICENSE_DIR"
 cp "$ROOT_DIR/LICENSE" "$LICENSE_DIR/LICENSE"
 cp "$ROOT_DIR/THIRD_PARTY_NOTICES.md" "$LICENSE_DIR/THIRD_PARTY_NOTICES.md"
 find "$ROOT_DIR/app/src/assets/fonts" -name "OFL-*.txt" -exec cp {} "$FONT_LICENSE_DIR/" \;
+find "$ROOT_DIR/app/src/assets/licenses" -name "*.txt" -exec cp {} "$DEPENDENCY_LICENSE_DIR/" \;
 
 echo "📦 Building Chrome Extension..."
 cd "$ROOT_DIR/extension"

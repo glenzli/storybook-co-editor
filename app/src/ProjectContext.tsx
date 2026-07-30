@@ -62,6 +62,44 @@ export interface PrintSettings {
     double_sided: boolean;
 }
 
+export interface PublicationContributor {
+    role: 'author' | 'illustrator' | 'editor' | 'translator' | 'other';
+    name: string;
+}
+
+export interface PublicationIdentifier {
+    scheme: 'ISBN' | 'DOI' | 'URL' | 'CUSTOM';
+    value: string;
+}
+
+export interface PublicationMetadata {
+    version?: number;
+    title?: string;
+    contributors?: PublicationContributor[];
+    language?: string;
+    description?: string;
+    keywords?: string[];
+    publisher?: string;
+    publication_date?: string;
+    copyright_holder?: string;
+    copyright_year?: string;
+    copyright_notice?: string;
+    license_name?: string;
+    license_url?: string;
+    identifiers?: PublicationIdentifier[];
+    copyright_page_mode?: 'none' | 'electronic' | 'all';
+}
+
+export interface ElectronicPdfSettings {
+    version?: number;
+    preset?: 'screen' | 'personal' | 'open' | 'custom';
+    encryption_enabled?: boolean;
+    printing?: 'none' | 'low_resolution' | 'high_quality';
+    allow_copying?: boolean;
+    allow_modification?: boolean;
+    allow_annotations?: boolean;
+}
+
 export interface ProjectState {
     schema_version?: number;
     project_name: string;
@@ -80,6 +118,8 @@ export interface ProjectState {
     canvas_height: number;
     author_text_settings?: TextSettings;
     page_text_overrides?: Record<string, { offset_x: number; offset_y: number; text_color?: string }>;
+    publication_metadata?: PublicationMetadata;
+    electronic_pdf_settings?: ElectronicPdfSettings;
 }
 
 export interface ProjectInfo {
