@@ -1,4 +1,4 @@
-import type { ProjectState, TextSettings } from '../ProjectContext';
+import type { ProjectState, TextSettings } from '../project/model';
 
 export const BUNDLED_FONT_FAMILIES = [
   'LXGW WenKai',

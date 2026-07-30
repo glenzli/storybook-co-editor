@@ -1,4 +1,4 @@
-import type { ProjectState } from '../ProjectContext';
+import type { ProjectState } from '../project/model';
 import {
   buildPublicationPage,
   renderPublicationPageToCanvas,
@@ -8,10 +8,10 @@ import {
 } from './publicationPageRenderer';
 import {
   buildStoryPages,
-  parseStoryScript,
   renderStoryPageToCanvas,
   type StoryPage,
 } from './storyPageRenderer';
+import { parseStoryScript } from '../story/script';
 
 export type ExportPage =
   | { kind: 'story'; exportIndex: number; width: number; height: number; story: StoryPage }

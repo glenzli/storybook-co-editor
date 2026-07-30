@@ -1,6 +1,6 @@
 import { FileBox, Undo2, Redo2, Save, FolderOpen, XCircle, Loader2, FileDown, BookMarked } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import type { ProjectState } from '../ProjectContext';
+import type { ProjectState } from '../project/model';
 import { LanguageSwitcher } from './LanguageSwitcher';
 import { LicenseNoticeButton } from './LicenseNoticeButton';
 

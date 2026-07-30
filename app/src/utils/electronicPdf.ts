@@ -1,5 +1,5 @@
 import { jsPDF } from 'jspdf';
-import type { ProjectState } from '../ProjectContext';
+import type { ProjectState } from '../project/model';
 import i18n from '../i18n';
 import { buildExportPages, renderExportPageToCanvas } from './exportPages';
 import { applyPublicationMetadataToPdf } from './publicationMetadata';

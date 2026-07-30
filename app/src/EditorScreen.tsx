@@ -1,5 +1,4 @@
 import { useEffect, useState, useMemo, useRef, useCallback } from 'react';
-import { listen } from '@tauri-apps/api/event';
 import { invoke } from '@tauri-apps/api/core';
 import type { DragEndEvent } from '@dnd-kit/core';
 import { save } from '@tauri-apps/plugin-dialog';
@@ -9,12 +8,8 @@ import { Image as TauriImage } from '@tauri-apps/api/image';
 import { Image as ImageIcon, Info, XOctagon, RefreshCw, Trash2, ArchiveRestore, ZoomIn } from 'lucide-react';
 import { getPaletteSync } from 'colorthief';
 import { useTranslation } from 'react-i18next';
-import {
-  useProject,
-  type ElectronicPdfSettings,
-  type ImageAdjustments,
-  type ProjectState,
-} from './ProjectContext';
+import { useProject } from './ProjectContext';
+import type { ElectronicPdfSettings, ProjectState } from './project/model';
 import { ProImage } from './components/ProImage';
 import { arrayMove } from '@dnd-kit/sortable';
 import { createLogger } from './utils/logger';
@@ -28,8 +23,8 @@ import {
   buildStoryPages,
   getDefaultExportFilename,
   getStrokeColor,
-  parseStoryScript,
 } from './utils/storyPageRenderer';
+import { hasStoryTitle, parseStoryScript } from './story/script';
 import {
   generateElectronicPdf,
   getElectronicPdfPageCount,
@@ -44,20 +39,15 @@ import { ElectronicPdfExportDialog } from './components/ElectronicPdfExportDialo
 import type { ElectronicPdfExportSecrets } from './utils/electronicPdfSettings';
 import { writeElectronicPdf } from './utils/pdfExportFinalizer';
 import { localizeAppError } from './i18n';
+import {
+  createMoveMapping,
+  remapMovedIndex,
+  remapPageIndexedState,
+  type PageIndexMapping,
+} from './editor/pageCollection';
+import { usePluginReceive, type SavedImageEvent } from './editor/usePluginReceive';
 
 const logger = createLogger('App');
-
-interface SavedImageEvent {
-  filepath: string;
-  stable_id?: string;
-  page?: number;
-  insert_after_current?: boolean;
-  status: string;
-}
-
-interface BatchEvent {
-  total?: number;
-}
 
 export default function EditorScreen() {
   const { t } = useTranslation();
@@ -73,9 +63,6 @@ export default function EditorScreen() {
   
   // Theme
   const [isDark, setIsDark] = useState(() => window.matchMedia('(prefers-color-scheme: dark)').matches);
-
-  // Sync Progress State
-  const [receivingState, setReceivingState] = useState<{ active: boolean, current: number, total: number }>({ active: false, current: 0, total: 0 });
 
   // Sidebar States
   const [isLeftOpen, setIsLeftOpen] = useState(() => localStorage.getItem('isLeftOpen') !== 'false');
@@ -167,80 +154,6 @@ export default function EditorScreen() {
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeWorkspaceId]); // Run once when workspace changes
-
-  useEffect(() => {
-    const u1 = listen<SavedImageEvent>('image-saved', (event) => {
-      logger.info("UI received image-saved", event.payload);
-      const { filepath, stable_id } = event.payload;
-      const url = `http://127.0.0.1:14320/images/${filepath}`;
-      
-      if (stable_id) {
-          appendSourceUrlMap(stable_id, filepath);
-      }
-      
-      setTrashedImages(currentTrash => {
-          if (currentTrash.includes(url)) {
-              logger.info("Image is in frontend trash pool, ignoring:", url);
-              return currentTrash;
-          }
-          
-          setImages(prev => {
-              if (prev.includes(url)) return prev;
-              
-              if (event.payload.insert_after_current && selectedIdxRef.current !== null) {
-                  const targetIdx = selectedIdxRef.current + 1;
-                  const newImages = [...prev];
-                  newImages.splice(targetIdx, 0, url);
-                  
-                  // Trigger shift
-                  setTimeout(() => {
-                      if (shiftProjectDictionariesRef.current) {
-                          shiftProjectDictionariesRef.current((oldIdx) => {
-                              if (oldIdx >= targetIdx) return oldIdx + 1;
-                              return oldIdx;
-                          }, prev.length);
-                      }
-                  }, 0);
-                  
-                  return newImages;
-              }
-              
-              return [...prev, url];
-          });
-          
-          setSelectedIdx(prevIdx => {
-              if (prevIdx === null) return 0;
-              if (event.payload.insert_after_current && selectedIdxRef.current !== null) {
-                  return selectedIdxRef.current + 1;
-              }
-              return prevIdx;
-          });
-          
-          return currentTrash;
-      });
-
-      setReceivingState(prev => {
-          if (!prev.active) return prev;
-          const current = prev.current + 1;
-          const active = current < prev.total;
-          return { ...prev, current, active };
-      });
-    });
-
-    const u2 = listen<BatchEvent>('batch-started', (event) => {
-        logger.info("UI received batch-started", event.payload);
-        setReceivingState({ active: true, current: 0, total: event.payload.total || 0 });
-    });
-
-    const u3 = listen('batch-cancelled', () => {
-        logger.info("UI received batch-cancelled");
-        setReceivingState({ active: false, current: 0, total: 0 });
-    });
-
-    return () => {
-      Promise.all([u1, u2, u3]).then(fns => fns.forEach(fn => fn()));
-    };
-  }, [appendSourceUrlMap]);
 
   // Sync project state
   useEffect(() => {
@@ -407,120 +320,37 @@ export default function EditorScreen() {
   }, [selectedIdx, currentText, parsedAuthor, canvasW, canvasH, projectState?.cover_text_settings?.font_size, projectState?.inner_text_settings?.font_size, projectState?.author_text_settings?.font_size]);
 
 
-  const cancelReceive = async () => {
-      try {
-          await fetch('http://127.0.0.1:14320/api/cancel-batch', { method: 'POST' });
-          setReceivingState({ active: false, current: 0, total: 0 });
-      } catch(e) {
-          logger.error("Failed to cancel receive:", e);
-      }
-  };
-
-  const shiftProjectDictionaries = useCallback((mapping: (oldIdx: number) => number | null, numItems: number) => {
+  const shiftProjectDictionaries = useCallback((mapping: PageIndexMapping, numItems: number) => {
     if (!projectState) return;
-    const newImageAdjustments: Record<string, ImageAdjustments> = {};
-    const newPageTextOverrides: NonNullable<ProjectState['page_text_overrides']> = {};
-    for (let i = 0; i < numItems; i++) {
-        const oldKey = String(i);
-        const newIdx = mapping(i);
-        if (newIdx !== null) {
-            const newKey = String(newIdx);
-            if (projectState.image_adjustments?.[oldKey]) {
-                newImageAdjustments[newKey] = projectState.image_adjustments[oldKey];
-            }
-            if (projectState.page_text_overrides?.[oldKey]) {
-                newPageTextOverrides[newKey] = projectState.page_text_overrides[oldKey];
-            }
-        }
-    }
-    updateProjectState({
-        image_adjustments: newImageAdjustments,
-        page_text_overrides: newPageTextOverrides
-    });
+    updateProjectState(remapPageIndexedState(projectState, numItems, mapping));
   }, [projectState, updateProjectState]);
 
-  const handleDragEnd = (event: DragEndEvent) => {
-    const { active, over } = event;
-
-    if (over && active.id !== over.id) {
-      setImages((items) => {
-        const oldIndex = items.indexOf(String(active.id));
-        const newIndex = items.indexOf(String(over.id));
-        if (oldIndex < 0 || newIndex < 0) return items;
-        
-        if (selectedIdx === oldIndex) {
-            setSelectedIdx(newIndex);
-        } else if (selectedIdx !== null) {
-            if (oldIndex < selectedIdx && newIndex >= selectedIdx) {
-                setSelectedIdx(selectedIdx - 1);
-            } else if (oldIndex > selectedIdx && newIndex <= selectedIdx) {
-                setSelectedIdx(selectedIdx + 1);
-            }
-        }
-
-        shiftProjectDictionaries((i) => {
-            if (i === oldIndex) return newIndex;
-            if (oldIndex < newIndex && i > oldIndex && i <= newIndex) return i - 1;
-            if (oldIndex > newIndex && i >= newIndex && i < oldIndex) return i + 1;
-            return i;
-        }, items.length);
-
-        return arrayMove(items, oldIndex, newIndex);
-      });
-    }
-  };
-
-  const handleMoveToTop = useCallback((idx: number) => {
-      setImages((items) => {
-        if (idx <= 0) return items;
-        const newIndex = 0;
-        const next = arrayMove(items, idx, newIndex);
-        
-        setSelectedIdx(prev => {
-            if (prev === idx) return newIndex;
-            if (prev !== null) {
-                if (idx < prev && newIndex >= prev) return prev - 1;
-                if (idx > prev && newIndex <= prev) return prev + 1;
-            }
-            return prev;
-        });
-
-        shiftProjectDictionaries((i) => {
-            if (i === idx) return newIndex;
-            if (idx < i && i <= newIndex) return i - 1;
-            if (newIndex <= i && i < idx) return i + 1;
-            return i;
-        }, items.length);
-
-        return next;
-      });
+  const movePage = useCallback((from: number, to: number) => {
+    setImages(items => {
+      if (from < 0 || to < 0 || from >= items.length || to >= items.length || from === to) {
+        return items;
+      }
+      const mapping = createMoveMapping(from, to);
+      setSelectedIdx(previous => previous === null ? null : remapMovedIndex(previous, from, to));
+      shiftProjectDictionaries(mapping, items.length);
+      return arrayMove(items, from, to);
+    });
   }, [shiftProjectDictionaries]);
 
-  const handleMoveToBottom = useCallback((idx: number) => {
-      setImages((items) => {
-        if (idx < 0 || idx >= items.length - 1) return items;
-        const newIndex = items.length - 1;
-        const next = arrayMove(items, idx, newIndex);
-        
-        setSelectedIdx(prev => {
-            if (prev === idx) return newIndex;
-            if (prev !== null) {
-                if (idx < prev && newIndex >= prev) return prev - 1;
-                if (idx > prev && newIndex <= prev) return prev + 1;
-            }
-            return prev;
-        });
+  const handleDragEnd = useCallback((event: DragEndEvent) => {
+    if (!event.over || event.active.id === event.over.id) return;
+    const from = images.indexOf(String(event.active.id));
+    const to = images.indexOf(String(event.over.id));
+    movePage(from, to);
+  }, [images, movePage]);
 
-        shiftProjectDictionaries((i) => {
-            if (i === idx) return newIndex;
-            if (idx < i && i <= newIndex) return i - 1;
-            if (newIndex <= i && i < idx) return i + 1;
-            return i;
-        }, items.length);
+  const handleMoveToTop = useCallback((index: number) => {
+    movePage(index, 0);
+  }, [movePage]);
 
-        return next;
-      });
-  }, [shiftProjectDictionaries]);
+  const handleMoveToBottom = useCallback((index: number) => {
+    movePage(index, images.length - 1);
+  }, [images.length, movePage]);
 
   const performElectronicPdfExport = useCallback(async (
     electronicPdfSettings: ElectronicPdfSettings,
@@ -695,6 +525,49 @@ export default function EditorScreen() {
     shiftProjectDictionariesRef.current = shiftProjectDictionaries;
   }, [shiftProjectDictionaries]);
 
+  const handleReceivedImage = useCallback((event: SavedImageEvent) => {
+    const { filepath, stable_id: stableId } = event;
+    const url = `http://127.0.0.1:14320/images/${filepath}`;
+
+    if (stableId) appendSourceUrlMap(stableId, filepath);
+
+    setTrashedImages(currentTrash => {
+      if (currentTrash.includes(url)) {
+        logger.info('Image is in frontend trash pool, ignoring', url);
+        return currentTrash;
+      }
+
+      setImages(previous => {
+        if (previous.includes(url)) return previous;
+        if (!event.insert_after_current || selectedIdxRef.current === null) {
+          return [...previous, url];
+        }
+
+        const targetIndex = selectedIdxRef.current + 1;
+        const next = [...previous];
+        next.splice(targetIndex, 0, url);
+        setTimeout(() => {
+          shiftProjectDictionariesRef.current(index => (
+            index >= targetIndex ? index + 1 : index
+          ), previous.length);
+        }, 0);
+        return next;
+      });
+
+      setSelectedIdx(previous => {
+        if (previous === null) return 0;
+        if (event.insert_after_current && selectedIdxRef.current !== null) {
+          return selectedIdxRef.current + 1;
+        }
+        return previous;
+      });
+
+      return currentTrash;
+    });
+  }, [appendSourceUrlMap]);
+
+  const { receivingState, cancelReceive } = usePluginReceive(handleReceivedImage);
+
   // Keyboard shortcuts: Cmd+S, Cmd+Z, Cmd+Shift+Z, Arrow keys
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -796,7 +669,7 @@ export default function EditorScreen() {
             handleOpenTrash={handleOpenTrash}
             handleDragEnd={handleDragEnd}
             handleInsertBlank={handleInsertBlankPage}
-            hasTitle={/(?:\[(Title|扉页)\])/i.test(projectState?.global_script || '')}
+            hasTitle={hasStoryTitle(projectState?.global_script || '')}
             imageAdjustments={projectState?.image_adjustments}
             textOverlays={textOverlays}
             canvasSize={canvasW}
@@ -931,7 +804,10 @@ export default function EditorScreen() {
                   <div className="flex items-center gap-3 bg-primary/10 text-primary px-3 py-1 rounded-full border border-primary/20">
                       <span className="font-bold flex items-center gap-2">
                           <RefreshCw size={12} className="animate-spin" />
-                          {t('editor.receivingImages', receivingState)}
+                          {t('editor.receivingImages', {
+                            current: receivingState.current,
+                            total: receivingState.total,
+                          })}
                       </span>
                       <button onClick={cancelReceive} className="hover:text-red-500 transition-colors ml-2" title={t('editor.cancelReceive')}>
                           <XOctagon size={14} />

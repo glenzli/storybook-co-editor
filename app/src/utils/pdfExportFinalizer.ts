@@ -1,6 +1,6 @@
 import { invoke } from '@tauri-apps/api/core';
 import { remove, writeFile } from '@tauri-apps/plugin-fs';
-import type { ElectronicPdfSettings } from '../ProjectContext';
+import type { ElectronicPdfSettings } from '../project/model';
 import {
   resolveElectronicPdfSettings,
   type ElectronicPdfExportSecrets,

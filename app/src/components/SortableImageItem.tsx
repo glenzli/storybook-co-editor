@@ -5,7 +5,7 @@ import { Trash2 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useThumbnail } from '../hooks/useThumbnail';
 import type { ProAdjustments } from '../utils/imageProcessor';
-import type { ImageAdjustments } from '../ProjectContext';
+import type { ImageAdjustments } from '../project/model';
 
 export interface TextOverlayInfo {
   text: string;

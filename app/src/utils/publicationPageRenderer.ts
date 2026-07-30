@@ -1,4 +1,4 @@
-import type { ProjectState, PublicationContributor } from '../ProjectContext';
+import type { ProjectState, PublicationContributor } from '../project/model';
 import i18n, { getPublicationLanguage } from '../i18n';
 import { getFontFamilyStack, getPublicationFontFamily } from './fonts';
 import { hasPublicationMetadata } from './publicationMetadata';

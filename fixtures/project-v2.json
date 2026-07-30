@@ -1,0 +1,141 @@
+{
+  "schema_version": 2,
+  "project_name": "Contract Fixture",
+  "last_modified": "2026-07-31T00:00:00Z",
+  "visible_images": [
+    "cover.png",
+    "page-1.png"
+  ],
+  "trashed_images": [],
+  "source_url_map": {
+    "source-1": "page-1.png"
+  },
+  "global_script": "[Cover]\nContract Fixture\n\n[Author]\nExample Author\n\n[1]\nFirst page",
+  "cover_text_settings": {
+    "font_family": "serif",
+    "font_size": 40,
+    "text_color": "#ffffff",
+    "has_shadow": true,
+    "has_backdrop": false,
+    "offset_x": 0,
+    "offset_y": 0,
+    "paper_alignment": "left",
+    "auto_snap_content": true
+  },
+  "title_text_settings": {
+    "font_family": "serif",
+    "font_size": 32,
+    "text_color": "#ffffff",
+    "has_shadow": true,
+    "has_backdrop": false,
+    "offset_x": 0,
+    "offset_y": 0,
+    "paper_alignment": "left",
+    "auto_snap_content": true
+  },
+  "inner_text_settings": {
+    "font_family": "serif",
+    "font_size": 20,
+    "text_color": "#ffffff",
+    "has_shadow": true,
+    "has_backdrop": false,
+    "offset_x": 0,
+    "offset_y": 0,
+    "paper_alignment": "left",
+    "auto_snap_content": true
+  },
+  "image_adjustments": {
+    "1": {
+      "offset_x": 2,
+      "offset_y": -3,
+      "scale": 1.1,
+      "bg_color": "#ffffff",
+      "brightness": 4,
+      "exposure": 0,
+      "highlights": 0,
+      "shadows": 0,
+      "contrast": 5,
+      "saturate": 6,
+      "temperature": 0,
+      "tint": 0,
+      "selective_colors": [],
+      "remove_white_bg": 0,
+      "remove_bg_color": null
+    }
+  },
+  "print_settings": {
+    "paper_size": "A4",
+    "paper_orientation": "portrait",
+    "book_size": "A5",
+    "layout_mode": "2-up",
+    "binding_method": "perfect",
+    "has_back_cover": false,
+    "spine_mm": 5,
+    "binding_margin_mm": 10,
+    "hardware_margin_mm": 0,
+    "crop_marks": true,
+    "double_sided": true,
+    "offset_x": 0,
+    "offset_y": 0,
+    "paper_alignment": "left",
+    "auto_snap_content": true
+  },
+  "canvas_width": 1024,
+  "canvas_height": 1024,
+  "author_text_settings": {
+    "font_family": "serif",
+    "font_size": 16,
+    "text_color": "#ffffff",
+    "has_shadow": true,
+    "has_backdrop": false,
+    "offset_x": 0,
+    "offset_y": 0,
+    "paper_alignment": "left",
+    "auto_snap_content": true
+  },
+  "page_text_overrides": {
+    "1": {
+      "offset_x": 3,
+      "offset_y": 4,
+      "text_color": "#111111"
+    }
+  },
+  "publication_metadata": {
+    "version": 1,
+    "title": "Contract Fixture",
+    "contributors": [
+      {
+        "role": "author",
+        "name": "Example Author"
+      }
+    ],
+    "language": "en",
+    "description": "Cross-language project contract fixture.",
+    "keywords": [
+      "fixture"
+    ],
+    "publisher": "",
+    "publication_date": "2026-07-31",
+    "copyright_holder": "Example Author",
+    "copyright_year": "2026",
+    "copyright_notice": "Copyright 2026 Example Author",
+    "license_name": "All Rights Reserved",
+    "license_url": "",
+    "identifiers": [
+      {
+        "scheme": "URL",
+        "value": "https://example.com/story"
+      }
+    ],
+    "copyright_page_mode": "electronic"
+  },
+  "electronic_pdf_settings": {
+    "version": 1,
+    "preset": "personal",
+    "encryption_enabled": true,
+    "printing": "none",
+    "allow_copying": false,
+    "allow_modification": false,
+    "allow_annotations": true
+  }
+}

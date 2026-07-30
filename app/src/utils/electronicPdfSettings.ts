@@ -1,4 +1,4 @@
-import type { ElectronicPdfSettings } from '../ProjectContext';
+import type { ElectronicPdfSettings } from '../project/model';
 
 export type ElectronicPdfPreset = Exclude<NonNullable<ElectronicPdfSettings['preset']>, 'custom'>;
 

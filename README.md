@@ -194,16 +194,28 @@ pnpm dev
 
 然后在 Chrome 打开 `chrome://extensions`，启用开发者模式，选择 `extension/dist` 作为 unpacked extension 加载。
 
+### 质量检查
+
+提交前从仓库根目录运行：
+
+```bash
+./scripts/check.sh
+```
+
+该命令会检查架构边界、lint、TypeScript、前端测试与构建、扩展构建、Rust 格式和测试。模块职责、schema 同步规则及 `utils/` 棘轮见 [ARCHITECTURE.md](ARCHITECTURE.md)。
+
 ## 仓库结构
 
 ```text
 .
 ├── app/                 # Tauri 桌面端：React 前端 + Rust 后端
-│   ├── src/             # 编辑器、拼版、组件和图像处理逻辑
-│   └── src-tauri/       # 本地 HTTP 服务和项目管理
+│   ├── src/             # project、story、editor、print 语义 owner 与 UI
+│   └── src-tauri/       # 项目契约、存储、归档和本地接收协议
 ├── extension/           # Chrome Manifest V3 扩展
 │   ├── src/content.ts   # 网页注入层：图片浮层、发送、参考图
 │   └── src/background.ts# 转发图片到本地桌面端
+├── fixtures/            # TypeScript/Rust 共享数据契约
+├── scripts/             # 本地与 CI 共用的质量检查
 ├── docs/images/         # README 截图资源
 ├── release/             # 本地构建产物输出目录
 └── release.sh           # 手动 release 构建脚本

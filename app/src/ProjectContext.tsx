@@ -3,137 +3,19 @@ import { createContext, useContext, useState, useEffect, useRef, useCallback } f
 import type { ReactNode } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
-import { load } from '@tauri-apps/plugin-store';
 import { open, save } from '@tauri-apps/plugin-dialog';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { localizeAppError } from './i18n';
-
-export interface TextSettings {
-    font_size?: number;
-    text_color?: string;
-    font_family?: string;
-    has_shadow?: boolean;
-    has_backdrop?: boolean;
-    offset_x?: number;
-    offset_y?: number;
-}
-
-export interface SelectiveColor {
-    id: string;          // Unique ID for the color block
-    target_hue: number;  // 0 to 360
-    d_hue: number;       // -180 to 180
-    d_sat: number;       // -100 to 100
-    d_lum: number;       // -100 to 100
-    range?: number;      // 5 to 90 degrees falloff, default 25
-}
-
-export interface ImageAdjustments {
-    offset_x?: number;
-    offset_y?: number;
-    scale?: number;
-    bg_color?: string;
-    remove_white_bg?: number;
-    remove_bg_color?: string;
-    brightness?: number;
-    exposure?: number;
-    highlights?: number;
-    shadows?: number;
-    contrast?: number;
-    saturate?: number;
-    temperature?: number;
-    tint?: number;
-    selective_colors?: SelectiveColor[];
-}
-
-export interface PrintSettings {
-    paper_size: 'A5' | 'A4' | 'A3';
-    paper_orientation: 'portrait' | 'landscape';
-    book_size: 'A5' | 'A4';
-    layout_mode: '1-up' | '2-up';
-    binding_method: 'perfect' | 'saddle' | 'butterfly';
-    has_back_cover: boolean;
-    spine_mm: number;
-    binding_margin_mm: number;
-    hardware_margin_mm: number;
-    crop_marks: boolean;
-    offset_x: number;
-    offset_y: number;
-    paper_alignment: 'center' | 'left' | 'top-left';
-    auto_snap_content: boolean;
-    double_sided: boolean;
-}
-
-export interface PublicationContributor {
-    role: 'author' | 'illustrator' | 'editor' | 'translator' | 'other';
-    name: string;
-}
-
-export interface PublicationIdentifier {
-    scheme: 'ISBN' | 'DOI' | 'URL' | 'CUSTOM';
-    value: string;
-}
-
-export interface PublicationMetadata {
-    version?: number;
-    title?: string;
-    contributors?: PublicationContributor[];
-    language?: string;
-    description?: string;
-    keywords?: string[];
-    publisher?: string;
-    publication_date?: string;
-    copyright_holder?: string;
-    copyright_year?: string;
-    copyright_notice?: string;
-    license_name?: string;
-    license_url?: string;
-    identifiers?: PublicationIdentifier[];
-    copyright_page_mode?: 'none' | 'electronic' | 'all';
-}
-
-export interface ElectronicPdfSettings {
-    version?: number;
-    preset?: 'screen' | 'personal' | 'open' | 'custom';
-    encryption_enabled?: boolean;
-    printing?: 'none' | 'low_resolution' | 'high_quality';
-    allow_copying?: boolean;
-    allow_modification?: boolean;
-    allow_annotations?: boolean;
-}
-
-export interface ProjectState {
-    schema_version?: number;
-    project_name: string;
-    last_modified: string;
-    visible_images: string[];
-    trashed_images: string[];
-    source_url_map?: Record<string, string>;
-    global_script: string;
-    cover_text_settings?: TextSettings;
-    title_text_settings?: TextSettings;
-    inner_text_settings?: TextSettings;
-    author_name?: string;
-    image_adjustments?: Record<string, ImageAdjustments>;
-    print_settings?: PrintSettings;
-    canvas_width: number;
-    canvas_height: number;
-    author_text_settings?: TextSettings;
-    page_text_overrides?: Record<string, { offset_x: number; offset_y: number; text_color?: string }>;
-    publication_metadata?: PublicationMetadata;
-    electronic_pdf_settings?: ElectronicPdfSettings;
-}
-
-export interface ProjectInfo {
-    workspace_id: string;
-    state: ProjectState;
-}
-
-interface RecentProject {
-    path: string;
-    name: string;
-    lastOpened: number;
-}
+import type { ProjectInfo, ProjectState } from './project/model';
+import { migrateProjectState } from './project/migrate';
+import { ProjectHistory } from './project/history';
+import {
+    loadRecentProjects,
+    saveRecentProjects,
+    withRecentProject,
+    type RecentProject,
+} from './project/recentProjects';
 
 interface ProjectContextType {
     activeWorkspaceId: string | null;
@@ -159,38 +41,6 @@ interface ProjectContextType {
 
 const ProjectContext = createContext<ProjectContextType | undefined>(undefined);
 
-type LegacyProjectState = Partial<ProjectState> & {
-    author_name?: string;
-    print_settings?: Partial<PrintSettings> & { cmyk_convert?: unknown };
-};
-
-export function migrateProjectState(rawState: unknown): ProjectState {
-    if (!rawState || typeof rawState !== 'object') return rawState as ProjectState;
-    const state = { ...(rawState as LegacyProjectState) };
-    
-    // Existing projects and v1 projects will get schema_version 1
-    if (typeof state.schema_version !== 'number') {
-        state.schema_version = 1;
-    }
-    
-    // Upgrade v1 -> v2: Migrate author_name into global_script
-    if (state.schema_version === 1) {
-        if (state.author_name && state.author_name.trim() !== '') {
-            // Prepend the author to the script. If the script already has content, add newlines.
-            const prefix = `[Author]\n${state.author_name}\n\n`;
-            state.global_script = state.global_script ? prefix + state.global_script : prefix.trim();
-        }
-        delete state.author_name;
-        state.schema_version = 2;
-    }
-
-    if (state.print_settings && typeof state.print_settings === 'object') {
-        delete state.print_settings.cmyk_convert;
-    }
-
-    return state as ProjectState;
-}
-
 export const ProjectProvider = ({ children }: { children: ReactNode }) => {
     const { t } = useTranslation();
     const [activeWorkspaceId, setActiveWorkspaceId] = useState<string | null>(null);
@@ -202,21 +52,20 @@ export const ProjectProvider = ({ children }: { children: ReactNode }) => {
     const [isDirty, setIsDirty] = useState(false);
     const [isSaving, setIsSaving] = useState(false);
     const [saveProgress, setSaveProgress] = useState<{ current: number, total: number } | null>(null);
-    // Undo/Redo history
-    const historyRef = useRef<ProjectState[]>([]);
-    const historyIndexRef = useRef(-1);
+    const historyRef = useRef(new ProjectHistory<ProjectState>(value => structuredClone(value)));
+    const historyWorkspaceRef = useRef<string | null>(null);
     const isUndoRedoRef = useRef(false);
-    const MAX_HISTORY = 50;
+    const [historyAvailability, setHistoryAvailability] = useState({ canUndo: false, canRedo: false });
     const navigate = useNavigate();
+    const refreshHistoryAvailability = useCallback(() => {
+        setHistoryAvailability({
+            canUndo: historyRef.current.canUndo,
+            canRedo: historyRef.current.canRedo,
+        });
+    }, []);
 
     useEffect(() => {
-        // Load recent projects
-        const loadRecent = async () => {
-            const store = await load('settings.json', { defaults: {}, autoSave: false });
-            const recent = await store.get<RecentProject[]>('recentProjects');
-            if (recent) setRecentProjects(recent);
-        };
-        loadRecent();
+        loadRecentProjects().then(setRecentProjects).catch(console.error);
 
         const unlisten = listen<{ workspace_id: string }>('project-auto-created', async (event) => {
             try {
@@ -244,17 +93,10 @@ export const ProjectProvider = ({ children }: { children: ReactNode }) => {
         };
     }, [navigate]);
 
-    const saveRecentToStore = async (projects: RecentProject[]) => {
-        const store = await load('settings.json', { defaults: {}, autoSave: false });
-        await store.set('recentProjects', projects);
-        await store.save();
-        setRecentProjects(projects);
-    };
-
     const addRecentProject = async (path: string, name: string) => {
-        const filtered = recentProjects.filter(p => p.path !== path);
-        const newRecent = [{ path, name, lastOpened: Date.now() }, ...filtered].slice(0, 10);
-        await saveRecentToStore(newRecent);
+        const next = withRecentProject(recentProjects, path, name);
+        await saveRecentProjects(next);
+        setRecentProjects(next);
     };
 
     const createNewProject = async () => {
@@ -410,44 +252,47 @@ export const ProjectProvider = ({ children }: { children: ReactNode }) => {
         setIsDirty(true);
     }, []);
 
-    // Push to undo history when projectState changes (skip undo/redo-triggered changes)
+    // Project history has the same lifecycle as the active workspace.
     useEffect(() => {
-        if (!projectState) return;
+        if (historyWorkspaceRef.current !== activeWorkspaceId) {
+            historyWorkspaceRef.current = activeWorkspaceId;
+            historyRef.current.reset(projectState ?? undefined);
+            isUndoRedoRef.current = false;
+            refreshHistoryAvailability();
+            return;
+        }
+        if (!projectState) {
+            historyRef.current.reset();
+            refreshHistoryAvailability();
+            return;
+        }
         if (isUndoRedoRef.current) {
             isUndoRedoRef.current = false;
             return;
         }
-        const history = historyRef.current;
-        const idx = historyIndexRef.current;
-        // Trim forward history on new edit
-        historyRef.current = history.slice(0, idx + 1);
-        historyRef.current.push(JSON.parse(JSON.stringify(projectState)));
-        if (historyRef.current.length > MAX_HISTORY) {
-            historyRef.current = historyRef.current.slice(-MAX_HISTORY);
-        }
-        historyIndexRef.current = historyRef.current.length - 1;
-    }, [projectState]);
+        historyRef.current.push(projectState);
+        refreshHistoryAvailability();
+    }, [activeWorkspaceId, projectState, refreshHistoryAvailability]);
 
-    // eslint-disable-next-line react-hooks/refs
-    const canUndo = historyIndexRef.current > 0;
-    // eslint-disable-next-line react-hooks/refs
-    const canRedo = historyIndexRef.current < historyRef.current.length - 1;
+    const { canUndo, canRedo } = historyAvailability;
 
     const undo = useCallback(() => {
-        if (historyIndexRef.current <= 0) return;
-        historyIndexRef.current -= 1;
+        const previous = historyRef.current.undo();
+        if (!previous) return;
         isUndoRedoRef.current = true;
-        setProjectState(JSON.parse(JSON.stringify(historyRef.current[historyIndexRef.current])));
+        setProjectState(previous);
         setIsDirty(true);
-    }, []);
+        refreshHistoryAvailability();
+    }, [refreshHistoryAvailability]);
 
     const redo = useCallback(() => {
-        if (historyIndexRef.current >= historyRef.current.length - 1) return;
-        historyIndexRef.current += 1;
+        const next = historyRef.current.redo();
+        if (!next) return;
         isUndoRedoRef.current = true;
-        setProjectState(JSON.parse(JSON.stringify(historyRef.current[historyIndexRef.current])));
+        setProjectState(next);
         setIsDirty(true);
-    }, []);
+        refreshHistoryAvailability();
+    }, [refreshHistoryAvailability]);
 
     // Auto-save: 5s after last edit, if dirty and has a save path
     useEffect(() => {

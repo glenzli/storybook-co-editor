@@ -1,5 +1,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { useProject, type PrintSettings } from './ProjectContext';
+import { useProject } from './ProjectContext';
+import type { PrintSettings } from './project/model';
+import { calculateImposition } from './print/imposition';
 import { ProImage } from './components/ProImage';
 import { Printer, Download, AlertTriangle, FileText, RefreshCw } from 'lucide-react';
 import { save } from '@tauri-apps/plugin-dialog';
@@ -14,101 +16,6 @@ import { buildExportPages, renderExportPageToCanvas } from './utils/exportPages'
 import { PublicationPagePreview } from './components/PublicationPagePreview';
 import { useTranslation } from 'react-i18next';
 import { localizeAppError } from './i18n';
-
-export interface ImposedSheet {
-  id: string;
-  isCover?: boolean;
-  front: { left: number | null, right: number | null };
-  back?: { left: number | null, right: number | null };
-}
-
-function calculateImposition(total: number, settings: PrintSettings): ImposedSheet[] {
-  if (total === 0) return [];
-  const sheets: ImposedSheet[] = [];
-
-  if (settings.layout_mode === '1-up' && settings.binding_method === 'perfect') {
-      for (let i = 0; i < total; i+=2) {
-          sheets.push({
-              id: `sheet-1up-${i/2 + 1}`,
-              isCover: false,
-              front: { left: i, right: null },
-              back: { left: (i+1 < total) ? i+1 : null, right: null }
-          });
-      }
-      return sheets;
-  }
-
-  const hasBack = settings.has_back_cover;
-  
-  const coverIdx = 0;
-  const backCoverIdx = hasBack ? total - 1 : null;
-  
-  const innerPages: number[] = [];
-  for (let i = 1; i < (hasBack ? total - 1 : total); i++) {
-    innerPages.push(i);
-  }
-
-  sheets.push({
-    id: 'sheet-cover',
-    isCover: true,
-    front: { left: backCoverIdx, right: coverIdx }
-  });
-
-  if (innerPages.length === 0) return sheets;
-
-  const method = settings.binding_method;
-  
-  if (method === 'saddle') {
-    while (innerPages.length % 4 !== 0) {
-      innerPages.push(-1);
-    }
-    const numSheets = innerPages.length / 4;
-    for (let i = 0; i < numSheets; i++) {
-      const p1 = innerPages[innerPages.length - 1 - i * 2];
-      const p2 = innerPages[i * 2];
-      const p3 = innerPages[i * 2 + 1];
-      const p4 = innerPages[innerPages.length - 2 - i * 2];
-
-      sheets.push({
-        id: `sheet-saddle-${i+1}`,
-        front: { left: p1 === -1 ? null : p1, right: p2 === -1 ? null : p2 },
-        back: { left: p3 === -1 ? null : p3, right: p4 === -1 ? null : p4 }
-      });
-    }
-  } else if (method === 'perfect') {
-    while (innerPages.length % 4 !== 0) {
-      innerPages.push(-1);
-    }
-    const totalInner = innerPages.length;
-    const half = totalInner / 2;
-    for (let i = 0; i < totalInner / 4; i++) {
-        const idx1 = i * 2;
-        const idx2 = half + i * 2;
-        const idx3 = idx1 + 1;
-        const idx4 = idx2 + 1;
-        
-        sheets.push({
-            id: `sheet-perfect-2up-${i+1}`,
-            front: { left: innerPages[idx1] === -1 ? null : innerPages[idx1], right: innerPages[idx2] === -1 ? null : innerPages[idx2] },
-            back: { left: innerPages[idx3] === -1 ? null : innerPages[idx3], right: innerPages[idx4] === -1 ? null : innerPages[idx4] }
-        });
-    }
-  } else if (method === 'butterfly') {
-    while (innerPages.length % 2 !== 0) {
-      innerPages.push(-1);
-    }
-    for (let i = 0; i < innerPages.length / 2; i++) {
-      const p1 = innerPages[i * 2];
-      const p2 = innerPages[i * 2 + 1];
-      sheets.push({
-        id: `sheet-butterfly-${i+1}`,
-        front: { left: p1 === -1 ? null : p1, right: p2 === -1 ? null : p2 }
-      });
-    }
-  }
-
-  return sheets;
-}
 
 interface PrintScreenProps {
     requestPdfExport?: (exportAction: () => void) => void;

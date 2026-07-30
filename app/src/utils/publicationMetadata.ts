@@ -1,6 +1,6 @@
-import type { ProjectState, PublicationMetadata } from '../ProjectContext';
+import type { ProjectState, PublicationMetadata } from '../project/model';
 import type { jsPDF } from 'jspdf';
-import { parseStoryScript } from './storyPageRenderer';
+import { parseStoryScript } from '../story/script';
 
 const METADATA_TEXT_FIELDS: Array<keyof PublicationMetadata> = [
   'title',

@@ -4,7 +4,7 @@ import { SortableContext, verticalListSortingStrategy, sortableKeyboardCoordinat
 import { LayoutTemplate, Archive, Sun, Moon, ChevronLeft, ChevronRight, FilePlus, ArrowUpToLine, ArrowDownToLine, Trash2, Download, Copy } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { SortableImageItem, type TextOverlayInfo } from './SortableImageItem';
-import type { ImageAdjustments } from '../ProjectContext';
+import type { ImageAdjustments } from '../project/model';
 
 interface LeftSidebarProps {
   isLeftOpen: boolean;

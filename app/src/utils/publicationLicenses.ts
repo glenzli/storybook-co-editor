@@ -1,4 +1,4 @@
-import type { PublicationMetadata } from '../ProjectContext';
+import type { PublicationMetadata } from '../project/model';
 
 export type PublicationLicensePresetId =
   | 'none'

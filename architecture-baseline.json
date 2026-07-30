@@ -1,0 +1,20 @@
+{
+  "version": 1,
+  "legacyUtilityFiles": [
+    "app/src/utils/electronicPdf.ts",
+    "app/src/utils/electronicPdfSettings.ts",
+    "app/src/utils/exportPages.ts",
+    "app/src/utils/fonts.ts",
+    "app/src/utils/imageProcessor.ts",
+    "app/src/utils/licenseNotices.ts",
+    "app/src/utils/logger.ts",
+    "app/src/utils/pdfExportFinalizer.ts",
+    "app/src/utils/publicationLicenses.ts",
+    "app/src/utils/publicationMetadata.ts",
+    "app/src/utils/publicationPageRenderer.ts",
+    "app/src/utils/storyPageRenderer.ts"
+  ],
+  "legacyGenericFiles": [
+    "app/src/lib/utils.ts"
+  ]
+}

@@ -192,16 +192,28 @@ pnpm dev
 
 Open `chrome://extensions`, enable Developer Mode, and load `extension/dist` as an unpacked extension.
 
+### Quality checks
+
+Run the maintained checks from the repository root before committing:
+
+```bash
+./scripts/check.sh
+```
+
+The command checks architecture boundaries, lint, TypeScript, frontend tests and builds, the extension build, Rust formatting, and Rust tests. See [ARCHITECTURE.md](ARCHITECTURE.md) for module ownership, schema synchronization, and the legacy `utils/` ratchet.
+
 ## Repository Layout
 
 ```text
 .
 ├── app/                  # Tauri desktop app: React frontend and Rust backend
-│   ├── src/              # Editor, imposition, components, and image processing
-│   └── src-tauri/        # Local HTTP bridge and project management
+│   ├── src/              # Project, story, editor, print owners, and UI
+│   └── src-tauri/        # Project contract, storage, archive, and receiver
 ├── extension/            # Chrome Manifest V3 extension
 │   ├── src/content.ts    # Injected image overlay, sending, and references
 │   └── src/background.ts # Forwards images to the local desktop app
+├── fixtures/             # Shared TypeScript/Rust data contracts
+├── scripts/              # Quality checks shared by local development and CI
 ├── docs/images/          # README screenshots
 ├── release/              # Local release artifacts
 └── release.sh            # Manual release build script

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Eye, ExternalLink, FileLock2, KeyRound, LockKeyhole, TriangleAlert, X } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import type { ElectronicPdfSettings, PublicationMetadata } from '../ProjectContext';
+import type { ElectronicPdfSettings, PublicationMetadata } from '../project/model';
 import {
   getElectronicPdfPreset,
   resolveElectronicPdfSettings,

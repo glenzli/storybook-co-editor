@@ -6,7 +6,7 @@ import type {
   PublicationContributor,
   PublicationIdentifier,
   PublicationMetadata,
-} from '../ProjectContext';
+} from '../project/model';
 import { createPublicationMetadataDraft, normalizePublicationMetadata } from '../utils/publicationMetadata';
 import {
   getPublicationLicensePreset,

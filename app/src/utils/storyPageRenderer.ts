@@ -1,17 +1,12 @@
-import type { ImageAdjustments, ProjectState, TextSettings } from '../ProjectContext';
+import type { ImageAdjustments, ProjectState, TextSettings } from '../project/model';
 import i18n from '../i18n';
 import { applyProAdjustments, type ProAdjustments } from './imageProcessor';
 import { getFontFamilyStack } from './fonts';
+import { parseStoryScript } from '../story/script';
 
 export const STORY_TEXT_BOTTOM = 40;
 export const STORY_TEXT_HORIZONTAL_PADDING = 48;
 export const STORY_TEXT_LINE_HEIGHT = 1.5;
-
-export interface ParsedStoryScript {
-  pageText: Map<number, string>;
-  author: string;
-  hasTitle: boolean;
-}
 
 export interface StoryTextLayer {
   id: 'main' | 'author';
@@ -48,35 +43,6 @@ export interface StoryPageViewport {
   y: number;
   width: number;
   height: number;
-}
-
-export function parseStoryScript(script: string): ParsedStoryScript {
-  const pageText = new Map<number, string>();
-  let author = '';
-  const hasTitle = /(?:\[(Title|扉页)\])/i.test(script);
-  const blocks = script.split(/(?=\[(?:Cover|封面|Title|扉页|Author|作者|\d+)\])/i);
-
-  blocks.forEach(block => {
-    const match = block.match(/\[(Cover|封面|Title|扉页|Author|作者|\d+)\]\s*([\s\S]*)/i);
-    if (!match) return;
-
-    const key = match[1].toLowerCase();
-    const text = match[2].trim();
-    if (key === 'author' || key === '作者') {
-      author = text;
-      return;
-    }
-
-    const pageIndex = key === 'cover' || key === '封面'
-      ? 0
-      : key === 'title' || key === '扉页'
-        ? 1
-        : Number.parseInt(key, 10) + (hasTitle ? 1 : 0);
-
-    if (Number.isFinite(pageIndex)) pageText.set(pageIndex, text);
-  });
-
-  return { pageText, author, hasTitle };
 }
 
 export function getStrokeColor(hexColor: string): string {

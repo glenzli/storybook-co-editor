@@ -1,294 +1,10 @@
-use font_kit::source::SystemSource;
-use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
-use std::fs::File;
-use std::io::{Read, Write};
-use std::path::{Path, PathBuf};
-use std::sync::{Arc, Mutex};
-use tauri::{AppHandle, Manager, State};
+use crate::project_archive;
+use crate::project_model::ProjectState;
+use crate::project_storage;
+use serde::Serialize;
+use std::sync::Mutex;
+use tauri::{AppHandle, Emitter, State};
 use uuid::Uuid;
-use walkdir::WalkDir;
-use zip::write::FileOptions;
-use zip::{ZipArchive, ZipWriter};
-
-#[derive(Debug, Serialize, Deserialize, Clone)]
-#[serde(default)]
-pub struct TextSettings {
-    pub font_family: String,
-    pub font_size: f32,
-    pub text_color: String,
-    pub has_shadow: bool,
-    pub has_backdrop: bool,
-    pub offset_x: f32,
-    pub offset_y: f32,
-    pub paper_alignment: String,
-    pub auto_snap_content: bool,
-}
-
-impl Default for TextSettings {
-    fn default() -> Self {
-        Self {
-            font_family: "serif".to_string(),
-            font_size: 20.0,
-            text_color: "#ffffff".to_string(),
-            has_shadow: true,
-            has_backdrop: false,
-            offset_x: 0.0,
-            offset_y: 0.0,
-            paper_alignment: "left".to_string(),
-            auto_snap_content: true,
-        }
-    }
-}
-
-#[derive(Serialize, Deserialize, Clone, Default)]
-pub struct PageTextOverride {
-    #[serde(default)]
-    pub offset_x: f32,
-    #[serde(default)]
-    pub offset_y: f32,
-    #[serde(default)]
-    pub text_color: Option<String>,
-}
-
-#[derive(Serialize, Deserialize, Clone)]
-#[serde(default)]
-pub struct PrintSettings {
-    pub paper_size: String,
-    pub paper_orientation: String,
-    pub book_size: String,
-    pub layout_mode: String,
-    pub binding_method: String,
-    pub has_back_cover: bool,
-    pub spine_mm: f32,
-    pub binding_margin_mm: f32,
-    pub hardware_margin_mm: f32,
-    pub crop_marks: bool,
-    pub double_sided: bool,
-    pub offset_x: f32,
-    pub offset_y: f32,
-    pub paper_alignment: String,
-    pub auto_snap_content: bool,
-}
-
-impl Default for PrintSettings {
-    fn default() -> Self {
-        Self {
-            paper_size: "A4".to_string(),
-            paper_orientation: "portrait".to_string(),
-            book_size: "A5".to_string(),
-            layout_mode: "2-up".to_string(),
-            binding_method: "perfect".to_string(),
-            has_back_cover: false,
-            spine_mm: 5.0,
-            binding_margin_mm: 10.0,
-            hardware_margin_mm: 0.0,
-            crop_marks: true,
-            double_sided: true,
-            offset_x: 0.0,
-            offset_y: 0.0,
-            paper_alignment: "left".to_string(),
-            auto_snap_content: true,
-        }
-    }
-}
-
-fn default_canvas_size() -> u32 {
-    1024
-}
-fn default_scale() -> f32 {
-    1.0
-}
-
-#[derive(Serialize, Deserialize, Clone)]
-pub struct SelectiveColor {
-    pub id: String,
-    pub target_hue: f32,
-    pub d_hue: f32,
-    pub d_sat: f32,
-    pub d_lum: f32,
-    #[serde(default)]
-    pub range: Option<f32>,
-}
-
-#[derive(Serialize, Deserialize, Clone)]
-pub struct ImageAdjustments {
-    #[serde(default)]
-    pub offset_x: f32,
-    #[serde(default)]
-    pub offset_y: f32,
-    #[serde(default = "default_scale")]
-    pub scale: f32,
-    #[serde(default)]
-    pub bg_color: Option<String>,
-    #[serde(default)]
-    pub brightness: f32,
-    #[serde(default)]
-    pub exposure: f32,
-    #[serde(default)]
-    pub highlights: f32,
-    #[serde(default)]
-    pub shadows: f32,
-    #[serde(default)]
-    pub contrast: f32,
-    #[serde(default)]
-    pub saturate: f32,
-    #[serde(default)]
-    pub temperature: f32,
-    #[serde(default)]
-    pub tint: f32,
-    #[serde(default)]
-    pub selective_colors: Option<Vec<SelectiveColor>>,
-    #[serde(default)]
-    pub remove_white_bg: f32,
-    #[serde(default)]
-    pub remove_bg_color: Option<String>,
-}
-
-#[derive(Serialize, Deserialize, Clone, Default)]
-pub struct PublicationContributor {
-    #[serde(default)]
-    pub role: String,
-    #[serde(default)]
-    pub name: String,
-}
-
-#[derive(Serialize, Deserialize, Clone, Default)]
-pub struct PublicationIdentifier {
-    #[serde(default)]
-    pub scheme: String,
-    #[serde(default)]
-    pub value: String,
-}
-
-#[derive(Serialize, Deserialize, Clone, Default)]
-pub struct PublicationMetadata {
-    #[serde(default)]
-    pub version: Option<u32>,
-    #[serde(default)]
-    pub title: String,
-    #[serde(default)]
-    pub contributors: Vec<PublicationContributor>,
-    #[serde(default)]
-    pub language: String,
-    #[serde(default)]
-    pub description: String,
-    #[serde(default)]
-    pub keywords: Vec<String>,
-    #[serde(default)]
-    pub publisher: String,
-    #[serde(default)]
-    pub publication_date: String,
-    #[serde(default)]
-    pub copyright_holder: String,
-    #[serde(default)]
-    pub copyright_year: String,
-    #[serde(default)]
-    pub copyright_notice: String,
-    #[serde(default)]
-    pub license_name: String,
-    #[serde(default)]
-    pub license_url: String,
-    #[serde(default)]
-    pub identifiers: Vec<PublicationIdentifier>,
-    #[serde(default)]
-    pub copyright_page_mode: String,
-}
-
-#[derive(Serialize, Deserialize, Clone)]
-#[serde(default)]
-pub struct ElectronicPdfSettings {
-    pub version: Option<u32>,
-    pub preset: String,
-    pub encryption_enabled: bool,
-    pub printing: String,
-    pub allow_copying: bool,
-    pub allow_modification: bool,
-    pub allow_annotations: bool,
-}
-
-impl Default for ElectronicPdfSettings {
-    fn default() -> Self {
-        Self {
-            version: Some(1),
-            preset: "screen".to_string(),
-            encryption_enabled: true,
-            printing: "none".to_string(),
-            allow_copying: false,
-            allow_modification: false,
-            allow_annotations: true,
-        }
-    }
-}
-
-#[derive(Serialize, Deserialize, Clone)]
-pub struct ProjectState {
-    #[serde(default)]
-    pub schema_version: Option<u32>,
-    pub project_name: String,
-    pub last_modified: String,
-    pub visible_images: Vec<String>,
-    pub trashed_images: Vec<String>,
-    #[serde(default)]
-    pub source_url_map: HashMap<String, String>,
-    pub global_script: String,
-    #[serde(default)]
-    pub cover_text_settings: TextSettings,
-    #[serde(default)]
-    pub title_text_settings: TextSettings,
-    #[serde(default)]
-    pub inner_text_settings: TextSettings,
-    #[serde(default)]
-    pub image_adjustments: HashMap<String, ImageAdjustments>,
-    #[serde(default)]
-    pub print_settings: PrintSettings,
-    #[serde(default = "default_canvas_size")]
-    pub canvas_width: u32,
-    #[serde(default = "default_canvas_size")]
-    pub canvas_height: u32,
-    #[serde(default)]
-    pub author_text_settings: TextSettings,
-    #[serde(default)]
-    pub page_text_overrides: HashMap<String, PageTextOverride>,
-    #[serde(default)]
-    pub publication_metadata: Option<PublicationMetadata>,
-    #[serde(default)]
-    pub electronic_pdf_settings: Option<ElectronicPdfSettings>,
-}
-
-impl Default for ProjectState {
-    fn default() -> Self {
-        Self {
-            schema_version: Some(2),
-            project_name: "Untitled".to_string(),
-            last_modified: chrono::Utc::now().to_rfc3339(),
-            visible_images: vec![],
-            trashed_images: vec![],
-            source_url_map: HashMap::new(),
-            global_script: "".to_string(),
-            cover_text_settings: TextSettings {
-                font_size: 40.0,
-                ..TextSettings::default()
-            },
-            title_text_settings: TextSettings {
-                font_size: 32.0,
-                ..TextSettings::default()
-            },
-            inner_text_settings: TextSettings::default(),
-            image_adjustments: HashMap::new(),
-            print_settings: PrintSettings::default(),
-            canvas_width: default_canvas_size(),
-            canvas_height: default_canvas_size(),
-            author_text_settings: TextSettings {
-                font_size: 16.0,
-                ..TextSettings::default()
-            },
-            page_text_overrides: HashMap::new(),
-            publication_metadata: None,
-            electronic_pdf_settings: None,
-        }
-    }
-}
 
 pub struct ProjectManager {
     pub active_workspace: Mutex<Option<String>>,
@@ -306,15 +22,14 @@ pub fn create_project(
     manager: State<ProjectManager>,
 ) -> Result<ProjectInfo, String> {
     let workspace_id = Uuid::new_v4().to_string();
-    let workspace_dir = get_workspace_dir(&app, &workspace_id)?;
+    let workspace_dir = project_storage::get_workspace_dir(&app, &workspace_id)?;
 
-    std::fs::create_dir_all(&workspace_dir).map_err(|e| e.to_string())?;
-    std::fs::create_dir_all(workspace_dir.join("images")).map_err(|e| e.to_string())?;
-    std::fs::create_dir_all(workspace_dir.join("trash")).map_err(|e| e.to_string())?;
+    std::fs::create_dir_all(&workspace_dir).map_err(|error| error.to_string())?;
+    std::fs::create_dir_all(workspace_dir.join("images")).map_err(|error| error.to_string())?;
+    std::fs::create_dir_all(workspace_dir.join("trash")).map_err(|error| error.to_string())?;
 
     let state = ProjectState::default();
-    save_state_to_disk(&workspace_dir, &state)?;
-
+    project_storage::save_state(&workspace_dir, &state)?;
     *manager.active_workspace.lock().unwrap() = Some(workspace_id.clone());
 
     Ok(ProjectInfo {
@@ -330,36 +45,11 @@ pub async fn open_project(
     archive_path: String,
 ) -> Result<ProjectInfo, String> {
     let workspace_id = Uuid::new_v4().to_string();
-    let workspace_dir = get_workspace_dir(&app, &workspace_id)?;
+    let workspace_dir = project_storage::get_workspace_dir(&app, &workspace_id)?;
+    std::fs::create_dir_all(&workspace_dir).map_err(|error| error.to_string())?;
 
-    std::fs::create_dir_all(&workspace_dir).map_err(|e| e.to_string())?;
-
-    // Unzip the archive
-    let file = File::open(&archive_path).map_err(|e| format!("Failed to open archive: {}", e))?;
-    let mut archive =
-        ZipArchive::new(file).map_err(|e| format!("Failed to read archive: {}", e))?;
-
-    for i in 0..archive.len() {
-        let mut file = archive.by_index(i).unwrap();
-        let outpath = match file.enclosed_name() {
-            Some(path) => workspace_dir.join(path),
-            None => continue,
-        };
-
-        if (*file.name()).ends_with('/') {
-            std::fs::create_dir_all(&outpath).map_err(|e| e.to_string())?;
-        } else {
-            if let Some(p) = outpath.parent() {
-                if !p.exists() {
-                    std::fs::create_dir_all(p).map_err(|e| e.to_string())?;
-                }
-            }
-            let mut outfile = File::create(&outpath).map_err(|e| e.to_string())?;
-            std::io::copy(&mut file, &mut outfile).map_err(|e| e.to_string())?;
-        }
-    }
-
-    let state = load_state_from_disk(&workspace_dir)?;
+    project_archive::extract(&archive_path, &workspace_dir)?;
+    let state = project_storage::load_state(&workspace_dir)?;
     *manager.active_workspace.lock().unwrap() = Some(workspace_id.clone());
 
     Ok(ProjectInfo {
@@ -374,76 +64,15 @@ pub async fn save_project(
     manager: State<'_, ProjectManager>,
     target_path: String,
 ) -> Result<(), String> {
-    let active = manager.active_workspace.lock().unwrap().clone();
-    if let Some(workspace_id) = active {
-        let workspace_dir = get_workspace_dir(&app, &workspace_id)?;
-
-        let temp_path = format!("{}.{}.tmp", target_path, Uuid::new_v4());
-        let file =
-            File::create(&temp_path).map_err(|e| format!("Failed to create temp file: {}", e))?;
-        let mut zip = ZipWriter::new(file);
-        let options = FileOptions::<()>::default()
-            .compression_method(zip::CompressionMethod::Stored)
-            .unix_permissions(0o755);
-
-        let walkdir = WalkDir::new(&workspace_dir);
-        let entries: Vec<_> = walkdir.into_iter().filter_map(|e| e.ok()).collect();
-        let total = entries.len();
-
-        for (i, entry) in entries.into_iter().enumerate() {
-            let path = entry.path();
-            let name = path.strip_prefix(&workspace_dir).unwrap();
-            let name_str = name.to_str().unwrap().replace("\\", "/");
-
-            // Skip macOS .DS_Store files just in case
-            if name_str.contains(".DS_Store") {
-                continue;
-            }
-
-            if path.is_file() {
-                if let Err(e) = zip.start_file(&name_str, options) {
-                    let _ = std::fs::remove_file(&temp_path);
-                    return Err(format!("Failed to start zip file {}: {}", name_str, e));
-                }
-                match File::open(path) {
-                    Ok(mut f) => {
-                        if let Err(e) = std::io::copy(&mut f, &mut zip) {
-                            let _ = std::fs::remove_file(&temp_path);
-                            return Err(format!("Failed to copy file {}: {}", name_str, e));
-                        }
-                    }
-                    Err(e) => {
-                        let _ = std::fs::remove_file(&temp_path);
-                        return Err(format!("Failed to open file {}: {}", name_str, e));
-                    }
-                }
-            } else if path.is_dir() && !name_str.is_empty() {
-                if let Err(e) = zip.add_directory(&name_str, options) {
-                    let _ = std::fs::remove_file(&temp_path);
-                    return Err(format!("Failed to add directory {}: {}", name_str, e));
-                }
-            }
-
-            if i % 10 == 0 || i == total - 1 {
-                use tauri::Emitter;
-                let _ = app.emit(
-                    "save-progress",
-                    serde_json::json!({ "current": i + 1, "total": total }),
-                );
-            }
-        }
-
-        if let Err(e) = zip.finish() {
-            let _ = std::fs::remove_file(&temp_path);
-            return Err(format!("Failed to finish zip: {}", e));
-        }
-
-        std::fs::rename(&temp_path, &target_path)
-            .map_err(|e| format!("Failed to atomic rename project file: {}", e))?;
-        Ok(())
-    } else {
-        Err("No active project".to_string())
-    }
+    let active_workspace = manager.active_workspace.lock().unwrap().clone();
+    let workspace_id = active_workspace.ok_or_else(|| "No active project".to_string())?;
+    let workspace_dir = project_storage::get_workspace_dir(&app, &workspace_id)?;
+    project_archive::write(&workspace_dir, &target_path, |current, total| {
+        let _ = app.emit(
+            "save-progress",
+            serde_json::json!({ "current": current, "total": total }),
+        );
+    })
 }
 
 #[tauri::command]
@@ -458,46 +87,8 @@ pub fn update_project_state(
     manager: State<ProjectManager>,
     state: ProjectState,
 ) -> Result<(), String> {
-    let active = manager.active_workspace.lock().unwrap().clone();
-    if let Some(workspace_id) = active {
-        let workspace_dir = get_workspace_dir(&app, &workspace_id)?;
-        save_state_to_disk(&workspace_dir, &state)?;
-        Ok(())
-    } else {
-        Err("No active project".to_string())
-    }
-}
-
-#[tauri::command]
-pub fn get_system_fonts() -> Result<Vec<String>, String> {
-    let source = SystemSource::new();
-    let mut fonts = source.all_families().unwrap_or_default();
-    fonts.sort();
-    fonts.dedup();
-    Ok(fonts)
-}
-
-pub fn get_workspace_dir(app: &AppHandle, workspace_id: &str) -> Result<PathBuf, String> {
-    let mut path = app.path().app_local_data_dir().map_err(|e| e.to_string())?;
-    path.push("workspaces");
-    path.push(workspace_id);
-    Ok(path)
-}
-
-fn save_state_to_disk(workspace_dir: &Path, state: &ProjectState) -> Result<(), String> {
-    let state_file = workspace_dir.join("project.json");
-    let content = serde_json::to_string_pretty(state).map_err(|e| e.to_string())?;
-    std::fs::write(&state_file, content).map_err(|e| e.to_string())?;
-    Ok(())
-}
-
-fn load_state_from_disk(workspace_dir: &Path) -> Result<ProjectState, String> {
-    let state_file = workspace_dir.join("project.json");
-    if state_file.exists() {
-        let content = std::fs::read_to_string(&state_file).map_err(|e| e.to_string())?;
-        let state: ProjectState = serde_json::from_str(&content).map_err(|e| e.to_string())?;
-        Ok(state)
-    } else {
-        Ok(ProjectState::default())
-    }
+    let active_workspace = manager.active_workspace.lock().unwrap().clone();
+    let workspace_id = active_workspace.ok_or_else(|| "No active project".to_string())?;
+    let workspace_dir = project_storage::get_workspace_dir(&app, &workspace_id)?;
+    project_storage::save_state(&workspace_dir, &state)
 }

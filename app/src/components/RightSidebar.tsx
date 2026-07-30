@@ -2,8 +2,13 @@ import { useState, useEffect, useRef } from 'react';
 import { PenTool, Type, Maximize2, ChevronDown, ChevronRight, ChevronLeft, LayoutTemplate, Pipette, Trash2, Copy, ClipboardPaste } from 'lucide-react';
 import { HexColorPicker } from 'react-colorful';
 import { useTranslation } from 'react-i18next';
-import type { ImageAdjustments, ProjectState, SelectiveColor, TextSettings } from '../ProjectContext';
+import type { ImageAdjustments, ProjectState, SelectiveColor, TextSettings } from '../project/model';
 import { BUILT_IN_FONT_OPTIONS } from '../utils/fonts';
+import {
+  getStoryPageIndexAtOffset,
+  hasStoryTitle,
+  validateStoryScript,
+} from '../story/script';
 
 function DebouncedTextarea({ value, onChange, onCursorChange, className }: { value: string, onChange: (v: string) => void, onCursorChange?: (idx: number | null) => void, className?: string }) {
   const { t } = useTranslation();
@@ -34,49 +39,10 @@ function DebouncedTextarea({ value, onChange, onCursorChange, className }: { val
 
   const handleSelect = (e: React.SyntheticEvent<HTMLTextAreaElement>) => {
     if (!onCursorChange) return;
-    const pos = e.currentTarget.selectionStart;
-    const textBeforeCursor = localValue.slice(0, pos);
-    
-    // Find all valid tags before the cursor
-    const validTagRegex = /\[(Cover|封面|Title|扉页|Author|作者|\d+)\]/gi;
-    const matches = [...textBeforeCursor.matchAll(validTagRegex)];
-    
-    if (matches.length > 0) {
-      const lastMatch = matches[matches.length - 1][1].toLowerCase();
-      let idx: number | null;
-      if (lastMatch === 'cover' || lastMatch === '封面') {
-          idx = 0;
-      } else if (lastMatch === 'title' || lastMatch === '扉页') {
-          idx = 1;
-      } else if (lastMatch === 'author' || lastMatch === '作者') {
-          idx = null; 
-      } else {
-          const hasTitle = /(?:\[(Title|扉页)\])/i.test(localValue);
-          idx = parseInt(lastMatch, 10) + (hasTitle ? 1 : 0);
-      }
-      onCursorChange(idx);
-    }
+    onCursorChange(getStoryPageIndexAtOffset(localValue, e.currentTarget.selectionStart));
   };
 
-  const validateScript = (script: string) => {
-    const lines = script.split('\n');
-    const errors: { line: number, tag: string }[] = [];
-    const validTagRegex = /^\[(Cover|封面|Title|扉页|Author|作者|\d+)\]$/i;
-    const startTagRegex = /^\[(.*?)\]/;
-    
-    lines.forEach((line, i) => {
-        const match = startTagRegex.exec(line.trim());
-        if (match) {
-            const tag = match[0];
-            if (!validTagRegex.test(tag)) {
-                errors.push({ line: i + 1, tag });
-            }
-        }
-    });
-    return errors;
-  };
-
-  const errors = validateScript(localValue);
+  const errors = validateStoryScript(localValue);
   const lineCount = localValue.split('\n').length;
   const gutterRef = useRef<HTMLDivElement>(null);
 
@@ -815,7 +781,7 @@ export function RightSidebar({
                     <span className="font-bold text-sm">
                       {selectedIdx === 0
                         ? t('rightSidebar.coverText')
-                        : (/(?:\[(Title|扉页)\])/i.test(projectState?.global_script || '') && selectedIdx === 1)
+                        : (hasStoryTitle(projectState?.global_script || '') && selectedIdx === 1)
                           ? t('rightSidebar.titleText')
                           : t('rightSidebar.bodyText')}
                     </span>
@@ -826,7 +792,7 @@ export function RightSidebar({
                 <div className="flex flex-col gap-3 pt-2">
                       {(() => {
                         const isCover = selectedIdx === 0;
-                        const hasTitle = /(?:\[(Title|扉页)\])/i.test(projectState?.global_script || '');
+                        const hasTitle = hasStoryTitle(projectState?.global_script || '');
                         const isTitle = hasTitle && selectedIdx === 1;
                         const currentSettings = isCover ? projectState?.cover_text_settings : (isTitle ? projectState?.title_text_settings : projectState?.inner_text_settings);
                         const defaultSettings = { 
