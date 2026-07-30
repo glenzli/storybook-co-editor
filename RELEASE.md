@@ -1,6 +1,6 @@
 # Manual Release Guide
 
-This project uses a manual GitLab Release flow. macOS packaging stays local because Tauri desktop builds depend on the local macOS toolchain and signing/notarization choices.
+This project uses a manual GitLab and GitHub Release flow. macOS packaging stays local because Tauri desktop builds depend on the local macOS toolchain and signing/notarization choices.
 
 ## Release Checklist
 
@@ -13,7 +13,7 @@ git status --short
 2. Confirm all public versions match.
 
 ```bash
-rg -n '"version": "1.1.4"|version = "1.1.4"|v1.1.4' \
+rg -n '"version": "1.2.0"|version = "1.2.0"|v1.2.0' \
   app/package.json \
   app/src-tauri/tauri.conf.json \
   app/src-tauri/Cargo.toml \
@@ -33,13 +33,13 @@ rg -n '"version": "1.1.4"|version = "1.1.4"|v1.1.4' \
 The script writes artifacts to `release/`:
 
 ```text
-storybook-co-editor_1.1.4_aarch64.dmg
+storybook-co-editor_1.2.0_aarch64.dmg
 storybook-co-editor.app
 storybook-co-editor.app.zip
-storybook-co-editor-extension-v1.1.4.zip
-storybook-co-editor-licenses-v1.1.4.zip
+storybook-co-editor-extension-v1.2.0.zip
+storybook-co-editor-licenses-v1.2.0.zip
 SHA256SUMS.txt
-RELEASE_NOTES_v1.1.4.md
+RELEASE_NOTES_v1.2.0.md
 ```
 
 4. Smoke test the build.
@@ -59,26 +59,41 @@ RELEASE_NOTES_v1.1.4.md
 5. Create and push the version tag.
 
 ```bash
-git tag -a v1.1.4 -m "Storybook Co-Editor v1.1.4"
-git push gitlab main
-git push gitlab v1.1.4
+git tag -a v1.2.0 -m "Storybook Co-Editor v1.2.0"
+git push gitlab main v1.2.0
+git push github main v1.2.0
 ```
 
 6. Create a GitLab Release.
 
 ```bash
-glab release create v1.1.4 \
-  release/storybook-co-editor_1.1.4_aarch64.dmg \
+glab release create v1.2.0 \
+  release/storybook-co-editor_1.2.0_aarch64.dmg \
   release/storybook-co-editor.app.zip \
-  release/storybook-co-editor-extension-v1.1.4.zip \
-  release/storybook-co-editor-licenses-v1.1.4.zip \
+  release/storybook-co-editor-extension-v1.2.0.zip \
+  release/storybook-co-editor-licenses-v1.2.0.zip \
   release/SHA256SUMS.txt \
   --repo glenzli/storybook-co-editor \
-  --name "Storybook Co-Editor v1.1.4" \
-  --notes-file release/RELEASE_NOTES_v1.1.4.md
+  --name "Storybook Co-Editor v1.2.0" \
+  --notes-file release/RELEASE_NOTES_v1.2.0.md
 ```
 
-7. Review the release in GitLab.
+7. Create a GitHub Release with one CLI invocation.
+
+```bash
+gh release create v1.2.0 \
+  release/storybook-co-editor_1.2.0_aarch64.dmg \
+  release/storybook-co-editor.app.zip \
+  release/storybook-co-editor-extension-v1.2.0.zip \
+  release/storybook-co-editor-licenses-v1.2.0.zip \
+  release/SHA256SUMS.txt \
+  --repo glenzli/storybook-co-editor \
+  --title "Storybook Co-Editor v1.2.0" \
+  --notes-file release/RELEASE_NOTES_v1.2.0.md \
+  --verify-tag
+```
+
+8. Review both releases.
 
 ## Notes For Users
 

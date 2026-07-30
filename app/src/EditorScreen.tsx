@@ -939,7 +939,7 @@ export default function EditorScreen() {
                   </div>
               )}
               <div className="flex items-center gap-4 text-xs font-mono text-muted-foreground/80">
-                  <span className="font-bold text-foreground/50">STORYBOOK CO-EDITOR v1.1.4</span>
+                  <span className="font-bold text-foreground/50">STORYBOOK CO-EDITOR v1.2.0</span>
                   <span>{t('editor.bridgeConnected')}</span>
               </div>
           </div>

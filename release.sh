@@ -21,6 +21,7 @@ require_cmd pnpm
 require_cmd zip
 require_cmd shasum
 require_cmd hdiutil
+require_cmd codesign
 
 APP_VERSION="$(json_version "$ROOT_DIR/app/package.json")"
 TAURI_VERSION="$(json_version "$ROOT_DIR/app/src-tauri/tauri.conf.json")"
@@ -74,6 +75,10 @@ if [[ ! -d "$APP_BUNDLE" ]]; then
   echo "Missing app bundle: $APP_BUNDLE" >&2
   exit 1
 fi
+
+echo "🔏 Applying an ad-hoc signature to the app bundle..."
+codesign --force --deep --sign - "$APP_BUNDLE"
+codesign --verify --deep --strict "$APP_BUNDLE"
 
 cp -R "$APP_BUNDLE" "$RELEASE_DIR/"
 
@@ -137,7 +142,25 @@ cat > "RELEASE_NOTES_v${VERSION}.md" <<EOF
 
 本次发布提供 macOS 桌面端和 Chrome 扩展手动安装包。
 
-### 下载内容
+This release provides the macOS desktop app and a manually installed Chrome extension.
+
+### 本次更新 / What's New
+
+- 新增逐页电子 PDF 导出，以及打印、复制、修改、批注和打开密码等发布权限设置。
+- 新增作品标题、参与者、版权、许可、ISBN、DOI、URL 等出版元数据和可选版权页。
+- 电子 PDF、印刷 PDF 和编辑预览共用页面渲染规则。
+- 桌面端新增简体中文与英文实时切换；Chrome 扩展跟随浏览器语言。
+- 补充适合绘本排版的本地字体、应用内许可证入口和随发布包分发的第三方 notice。
+- 改进 Chrome 扩展发送状态、重复图片和回收站图片提示。
+
+- Added page-by-page electronic PDF export with printing, copying, modification, annotation, and open-password controls.
+- Added publication metadata for titles, contributors, copyright, licenses, ISBN, DOI, URLs, and optional copyright pages.
+- Unified page rendering across the editor, electronic PDF, and print PDF outputs.
+- Added runtime English and Simplified Chinese switching in the desktop app; the Chrome extension follows the browser language.
+- Added locally bundled storybook fonts, an in-app license viewer, and third-party notices in release packages.
+- Improved Chrome extension delivery feedback for successful, duplicate, and trashed images.
+
+### 下载内容 / Downloads
 
 - \`$DMG_NAME\`: macOS 安装镜像，推荐普通用户下载。
 - \`storybook-co-editor.app.zip\`: macOS App Bundle 压缩包，适合直接解压测试。
@@ -145,16 +168,26 @@ cat > "RELEASE_NOTES_v${VERSION}.md" <<EOF
 - \`storybook-co-editor-licenses-v${VERSION}.zip\`: 应用和内置字体的许可证与第三方 notice。
 - \`SHA256SUMS.txt\`: 发布产物校验和。
 
-### 安装说明
+### 安装说明 / Installation
+
+**中文**
 
 1. 安装并启动 macOS 桌面端。
 2. 解压 Chrome 扩展包。
 3. 打开 \`chrome://extensions\`，启用开发者模式，选择解压后的扩展目录加载。
 4. 在支持的网页上悬停图片，使用“发送”按钮同步到桌面端。
 
-### 注意事项
+**English**
+
+1. Install and launch the macOS desktop app.
+2. Unzip the Chrome extension package.
+3. Open \`chrome://extensions\`, enable Developer Mode, and load the unzipped directory.
+4. Hover over an image on a supported page and use **Send** to transfer it to the desktop app.
+
+### 注意事项 / Notes
 
 - 当前构建未包含 Apple notarization。macOS 首次打开时如果出现安全提示，请在 Finder 中右键打开，或到系统设置中允许打开。
+- This build is not Apple-notarized. If macOS blocks the first launch, right-click the app in Finder and choose **Open**, or allow it in System Settings.
 EOF
 
 find "$RELEASE_DIR" -name ".DS_Store" -delete
