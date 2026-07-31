@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  <img alt="Version" src="https://img.shields.io/badge/version-1.2.0-blue.svg?cacheSeconds=2592000" />
+  <img alt="Version" src="https://img.shields.io/badge/version-1.2.1-blue.svg?cacheSeconds=2592000" />
   <img alt="Tauri" src="https://img.shields.io/badge/Tauri-2-FFC131?logo=tauri&logoColor=white" />
   <img alt="React" src="https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=white" />
   <img alt="Rust" src="https://img.shields.io/badge/Rust-1.85+-000000?logo=rust&logoColor=white" />
@@ -20,7 +20,7 @@ Storybook Co-Editor is a local collaborative layout tool for AI-generated and we
 
 It is intended for storybooks created with ChatGPT, Gemini, Midjourney, Discord, or other browser-based tools, when the generated images need to become an editable, persistent, and exportable local project.
 
-- Current version: `1.2.0`
+- Current version: `1.2.1`
 - Downloads: [GitLab Releases](https://gitlab.com/glenzli/storybook-co-editor/-/releases)
 - Project format: `.scproj`
 - Interface languages: English and Simplified Chinese
@@ -133,8 +133,8 @@ PDF permissions communicate the publisher's intended restrictions, but they are 
 Download the current packages from [Releases](https://gitlab.com/glenzli/storybook-co-editor/-/releases):
 
 ```text
-storybook-co-editor_1.2.0_aarch64.dmg
-storybook-co-editor-extension-v1.2.0.zip
+storybook-co-editor_1.2.1_aarch64.dmg
+storybook-co-editor-extension-v1.2.1.zip
 ```
 
 Installation:
@@ -251,12 +251,12 @@ Expected artifacts:
 
 ```text
 release/storybook-co-editor.app
-release/storybook-co-editor_1.2.0_aarch64.dmg
+release/storybook-co-editor_1.2.1_aarch64.dmg
 release/storybook-co-editor.app.zip
-release/storybook-co-editor-extension-v1.2.0.zip
-release/storybook-co-editor-licenses-v1.2.0.zip
+release/storybook-co-editor-extension-v1.2.1.zip
+release/storybook-co-editor-licenses-v1.2.1.zip
 release/SHA256SUMS.txt
-release/RELEASE_NOTES_v1.2.0.md
+release/RELEASE_NOTES_v1.2.1.md
 ```
 
 See [RELEASE.md](RELEASE.md) for the complete manual release workflow.

@@ -152,6 +152,8 @@ This release provides the macOS desktop app and a manually installed Chrome exte
 - 桌面端新增简体中文与英文实时切换；Chrome 扩展跟随浏览器语言。
 - 补充适合绘本排版的本地字体、应用内许可证入口和随发布包分发的第三方 notice。
 - 改进 Chrome 扩展发送状态、重复图片和回收站图片提示。
+- 新增带本机访问令牌的 MCP 服务，可让 Codex 读取和调整剧本及基础文字排版；支持一键写入 Codex 配置和令牌轮换。
+- 剧本面板新增可选择模型与编辑意见的 Codex 润色建议流程，确认后才会写入项目。
 
 - Added page-by-page electronic PDF export with printing, copying, modification, annotation, and open-password controls.
 - Added publication metadata for titles, contributors, copyright, licenses, ISBN, DOI, URLs, and optional copyright pages.
@@ -159,6 +161,8 @@ This release provides the macOS desktop app and a manually installed Chrome exte
 - Added runtime English and Simplified Chinese switching in the desktop app; the Chrome extension follows the browser language.
 - Added locally bundled storybook fonts, an in-app license viewer, and third-party notices in release packages.
 - Improved Chrome extension delivery feedback for successful, duplicate, and trashed images.
+- Added a token-protected local MCP server for Codex to read and adjust story scripts and basic text layout, including one-click Codex configuration and token rotation.
+- Added a Codex script-polish proposal flow with selectable models and editing direction; proposals are written only after approval.
 
 ### 下载内容 / Downloads
 
