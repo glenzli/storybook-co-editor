@@ -12,7 +12,7 @@
   <img alt="Version" src="https://img.shields.io/badge/version-1.2.0-blue.svg?cacheSeconds=2592000" />
   <img alt="Tauri" src="https://img.shields.io/badge/Tauri-2-FFC131?logo=tauri&logoColor=white" />
   <img alt="React" src="https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=white" />
-  <img alt="Rust" src="https://img.shields.io/badge/Rust-1.77-000000?logo=rust&logoColor=white" />
+  <img alt="Rust" src="https://img.shields.io/badge/Rust-1.85+-000000?logo=rust&logoColor=white" />
   <img alt="License" src="https://img.shields.io/badge/license-MIT-green.svg" />
 </p>
 
@@ -67,6 +67,8 @@ flowchart LR
   C --> D["Tauri desktop project"]
   D --> E["Page and script layout"]
   E --> F["Image adjustments"]
+  D <--> K["Local AI client / MCP"]
+  E <--> L["Codex script proposal"]
   F --> G{"Choose export mode"}
   G --> H["Page-by-page electronic PDF"]
   G --> I["Prepress imposition"]
@@ -113,7 +115,16 @@ flowchart LR
 - Publication metadata and electronic PDF permission preferences are optional project-level data.
 - Recent projects, save, save as, autosave, undo, and redo.
 - The desktop interface switches between English and Simplified Chinese at runtime and remembers the selection. The Chrome extension follows the browser language.
-- Editing and export remain local and do not depend on a remote service.
+- Core editing and export remain local. Optional Codex polishing follows the active Codex model configuration.
+
+**AI collaboration (experimental)**
+
+- The AI toolbar entry shows a token-protected local MCP endpoint and can generate a Codex configuration block.
+- The app generates the access token randomly and lets you rotate it from the AI entry. Rotation invalidates the old token immediately, so reconnect Codex or other clients with the new configuration.
+- The first MCP version can read the active project and complete script, replace the script, read page layout, and adjust per-page text position.
+- Every MCP write requires the `last_modified` value from a preceding read. Concurrent changes are rejected instead of overwritten, and successful updates synchronize into the open editor.
+- Before `Polish with Codex` runs, you can select from the models available in local Codex and provide editing direction. Codex returns a proposal only; the app presents the current and proposed scripts side by side and writes the result only after approval.
+- Polishing reuses the local Codex login and model configuration. The script and editing direction are sent to the selected model service. Normal editing and MCP remain available when Codex is not installed or signed in.
 
 PDF permissions communicate the publisher's intended restrictions, but they are not DRM. Screenshots and specialized tools may bypass them. The project never stores the PDF open password.
 
@@ -165,6 +176,14 @@ Rules:
 - `[Author]` or `[作者]` maps to the cover author credit.
 - `[Title]` or `[扉页]` maps to the title page. When a title page exists, numbered body pages shift automatically.
 - `[1]`, `[2]`, and other numeric tags map to body pages.
+
+## Connect An AI Client
+
+1. Open a project and select the robot icon in the top toolbar.
+2. Select `Install to Codex` and confirm. The app creates or updates only the `storybook` entry in the Codex user configuration (`~/.codex/config.toml`), keeping your other settings intact. You can still copy the configuration block for another client.
+3. Restart Codex or open a new task, then keep Storybook Co-Editor running while you use the `storybook` MCP server.
+
+The MCP server listens only on `127.0.0.1:14320` and uses a locally generated token. The token grants read and edit access to the active project; do not commit it or share it with untrusted clients. Rotating the token requires installing the Codex entry again. Image pixels are not exposed as MCP resources in this first version. The server exposes project structure, the script, and a small set of layout parameters.
 
 ## Local Development
 

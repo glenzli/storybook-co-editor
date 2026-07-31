@@ -6,10 +6,14 @@ owner below; application roots compose owners and do not absorb their policies.
 ## Owners
 
 - `app/src/project/`: TypeScript project data contract, migration, recent-project
-  persistence, and history.
+  persistence, history, and externally-originated update propagation.
 - `app/src/story/`: Story script language and its parsing and validation policy.
 - `app/src/editor/`: Editor-specific collection projection and asynchronous
   receive lifecycles.
+- `app/src/components/right-sidebar/`: Cohesive right-sidebar interaction
+  regions, including script editing and Codex proposal review.
+- `app/src/components/ai/`: AI client connection controls and local MCP
+  configuration display.
 - `app/src/print/`: Print imposition and print-specific layout policy.
 - `app/src/utils/`: Legacy owner location. It is ratcheted and cannot accept new
   production files. Move a complete responsibility out when changing it.
@@ -17,15 +21,23 @@ owner below; application roots compose owners and do not absorb their policies.
 - `app/src-tauri/src/project_storage.rs`: The only owner of `project.json`.
 - `app/src-tauri/src/project_archive.rs`: `.scproj` extraction and atomic writing.
 - `app/src-tauri/src/project_manager.rs`: Active project session commands.
+- `app/src-tauri/src/project_operations.rs`: Serialized project reads and
+  revision-checked external mutations shared by MCP and the frontend.
 - `app/src-tauri/src/receiver.rs`: Local extension protocol, receive batches,
   image ingestion, trash operations, and receiver events.
+- `app/src-tauri/src/mcp_server.rs`: Authenticated loopback MCP transport,
+  access-token generation and rotation lifecycle, resources, and project tools.
+- `app/src-tauri/src/codex_mcp_config.rs`: Confirmed installation of the local
+  Storybook MCP registration into the user's Codex configuration.
+- `app/src-tauri/src/codex_polish.rs`: Optional Codex App Server lifecycle for
+  structured story-polish proposals.
 - `app/src-tauri/src/lib.rs`: Tauri composition and command registration only.
 - `extension/src/`: Browser-side extraction and receiver client.
 
 `fixtures/project-v2.json` is the cross-language serialization contract. Format
 changes must update both the TypeScript migration test and Rust round-trip test.
 Metadata additions remain schema v2 while they are optional and backward
-compatible.
+compatible. MCP and Codex operations do not change the project schema.
 
 ## Growth Rules
 

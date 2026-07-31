@@ -6,6 +6,7 @@ import smileySansLicense from '../assets/fonts/display/OFL-Smiley-Sans.txt?raw';
 import zcoolQingKeHuangYouLicense from '../assets/fonts/display/OFL-ZCOOL-QingKe-HuangYou.txt?raw';
 import zcoolXiaoWeiLicense from '../assets/fonts/display/OFL-ZCOOL-XiaoWei.txt?raw';
 import lopdfLicense from '../assets/licenses/lopdf-MIT.txt?raw';
+import rmcpLicense from '../assets/licenses/rmcp-Apache-2.0.txt?raw';
 
 export interface FontLicenseNotice {
   id: string;
@@ -30,11 +31,21 @@ export const DEPENDENCY_LICENSE_NOTICES: FontLicenseNotice[] = [
     id: 'lopdf',
     name: 'lopdf',
     label: 'lopdf PDF 文档库',
-    license: 'MIT License',
+    license: 'Apache License 2.0',
     sourceUrl: 'https://github.com/J-F-Liu/lopdf',
     bundledFiles: '桌面端 Rust 二进制',
     licenseFile: 'app/src/assets/licenses/lopdf-MIT.txt',
     licenseText: lopdfLicense,
+  },
+  {
+    id: 'rmcp',
+    name: 'rmcp',
+    label: 'Model Context Protocol Rust SDK',
+    license: 'MIT License',
+    sourceUrl: 'https://github.com/modelcontextprotocol/rust-sdk',
+    bundledFiles: '桌面端 Rust 二进制',
+    licenseFile: 'app/src/assets/licenses/rmcp-Apache-2.0.txt',
+    licenseText: rmcpLicense,
   },
 ];
 

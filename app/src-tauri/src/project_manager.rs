@@ -1,5 +1,6 @@
 use crate::project_archive;
 use crate::project_model::ProjectState;
+use crate::project_operations;
 use crate::project_storage;
 use serde::Serialize;
 use std::sync::Mutex;
@@ -8,6 +9,7 @@ use uuid::Uuid;
 
 pub struct ProjectManager {
     pub active_workspace: Mutex<Option<String>>,
+    pub operation_lock: Mutex<()>,
 }
 
 #[derive(Serialize)]
@@ -21,6 +23,10 @@ pub fn create_project(
     app: AppHandle,
     manager: State<ProjectManager>,
 ) -> Result<ProjectInfo, String> {
+    let _guard = manager
+        .operation_lock
+        .lock()
+        .map_err(|_| "PROJECT_LOCK_POISONED".to_string())?;
     let workspace_id = Uuid::new_v4().to_string();
     let workspace_dir = project_storage::get_workspace_dir(&app, &workspace_id)?;
 
@@ -44,6 +50,10 @@ pub async fn open_project(
     manager: State<'_, ProjectManager>,
     archive_path: String,
 ) -> Result<ProjectInfo, String> {
+    let _guard = manager
+        .operation_lock
+        .lock()
+        .map_err(|_| "PROJECT_LOCK_POISONED".to_string())?;
     let workspace_id = Uuid::new_v4().to_string();
     let workspace_dir = project_storage::get_workspace_dir(&app, &workspace_id)?;
     std::fs::create_dir_all(&workspace_dir).map_err(|error| error.to_string())?;
@@ -64,6 +74,10 @@ pub async fn save_project(
     manager: State<'_, ProjectManager>,
     target_path: String,
 ) -> Result<(), String> {
+    let _guard = manager
+        .operation_lock
+        .lock()
+        .map_err(|_| "PROJECT_LOCK_POISONED".to_string())?;
     let active_workspace = manager.active_workspace.lock().unwrap().clone();
     let workspace_id = active_workspace.ok_or_else(|| "No active project".to_string())?;
     let workspace_dir = project_storage::get_workspace_dir(&app, &workspace_id)?;
@@ -77,6 +91,10 @@ pub async fn save_project(
 
 #[tauri::command]
 pub fn close_project(manager: State<ProjectManager>) -> Result<(), String> {
+    let _guard = manager
+        .operation_lock
+        .lock()
+        .map_err(|_| "PROJECT_LOCK_POISONED".to_string())?;
     *manager.active_workspace.lock().unwrap() = None;
     Ok(())
 }
@@ -87,8 +105,5 @@ pub fn update_project_state(
     manager: State<ProjectManager>,
     state: ProjectState,
 ) -> Result<(), String> {
-    let active_workspace = manager.active_workspace.lock().unwrap().clone();
-    let workspace_id = active_workspace.ok_or_else(|| "No active project".to_string())?;
-    let workspace_dir = project_storage::get_workspace_dir(&app, &workspace_id)?;
-    project_storage::save_state(&workspace_dir, &state)
+    project_operations::save_frontend_state(&app, &manager, state)
 }

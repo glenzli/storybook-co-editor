@@ -12,7 +12,7 @@
   <img alt="Version" src="https://img.shields.io/badge/version-1.2.0-blue.svg?cacheSeconds=2592000" />
   <img alt="Tauri" src="https://img.shields.io/badge/Tauri-2-FFC131?logo=tauri&logoColor=white" />
   <img alt="React" src="https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=white" />
-  <img alt="Rust" src="https://img.shields.io/badge/Rust-1.77-000000?logo=rust&logoColor=white" />
+  <img alt="Rust" src="https://img.shields.io/badge/Rust-1.85+-000000?logo=rust&logoColor=white" />
   <img alt="License" src="https://img.shields.io/badge/license-MIT-green.svg" />
 </p>
 
@@ -67,6 +67,8 @@ flowchart LR
   C --> D["Tauri 桌面项目"]
   D --> E["分页与脚本排版"]
   E --> F["图像微调"]
+  D <--> K["本机 AI 客户端 / MCP"]
+  E <--> L["Codex 剧本润色建议"]
   F --> G{"选择导出方式"}
   G --> H["逐页电子 PDF"]
   G --> I["印前拼版"]
@@ -113,7 +115,16 @@ flowchart LR
 - 出版与版权信息、电子 PDF 权限偏好作为可选的项目级数据保存在 `.scproj` 中。
 - 支持最近项目、保存、另存为、自动保存、撤销和重做。
 - 桌面端支持简体中文和英文实时切换并记忆选择；Chrome 扩展跟随浏览器语言。
-- 所有编辑在本地完成，不依赖远程服务。
+- 核心编辑与导出在本地完成；可选的 Codex 润色按 Codex 当前模型配置处理。
+
+**AI 协作（实验性）**
+
+- 工具栏的 AI 入口会显示带访问令牌的本机 MCP 地址，可直接生成 Codex 配置。
+- 访问令牌由应用随机生成；可在 AI 入口轮换。轮换会立即使旧令牌失效，并需要用新的配置重新连接 Codex 或其他客户端。
+- MCP 第一版支持读取当前项目和完整剧本、替换剧本、读取页面布局及调整单页文字位置。
+- 所有 MCP 写入都要求携带最近一次读取到的 `last_modified`，检测到并发修改时会拒绝覆盖，并把成功修改实时同步回编辑器。
+- 剧本面板提供 `Codex 润色`：执行前可以从本机 Codex 的可用模型中选择，并填写本次修改意见。Codex 只返回建议版本，应用会先显示原文与建议对照，确认后才写入项目。
+- 润色功能复用本机 Codex 登录和模型配置；剧本文本与修改意见会发送给所选模型服务。未安装或未登录 Codex 时，普通编辑和 MCP 功能不受影响。
 
 PDF 权限用于表达发布者的使用限制，不等同于 DRM；截图或专用工具仍可能绕过限制。项目不会保存 PDF 打开密码。
 
@@ -167,6 +178,14 @@ storybook-co-editor-extension-v1.2.0.zip
 - `[Author]` 或 `[作者]` 映射封面作者署名。
 - `[Title]` 或 `[扉页]` 映射扉页；如果存在扉页，正文数字页会自动后移。
 - `[1]`、`[2]` 等数字标签映射正文页。
+
+## 连接 AI 客户端
+
+1. 打开一个项目，点击顶部工具栏的机器人图标。
+2. 点击 `安装到 Codex` 并确认。应用只会在 Codex 用户配置（`~/.codex/config.toml`）中创建或更新 `storybook` 条目，保留其他设置；其他 AI 客户端仍可复制下方配置。
+3. 重启 Codex 或新建一个任务，并在使用 `storybook` MCP 服务时保持 Storybook Co-Editor 运行。
+
+MCP 服务只监听 `127.0.0.1:14320`，并使用首次启动时生成的本机令牌。令牌拥有当前项目的读取和编辑权限，不应写入仓库或交给不受信任的客户端；轮换令牌后需要重新安装 Codex 条目。图像像素不会作为 MCP 资源暴露；第一版只提供项目结构、剧本和少量排版参数。
 
 ## 本地开发
 

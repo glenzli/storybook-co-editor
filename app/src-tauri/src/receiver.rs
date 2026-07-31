@@ -9,10 +9,10 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::sync::{Arc, Mutex};
 use tauri::{AppHandle, Emitter, Manager};
-use tower_http::cors::{Any, CorsLayer};
+use tower_http::cors::{AllowOrigin, Any, CorsLayer};
 
+use crate::mcp_server;
 use crate::project_manager::{self, ProjectManager};
-use crate::project_model::ProjectState;
 use crate::project_storage;
 
 #[derive(Deserialize)]
@@ -27,18 +27,6 @@ struct SaveImageRequest {
 #[derive(Deserialize)]
 struct BatchStartRequest {
     total: u32,
-}
-
-#[derive(Serialize)]
-struct ProjectStateResponse {
-    success: bool,
-    state: Option<ProjectState>,
-    error: Option<String>,
-}
-
-#[derive(Deserialize)]
-struct UpdateProjectStateRequest {
-    state: ProjectState,
 }
 
 #[derive(Deserialize)]
@@ -88,7 +76,8 @@ fn get_or_create_active_workspace(app_handle: &AppHandle) -> Result<std::path::P
         let _ = app_handle.emit(
             "project-auto-created",
             serde_json::json!({
-                "workspace_id": info.workspace_id.clone()
+                "workspace_id": info.workspace_id.clone(),
+                "state": info.state
             }),
         );
 
@@ -98,21 +87,30 @@ fn get_or_create_active_workspace(app_handle: &AppHandle) -> Result<std::path::P
 
 pub async fn start_server(app_handle: AppHandle) {
     let cors = CorsLayer::new()
-        .allow_origin(Any)
+        .allow_origin(AllowOrigin::predicate(|origin, _| {
+            origin.to_str().is_ok_and(|value| {
+                value.starts_with("chrome-extension://")
+                    || matches!(
+                        value,
+                        "http://localhost:5173"
+                            | "http://127.0.0.1:5173"
+                            | "tauri://localhost"
+                            | "https://tauri.localhost"
+                    )
+            })
+        }))
         .allow_methods(Any)
         .allow_headers(Any);
 
     let state = Arc::new(AppState {
-        app_handle,
+        app_handle: app_handle.clone(),
         is_cancelled: Mutex::new(false),
     });
 
-    let app = Router::new()
+    let receiver = Router::new()
         .route("/api/save-image", post(save_image))
         .route("/api/start-batch", post(start_batch))
         .route("/api/cancel-batch", post(cancel_batch))
-        .route("/api/project/state", axum::routing::get(get_project_state))
-        .route("/api/project/state", post(update_project_state))
         .route("/api/list-images", axum::routing::get(list_images))
         .route("/api/trash-image", post(trash_image))
         .route("/api/restore-trash", post(restore_trash))
@@ -123,7 +121,16 @@ pub async fn start_server(app_handle: AppHandle) {
         .layer(DefaultBodyLimit::max(50 * 1024 * 1024))
         .with_state(state);
 
-    let listener = tokio::net::TcpListener::bind("0.0.0.0:14320")
+    let mcp = match mcp_server::router(app_handle) {
+        Ok(router) => router,
+        Err(error) => {
+            eprintln!("Failed to initialize MCP server: {error}");
+            Router::new()
+        }
+    };
+    let app = receiver.merge(mcp);
+
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:14320")
         .await
         .unwrap();
     println!(
@@ -358,57 +365,6 @@ async fn list_images(State(state): State<Arc<AppState>>) -> Json<ListImagesRespo
     Json(ListImagesResponse {
         success: true,
         images: files,
-        error: None,
-    })
-}
-
-async fn get_project_state(State(state): State<Arc<AppState>>) -> Json<ProjectStateResponse> {
-    let ws_dir = match get_or_create_active_workspace(&state.app_handle) {
-        Ok(dir) => dir,
-        Err(e) => {
-            return Json(ProjectStateResponse {
-                success: false,
-                state: None,
-                error: Some(e),
-            })
-        }
-    };
-    match project_storage::load_state(&ws_dir) {
-        Ok(project_state) => Json(ProjectStateResponse {
-            success: true,
-            state: Some(project_state),
-            error: None,
-        }),
-        Err(error) => Json(ProjectStateResponse {
-            success: false,
-            state: None,
-            error: Some(error),
-        }),
-    }
-}
-
-async fn update_project_state(
-    State(state): State<Arc<AppState>>,
-    Json(payload): Json<UpdateProjectStateRequest>,
-) -> Json<GenericResponse> {
-    let ws_dir = match get_or_create_active_workspace(&state.app_handle) {
-        Ok(dir) => dir,
-        Err(e) => {
-            return Json(GenericResponse {
-                success: false,
-                error: Some(e),
-            })
-        }
-    };
-    if let Err(error) = project_storage::save_state(&ws_dir, &payload.state) {
-        return Json(GenericResponse {
-            success: false,
-            error: Some(error),
-        });
-    }
-
-    Json(GenericResponse {
-        success: true,
         error: None,
     })
 }

@@ -17,6 +17,7 @@ import PrintScreen from './PrintScreen';
 import { EditorHeader } from './components/EditorHeader';
 import { LeftSidebar } from './components/LeftSidebar';
 import { RightSidebar } from './components/RightSidebar';
+import { AiIntegrationDialog } from './components/ai/AiIntegrationDialog';
 import { getFontFamilyStack, waitForProjectFonts } from './utils/fonts';
 import { StoryTextOverlay } from './components/StoryTextOverlay';
 import {
@@ -46,6 +47,7 @@ import {
   type PageIndexMapping,
 } from './editor/pageCollection';
 import { usePluginReceive, type SavedImageEvent } from './editor/usePluginReceive';
+import { subscribeExternalProjectUpdates } from './project/externalUpdates';
 
 const logger = createLogger('App');
 
@@ -83,6 +85,7 @@ export default function EditorScreen() {
   const [isElectronicPdfExportOpen, setIsElectronicPdfExportOpen] = useState(false);
   const [isPublicationMetadataOpen, setIsPublicationMetadataOpen] = useState(false);
   const [isMissingMetadataPromptOpen, setIsMissingMetadataPromptOpen] = useState(false);
+  const [isAiIntegrationOpen, setIsAiIntegrationOpen] = useState(false);
   const pendingPdfExportRef = useRef<(() => void) | null>(null);
 
 
@@ -154,6 +157,24 @@ export default function EditorScreen() {
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeWorkspaceId]); // Run once when workspace changes
+
+  useEffect(() => subscribeExternalProjectUpdates(update => {
+    if (update.workspace_id !== activeWorkspaceId) return;
+    const urls = update.state.visible_images.map(filename => (
+      filename.startsWith('blank://') ? filename : `http://127.0.0.1:14320/images/${filename}`
+    ));
+    const trashUrls = update.state.trashed_images.map(filename => (
+      filename.startsWith('blank://') ? filename : `http://127.0.0.1:14320/images/${filename}`
+    ));
+    setImages(urls);
+    setTrashedImages(trashUrls);
+    setGlobalScript(update.state.global_script);
+    setSelectedIdx(current => {
+      if (urls.length === 0) return null;
+      if (current === null) return 0;
+      return Math.min(current, urls.length - 1);
+    });
+  }), [activeWorkspaceId]);
 
   // Sync project state
   useEffect(() => {
@@ -647,6 +668,7 @@ export default function EditorScreen() {
         electronicPdfProgress={electronicPdfProgress}
         openPublicationMetadata={() => setIsPublicationMetadataOpen(true)}
         hasPublicationMetadata={hasPublicationMetadata(projectState?.publication_metadata)}
+        openAiIntegration={() => setIsAiIntegrationOpen(true)}
       />
 
       {/* Main Area */}
@@ -753,6 +775,11 @@ export default function EditorScreen() {
       ) : (
         <PrintScreen requestPdfExport={requestPdfExport} />
       )}
+
+      <AiIntegrationDialog
+        open={isAiIntegrationOpen}
+        onClose={() => setIsAiIntegrationOpen(false)}
+      />
 
       {/* Bottom Status Bar */}
       <footer className="h-10 bg-card border-t border-border flex items-center justify-between px-4 text-xs flex-shrink-0 relative z-20">

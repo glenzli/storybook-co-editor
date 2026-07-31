@@ -23,3 +23,4 @@ Full license texts are bundled in the source tree, shown in the app under "ËÆ∏Âè
 | Component | License | Source | Bundled license |
 | --- | --- | --- | --- |
 | lopdf | MIT License | https://github.com/J-F-Liu/lopdf | `app/src/assets/licenses/lopdf-MIT.txt` |
+| rmcp (Model Context Protocol Rust SDK) | Apache License 2.0 | https://github.com/modelcontextprotocol/rust-sdk | `app/src/assets/licenses/rmcp-Apache-2.0.txt` |

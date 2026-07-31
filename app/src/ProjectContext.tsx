@@ -11,6 +11,10 @@ import type { ProjectInfo, ProjectState } from './project/model';
 import { migrateProjectState } from './project/migrate';
 import { ProjectHistory } from './project/history';
 import {
+    dispatchExternalProjectUpdate,
+    type ExternalProjectUpdate,
+} from './project/externalUpdates';
+import {
     loadRecentProjects,
     saveRecentProjects,
     withRecentProject,
@@ -54,6 +58,8 @@ export const ProjectProvider = ({ children }: { children: ReactNode }) => {
     const [saveProgress, setSaveProgress] = useState<{ current: number, total: number } | null>(null);
     const historyRef = useRef(new ProjectHistory<ProjectState>(value => structuredClone(value)));
     const historyWorkspaceRef = useRef<string | null>(null);
+    const activeWorkspaceRef = useRef<string | null>(null);
+    const pendingExternalUpdateRef = useRef<ExternalProjectUpdate | null>(null);
     const isUndoRedoRef = useRef(false);
     const [historyAvailability, setHistoryAvailability] = useState({ canUndo: false, canRedo: false });
     const navigate = useNavigate();
@@ -65,33 +71,48 @@ export const ProjectProvider = ({ children }: { children: ReactNode }) => {
     }, []);
 
     useEffect(() => {
+        activeWorkspaceRef.current = activeWorkspaceId;
+    }, [activeWorkspaceId]);
+
+    useEffect(() => {
         loadRecentProjects().then(setRecentProjects).catch(console.error);
 
-        const unlisten = listen<{ workspace_id: string }>('project-auto-created', async (event) => {
-            try {
-                // Fetch the newly created state
-                const res = await fetch('http://127.0.0.1:14320/api/project/state');
-                const data = await res.json();
-                if (data.success && data.state) {
-                    setActiveWorkspaceId(event.payload.workspace_id);
-                    setProjectState(migrateProjectState(data.state));
-                    setCurrentProjectPath(null);
-                    navigate('/editor');
-                }
-            } catch (e) {
-                console.error("Failed to sync auto-created project", e);
-            }
+        const unlisten = listen<ProjectInfo>('project-auto-created', (event) => {
+            setActiveWorkspaceId(event.payload.workspace_id);
+            setProjectState(migrateProjectState(event.payload.state));
+            setCurrentProjectPath(null);
+            navigate('/editor');
         });
 
         const unlistenProgress = listen<{ current: number, total: number }>('save-progress', (event) => {
             setSaveProgress(event.payload);
         });
 
+        const unlistenExternalUpdate = listen<ExternalProjectUpdate>('external-project-update', (event) => {
+            if (event.payload.workspace_id !== activeWorkspaceRef.current) return;
+            if (syncTimeoutRef.current) clearTimeout(syncTimeoutRef.current);
+            const update = {
+                ...event.payload,
+                state: migrateProjectState(event.payload.state),
+            };
+            pendingExternalUpdateRef.current = update;
+            setProjectState(update.state);
+            setIsDirty(true);
+        });
+
         return () => {
             unlisten.then(f => f());
             unlistenProgress.then(f => f());
+            unlistenExternalUpdate.then(f => f());
         };
     }, [navigate]);
+
+    useEffect(() => {
+        const update = pendingExternalUpdateRef.current;
+        if (!update || !projectState) return;
+        pendingExternalUpdateRef.current = null;
+        dispatchExternalProjectUpdate(update);
+    }, [projectState]);
 
     const addRecentProject = async (path: string, name: string) => {
         const next = withRecentProject(recentProjects, path, name);
@@ -225,7 +246,9 @@ export const ProjectProvider = ({ children }: { children: ReactNode }) => {
         }
         
         syncTimeoutRef.current = setTimeout(() => {
-            invoke('update_project_state', { state: projectState }).catch(console.error);
+            invoke('update_project_state', { state: projectState }).catch(error => {
+                if (String(error) !== 'STALE_PROJECT_STATE') console.error(error);
+            });
         }, 300);
         
         return () => {

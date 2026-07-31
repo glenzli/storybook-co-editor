@@ -1,4 +1,4 @@
-import { FileBox, Undo2, Redo2, Save, FolderOpen, XCircle, Loader2, FileDown, BookMarked } from 'lucide-react';
+import { Bot, FileBox, Undo2, Redo2, Save, FolderOpen, XCircle, Loader2, FileDown, BookMarked } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import type { ProjectState } from '../project/model';
 import { LanguageSwitcher } from './LanguageSwitcher';
@@ -23,6 +23,7 @@ interface EditorHeaderProps {
   electronicPdfProgress?: { current: number, total: number } | null;
   openPublicationMetadata: () => void;
   hasPublicationMetadata: boolean;
+  openAiIntegration: () => void;
 }
 
 export function EditorHeader({
@@ -44,6 +45,7 @@ export function EditorHeader({
   electronicPdfProgress,
   openPublicationMetadata,
   hasPublicationMetadata,
+  openAiIntegration,
 }: EditorHeaderProps) {
   const { t } = useTranslation();
 
@@ -84,6 +86,15 @@ export function EditorHeader({
       </div>
 
       <div className="flex items-center justify-end gap-1 w-1/3">
+          <button
+            type="button"
+            onClick={openAiIntegration}
+            className="p-1.5 rounded-md transition-colors text-muted-foreground hover:bg-muted hover:text-foreground"
+            title={t('header.aiIntegration')}
+            aria-label={t('header.aiIntegration')}
+          >
+              <Bot size={14} />
+          </button>
           <button
             type="button"
             onClick={openPublicationMetadata}

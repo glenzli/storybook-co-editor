@@ -4,89 +4,8 @@ import { HexColorPicker } from 'react-colorful';
 import { useTranslation } from 'react-i18next';
 import type { ImageAdjustments, ProjectState, SelectiveColor, TextSettings } from '../project/model';
 import { BUILT_IN_FONT_OPTIONS } from '../utils/fonts';
-import {
-  getStoryPageIndexAtOffset,
-  hasStoryTitle,
-  validateStoryScript,
-} from '../story/script';
-
-function DebouncedTextarea({ value, onChange, onCursorChange, className }: { value: string, onChange: (v: string) => void, onCursorChange?: (idx: number | null) => void, className?: string }) {
-  const { t } = useTranslation();
-  const [localValue, setLocalValue] = useState(value);
-  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  useEffect(() => {
-    setLocalValue(value);
-  }, [value]);
-
-  const handleChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    const newVal = e.target.value;
-    setLocalValue(newVal);
-    
-    // Auto-save after 1.5 seconds of inactivity
-    if (timeoutRef.current) clearTimeout(timeoutRef.current);
-    timeoutRef.current = setTimeout(() => {
-      onChange(newVal);
-    }, 1500);
-  };
-
-  const handleBlur = () => {
-    if (timeoutRef.current) clearTimeout(timeoutRef.current);
-    if (localValue !== value) {
-      onChange(localValue);
-    }
-  };
-
-  const handleSelect = (e: React.SyntheticEvent<HTMLTextAreaElement>) => {
-    if (!onCursorChange) return;
-    onCursorChange(getStoryPageIndexAtOffset(localValue, e.currentTarget.selectionStart));
-  };
-
-  const errors = validateStoryScript(localValue);
-  const lineCount = localValue.split('\n').length;
-  const gutterRef = useRef<HTMLDivElement>(null);
-
-  return (
-    <div className="flex-1 flex flex-col gap-2 min-h-0">
-      <div className="flex-1 flex min-h-0 bg-background border border-border rounded-md focus-within:ring-1 focus-within:ring-primary overflow-hidden transition-all">
-        {/* Line Numbers */}
-        <div 
-          ref={gutterRef}
-          className="w-10 py-3 pl-2 pr-2 text-right text-xs text-muted-foreground/50 bg-muted/10 font-mono select-none overflow-hidden shrink-0 border-r border-border/50"
-        >
-          {Array.from({ length: lineCount }).map((_, i) => (
-            <div key={i} className="leading-[1.5rem]">{i + 1}</div>
-          ))}
-        </div>
-        
-        {/* Textarea */}
-        <textarea 
-          className={className || "flex-1 w-full bg-transparent py-3 px-3 text-sm text-foreground focus:outline-none resize-none font-mono whitespace-pre overflow-auto leading-[1.5rem]"}
-          value={localValue}
-          onChange={handleChange}
-          onBlur={handleBlur}
-          onSelect={handleSelect}
-          onScroll={(e) => {
-              if (gutterRef.current) gutterRef.current.scrollTop = e.currentTarget.scrollTop;
-          }}
-          wrap="off"
-        />
-      </div>
-
-      {/* Validation Errors */}
-      {errors.length > 0 && (
-        <div className="bg-red-500/10 border border-red-500/30 rounded-md p-2 max-h-32 overflow-y-auto shrink-0 flex flex-col gap-1">
-          <span className="text-xs font-bold text-red-500 mb-0.5">{t('rightSidebar.invalidTags')}</span>
-          <ul className="text-xs text-red-500/80 space-y-0.5">
-            {errors.map((err, idx) => (
-              <li key={idx}>{t('rightSidebar.invalidTagLine', { line: err.line })} <code className="bg-red-500/20 px-1 rounded">{err.tag}</code></li>
-            ))}
-          </ul>
-        </div>
-      )}
-    </div>
-  );
-}
+import { hasStoryTitle } from '../story/script';
+import { ScriptPanel } from './right-sidebar/ScriptPanel';
 
 const useEyedropper = () => {
   const [isSupported] = useState(() => 'EyeDropper' in window);
@@ -600,17 +519,11 @@ export function RightSidebar({
 
             {/* Script Tab */}
             {rightTab === 'script' && (
-            <div className="p-4 flex-1 flex flex-col gap-3 w-full overflow-hidden">
-              <p className="text-xs text-muted-foreground flex-shrink-0">
-                {t('rightSidebar.scriptHelp')}
-              </p>
-              <DebouncedTextarea 
-                className="flex-1 w-full bg-background border border-border rounded-md p-3 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary resize-none transition-all font-mono min-h-0"
+              <ScriptPanel
                 value={globalScript}
                 onChange={setGlobalScript}
                 onCursorChange={setSelectedIdx}
               />
-            </div>
             )}
 
             {/* Style Tab */}

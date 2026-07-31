@@ -144,6 +144,25 @@ for (const file of productionFiles.filter(file => file.endsWith('.rs'))) {
       && file !== 'app/src-tauri/src/receiver.rs') {
     fail(`${file}: local receiver routes are owned by receiver.rs`);
   }
+  if (source.includes('StreamableHttpService')
+      && file !== 'app/src-tauri/src/mcp_server.rs') {
+    fail(`${file}: MCP transport is owned by mcp_server.rs`);
+  }
+  if (source.includes('"app-server"')
+      && file !== 'app/src-tauri/src/codex_polish.rs') {
+    fail(`${file}: Codex App Server lifecycle is owned by codex_polish.rs`);
+  }
+}
+
+for (const file of productionFiles) {
+  const source = read(file).split('#[cfg(test)]')[0];
+  if (source.includes('"external-project-update"')
+      && ![
+        'app/src-tauri/src/project_operations.rs',
+        'app/src/ProjectContext.tsx',
+      ].includes(file)) {
+    fail(`${file}: external project update transport has an unexpected owner`);
+  }
 }
 
 const nativeEntry = read('app/src-tauri/src/lib.rs');
@@ -158,6 +177,9 @@ if (read('app/src/PrintScreen.tsx').includes('function calculateImposition')) {
 }
 if (read('app/src/utils/storyPageRenderer.ts').includes('function parseStoryScript')) {
   fail('storyPageRenderer.ts must delegate script grammar to story/script.ts');
+}
+if (read('app/src/components/RightSidebar.tsx').includes('function DebouncedTextarea')) {
+  fail('RightSidebar.tsx must delegate script editing to right-sidebar/ScriptPanel.tsx');
 }
 
 const fixtureReferences = [

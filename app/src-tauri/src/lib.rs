@@ -1,7 +1,11 @@
+mod codex_mcp_config;
+mod codex_polish;
+mod mcp_server;
 mod pdf_security;
 mod project_archive;
 mod project_manager;
 mod project_model;
+mod project_operations;
 mod project_storage;
 mod receiver;
 mod system_fonts;
@@ -23,8 +27,10 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
         .setup(|app| {
+            app.manage(mcp_server::McpTokenState::default());
             app.manage(ProjectManager {
                 active_workspace: Mutex::new(None),
+                operation_lock: Mutex::new(()),
             });
 
             let handle = app.handle().clone();
@@ -39,6 +45,11 @@ pub fn run() {
             project_manager::save_project,
             project_manager::close_project,
             project_manager::update_project_state,
+            mcp_server::get_mcp_connection_info,
+            mcp_server::rotate_mcp_access_token,
+            codex_mcp_config::install_mcp_into_codex,
+            codex_polish::list_codex_models,
+            codex_polish::polish_story_with_codex,
             system_fonts::get_system_fonts,
             pdf_security::protect_pdf,
             greet
