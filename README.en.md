@@ -68,7 +68,9 @@ flowchart LR
   D --> E["Page and script layout"]
   E --> F["Image adjustments"]
   D <--> K["Local AI client / MCP"]
-  E <--> L["Codex script proposal"]
+  D <--> L["Local Codex App Server"]
+  L --> M["Script polish proposal"]
+  L --> N["Creation / redraw candidates"]
   F --> G{"Choose export mode"}
   G --> H["Page-by-page electronic PDF"]
   G --> I["Prepress imposition"]
@@ -119,13 +121,15 @@ flowchart LR
 
 **AI collaboration (experimental)**
 
+- **Codex is an optional local dependency.** To use Codex polishing, creation, or redraw, install and sign in to the Codex / ChatGPT desktop app so its local Codex App Server is available. The app checks for available models at launch; when no usable Codex is found, those controls are disabled while editing, export, and MCP remain available independently.
 - The AI toolbar entry shows a token-protected local MCP endpoint and can generate a Codex configuration block.
 - The app generates the access token randomly and lets you rotate it from the AI entry. Rotation invalidates the old token immediately, so reconnect Codex or other clients with the new configuration.
 - The first MCP version can read the active project and complete script, replace the script, read page layout, and adjust per-page text position.
 - Every MCP write requires the `last_modified` value from a preceding read. Concurrent changes are rejected instead of overwritten, and successful updates synchronize into the open editor.
 - Before `Polish with Codex` runs, you can select from the models available in local Codex and provide editing direction. Codex returns a proposal only; the app presents the current and proposed scripts side by side and writes the result only after approval.
-- Polishing reuses the local Codex login and model configuration. The script and editing direction are sent to the selected model service. Normal editing and MCP remain available when Codex is not installed or signed in.
-- The new-page menu offers a blank page or `Create with Codex`; a candidate is appended only after confirmation. `Redraw image with Codex` is available at the top of page styling and from the thumbnail and main-canvas context menus. For redraw, the app supplies an isolated image copy to Codex's `imagegen` tool, presents the result as a candidate, and replaces the current page only after confirmation while keeping the original in the trash.
+- The new-page menu offers a blank page or `Create with Codex`. Creation uses the current canvas aspect ratio and appends its image only after you confirm the candidate.
+- `Redraw image with Codex` is available at the top of page styling and from the thumbnail and main-canvas context menus. For redraw, the app supplies an isolated PNG copy to Codex's `imagegen` tool; candidates do not change a page or enter the `.scproj` package until you confirm them, after which the original moves to the trash.
+- Polishing, creation, and redraw reuse the local Codex login and model configuration. The script, creation direction, and redraw direction are sent to the selected model service; redraw also sends the isolated copy of the selected page image.
 
 PDF permissions communicate the publisher's intended restrictions, but they are not DRM. Screenshots and specialized tools may bypass them. The project never stores the PDF open password.
 
