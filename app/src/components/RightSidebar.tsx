@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { PenTool, Type, Maximize2, ChevronDown, ChevronRight, ChevronLeft, LayoutTemplate, Pipette, Trash2, Copy, ClipboardPaste } from 'lucide-react';
+import { PenTool, Type, Maximize2, ChevronDown, ChevronRight, ChevronLeft, LayoutTemplate, Pipette, Trash2, Copy, ClipboardPaste, Sparkles } from 'lucide-react';
 import { HexColorPicker } from 'react-colorful';
 import { useTranslation } from 'react-i18next';
 import type { ImageAdjustments, ProjectState, SelectiveColor, TextSettings } from '../project/model';
@@ -99,6 +99,9 @@ interface RightSidebarProps {
   canvasH: number;
   selectedIdx: number | null;
   setSelectedIdx: (idx: number | null) => void;
+  selectedImage: string | null;
+  isCodexAvailable: boolean;
+  onRedrawImage: () => void;
 
   systemFonts: string[];
   extractedColors: string[];
@@ -378,6 +381,9 @@ export function RightSidebar({
   canvasH,
   selectedIdx,
   setSelectedIdx,
+  selectedImage,
+  isCodexAvailable,
+  onRedrawImage,
   systemFonts,
   extractedColors,
   xyBounds,
@@ -523,12 +529,23 @@ export function RightSidebar({
                 value={globalScript}
                 onChange={setGlobalScript}
                 onCursorChange={setSelectedIdx}
+                isCodexAvailable={isCodexAvailable}
               />
             )}
 
             {/* Style Tab */}
             {rightTab === 'style' && (
             <div className="p-4 flex-1 flex flex-col gap-4 w-full overflow-y-auto">
+              <button
+                type="button"
+                onClick={onRedrawImage}
+                disabled={!isCodexAvailable || !selectedImage || selectedImage.startsWith('blank://')}
+                title={!isCodexAvailable ? t('ai.codexUnavailable') : undefined}
+                className="min-h-12 w-full flex items-center justify-center gap-2 rounded-md border border-border bg-background px-4 py-3 text-sm font-medium text-foreground hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <Sparkles size={16} className="text-primary" />
+                {t('ai.redrawImage')}
+              </button>
 
 
               {/* Canvas Settings */}

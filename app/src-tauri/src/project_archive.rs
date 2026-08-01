@@ -59,6 +59,9 @@ pub fn write(
         if name.contains(".DS_Store") {
             continue;
         }
+        if name == "codex-candidates" || name.starts_with("codex-candidates/") {
+            continue;
+        }
 
         let result = if path.is_file() {
             zip.start_file(&name, options)
@@ -109,9 +112,15 @@ mod tests {
         let extracted = root.join("extracted");
         let archive = root.join("project.scproj");
         fs::create_dir_all(source.join("trash")).unwrap();
+        fs::create_dir_all(source.join("codex-candidates")).unwrap();
         fs::write(source.join("project.json"), br#"{"schema_version":2}"#).unwrap();
         fs::write(source.join("cover.png"), b"image-bytes").unwrap();
         fs::write(source.join("trash").join("old.png"), b"trash-bytes").unwrap();
+        fs::write(
+            source.join("codex-candidates").join("preview.png"),
+            b"candidate-bytes",
+        )
+        .unwrap();
 
         let mut final_progress = None;
         write(&source, archive.to_str().unwrap(), |current, total| {
@@ -133,6 +142,7 @@ mod tests {
             fs::read(extracted.join("trash").join("old.png")).unwrap(),
             b"trash-bytes"
         );
+        assert!(!extracted.join("codex-candidates").exists());
         assert!(final_progress.is_some());
 
         fs::remove_dir_all(root).unwrap();

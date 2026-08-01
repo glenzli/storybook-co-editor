@@ -4,6 +4,11 @@ import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { localizeAppError } from '../../i18n';
 import {
+  listCodexModels,
+  preferredCodexModel,
+  type CodexModelOption,
+} from '../ai/codexModels';
+import {
   getStoryPageIndexAtOffset,
   validateStoryScript,
 } from '../../story/script';
@@ -13,20 +18,14 @@ interface CodexPolishResult {
   notes: string;
 }
 
-interface CodexModelOption {
-  model: string;
-  displayName: string;
-  description: string;
-  isDefault: boolean;
-}
-
 interface ScriptPanelProps {
   value: string;
   onChange: (value: string) => void;
   onCursorChange: (pageIndex: number | null) => void;
+  isCodexAvailable: boolean;
 }
 
-export function ScriptPanel({ value, onChange, onCursorChange }: ScriptPanelProps) {
+export function ScriptPanel({ value, onChange, onCursorChange, isCodexAvailable }: ScriptPanelProps) {
   const { t, i18n } = useTranslation();
   const [localValue, setLocalValue] = useState(value);
   const [isPolishing, setIsPolishing] = useState(false);
@@ -53,15 +52,11 @@ export function ScriptPanel({ value, onChange, onCursorChange }: ScriptPanelProp
     let isCancelled = false;
     setIsLoadingModels(true);
     setPolishError(null);
-    invoke<CodexModelOption[]>('list_codex_models')
+    listCodexModels()
       .then(availableModels => {
         if (isCancelled) return;
         setModels(availableModels);
-        const savedModel = localStorage.getItem('storybook-codex-polish-model');
-        const initialModel = availableModels.find(option => option.model === savedModel)
-          || availableModels.find(option => option.isDefault)
-          || availableModels[0];
-        setSelectedModel(initialModel?.model || '');
+        setSelectedModel(preferredCodexModel(availableModels, 'storybook-codex-polish-model'));
       })
       .catch(error => {
         if (!isCancelled) {
@@ -135,9 +130,9 @@ export function ScriptPanel({ value, onChange, onCursorChange }: ScriptPanelProp
           <button
             type="button"
             onClick={() => setIsPolishSetupOpen(true)}
-            disabled={isPolishing || errors.length > 0 || !localValue.trim()}
+            disabled={!isCodexAvailable || isPolishing || errors.length > 0 || !localValue.trim()}
             className="h-8 px-2.5 flex items-center gap-1.5 rounded border border-border bg-background text-xs font-medium text-foreground hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed flex-shrink-0"
-            title={t('ai.polishDescription')}
+            title={!isCodexAvailable ? t('ai.codexUnavailable') : t('ai.polishDescription')}
           >
             {isPolishing
               ? <Loader2 size={13} className="animate-spin" />

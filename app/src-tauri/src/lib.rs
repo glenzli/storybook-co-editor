@@ -1,3 +1,5 @@
+mod codex_app_server;
+mod codex_image_edit;
 mod codex_mcp_config;
 mod codex_polish;
 mod mcp_server;
@@ -50,6 +52,11 @@ pub fn run() {
             codex_mcp_config::install_mcp_into_codex,
             codex_polish::list_codex_models,
             codex_polish::polish_story_with_codex,
+            codex_image_edit::redraw_image_with_codex,
+            codex_image_edit::create_image_with_codex,
+            codex_image_edit::apply_codex_image_variant,
+            codex_image_edit::append_codex_image,
+            codex_image_edit::discard_codex_image_variant,
             system_fonts::get_system_fonts,
             pdf_security::protect_pdf,
             greet

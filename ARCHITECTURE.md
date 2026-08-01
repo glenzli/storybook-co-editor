@@ -12,8 +12,8 @@ owner below; application roots compose owners and do not absorb their policies.
   receive lifecycles.
 - `app/src/components/right-sidebar/`: Cohesive right-sidebar interaction
   regions, including script editing and Codex proposal review.
-- `app/src/components/ai/`: AI client connection controls and local MCP
-  configuration display.
+- `app/src/components/ai/`: AI client connection controls, shared Codex model
+  selection, and review-first Codex proposal dialogs.
 - `app/src/print/`: Print imposition and print-specific layout policy.
 - `app/src/utils/`: Legacy owner location. It is ratcheted and cannot accept new
   production files. Move a complete responsibility out when changing it.
@@ -29,15 +29,20 @@ owner below; application roots compose owners and do not absorb their policies.
   access-token generation and rotation lifecycle, resources, and project tools.
 - `app/src-tauri/src/codex_mcp_config.rs`: Confirmed installation of the local
   Storybook MCP registration into the user's Codex configuration.
-- `app/src-tauri/src/codex_polish.rs`: Optional Codex App Server lifecycle for
-  structured story-polish proposals.
+- `app/src-tauri/src/codex_app_server.rs`: Codex App Server process and JSON-RPC
+  session lifecycle shared by local Codex features.
+- `app/src-tauri/src/codex_polish.rs`: Structured story-polish proposals.
+- `app/src-tauri/src/codex_image_edit.rs`: Isolated source-image preparation,
+  Codex image-generation lifecycle, candidate validation, and confirmation-only
+  page creation or image replacement.
 - `app/src-tauri/src/lib.rs`: Tauri composition and command registration only.
 - `extension/src/`: Browser-side extraction and receiver client.
 
 `fixtures/project-v2.json` is the cross-language serialization contract. Format
 changes must update both the TypeScript migration test and Rust round-trip test.
 Metadata additions remain schema v2 while they are optional and backward
-compatible. MCP and Codex operations do not change the project schema.
+compatible. MCP and Codex operations do not change the project schema. Codex
+image candidates remain outside `.scproj` until the user confirms replacement.
 
 ## Growth Rules
 

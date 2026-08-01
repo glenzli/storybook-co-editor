@@ -149,8 +149,11 @@ for (const file of productionFiles.filter(file => file.endsWith('.rs'))) {
     fail(`${file}: MCP transport is owned by mcp_server.rs`);
   }
   if (source.includes('"app-server"')
-      && file !== 'app/src-tauri/src/codex_polish.rs') {
-    fail(`${file}: Codex App Server lifecycle is owned by codex_polish.rs`);
+      && ![
+        'app/src-tauri/src/codex_app_server.rs',
+        'app/src-tauri/src/codex_polish.rs',
+      ].includes(file)) {
+    fail(`${file}: Codex App Server process lifecycle is owned by codex_app_server.rs`);
   }
 }
 

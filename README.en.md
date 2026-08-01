@@ -125,6 +125,7 @@ flowchart LR
 - Every MCP write requires the `last_modified` value from a preceding read. Concurrent changes are rejected instead of overwritten, and successful updates synchronize into the open editor.
 - Before `Polish with Codex` runs, you can select from the models available in local Codex and provide editing direction. Codex returns a proposal only; the app presents the current and proposed scripts side by side and writes the result only after approval.
 - Polishing reuses the local Codex login and model configuration. The script and editing direction are sent to the selected model service. Normal editing and MCP remain available when Codex is not installed or signed in.
+- The new-page menu offers a blank page or `Create with Codex`; a candidate is appended only after confirmation. `Redraw image with Codex` is available at the top of page styling and from the thumbnail and main-canvas context menus. For redraw, the app supplies an isolated image copy to Codex's `imagegen` tool, presents the result as a candidate, and replaces the current page only after confirmation while keeping the original in the trash.
 
 PDF permissions communicate the publisher's intended restrictions, but they are not DRM. Screenshots and specialized tools may bypass them. The project never stores the PDF open password.
 
@@ -183,7 +184,7 @@ Rules:
 2. Select `Install to Codex` and confirm. The app creates or updates only the `storybook` entry in the Codex user configuration (`~/.codex/config.toml`), keeping your other settings intact. You can still copy the configuration block for another client.
 3. Restart Codex or open a new task, then keep Storybook Co-Editor running while you use the `storybook` MCP server.
 
-The MCP server listens only on `127.0.0.1:14320` and uses a locally generated token. The token grants read and edit access to the active project; do not commit it or share it with untrusted clients. Rotating the token requires installing the Codex entry again. Image pixels are not exposed as MCP resources in this first version. The server exposes project structure, the script, and a small set of layout parameters.
+The MCP server listens only on `127.0.0.1:14320` and uses a locally generated token. The token grants read and edit access to the active project; do not commit it or share it with untrusted clients. Rotating the token requires installing the Codex entry again. Image pixels are not exposed as MCP resources in this first version. The server exposes project structure, the script, and a small set of layout parameters. Codex creation and redraw are separate desktop-initiated requests: creation sends the requested visual direction, while redraw additionally sends an isolated copy of the current image.
 
 ## Local Development
 

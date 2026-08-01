@@ -17,7 +17,10 @@ import PrintScreen from './PrintScreen';
 import { EditorHeader } from './components/EditorHeader';
 import { LeftSidebar } from './components/LeftSidebar';
 import { RightSidebar } from './components/RightSidebar';
+import { PageImageContextMenu, type PageImageMenuTarget } from './components/PageImageContextMenu';
 import { AiIntegrationDialog } from './components/ai/AiIntegrationDialog';
+import { CodexImageDialog, type CodexImageRequest } from './components/ai/CodexImageDialog';
+import { useCodexAvailability } from './components/ai/codexModels';
 import { getFontFamilyStack, waitForProjectFonts } from './utils/fonts';
 import { StoryTextOverlay } from './components/StoryTextOverlay';
 import {
@@ -53,6 +56,7 @@ const logger = createLogger('App');
 
 export default function EditorScreen() {
   const { t } = useTranslation();
+  const isCodexAvailable = useCodexAvailability();
   const { activeWorkspaceId, projectState, updateProjectState, appendSourceUrlMap, saveProject, saveProjectAs, closeProject, currentProjectPath, isDirty, undo, redo, canUndo, canRedo, isSaving, saveProgress } = useProject();
   const [images, setImages] = useState<string[]>([]);
   const [selectedIdx, setSelectedIdx] = useState<number | null>(null);
@@ -86,6 +90,8 @@ export default function EditorScreen() {
   const [isPublicationMetadataOpen, setIsPublicationMetadataOpen] = useState(false);
   const [isMissingMetadataPromptOpen, setIsMissingMetadataPromptOpen] = useState(false);
   const [isAiIntegrationOpen, setIsAiIntegrationOpen] = useState(false);
+  const [codexImageRequest, setCodexImageRequest] = useState<CodexImageRequest | null>(null);
+  const [canvasContextMenu, setCanvasContextMenu] = useState<PageImageMenuTarget | null>(null);
   const pendingPdfExportRef = useRef<(() => void) | null>(null);
 
 
@@ -644,6 +650,37 @@ export default function EditorScreen() {
     });
   };
 
+  const openCodexCreate = useCallback(() => {
+    if (!isCodexAvailable || !projectState) return;
+    setCodexImageRequest({
+      kind: 'create',
+      width: canvasW,
+      height: canvasH,
+      expectedLastModified: projectState.last_modified,
+    });
+  }, [canvasH, canvasW, isCodexAvailable, projectState]);
+
+  const openCodexRedraw = useCallback((id: string, index: number) => {
+    if (!isCodexAvailable || !projectState || id.startsWith('blank://')) return;
+    const sourceImage = id.split('/').pop();
+    if (!sourceImage) return;
+    setSelectedIdx(index);
+    setCodexImageRequest({
+      kind: 'redraw',
+      pageIndex: index,
+      sourceImage,
+      sourceImageUrl: id,
+      expectedLastModified: projectState.last_modified,
+    });
+  }, [isCodexAvailable, projectState]);
+
+  useEffect(() => {
+    if (!canvasContextMenu) return;
+    const dismiss = () => setCanvasContextMenu(null);
+    document.addEventListener('click', dismiss);
+    return () => document.removeEventListener('click', dismiss);
+  }, [canvasContextMenu]);
+
 
   return (
     <div className="flex flex-col h-screen bg-background text-foreground overflow-hidden transition-colors duration-300">
@@ -681,6 +718,7 @@ export default function EditorScreen() {
             images={images}
             selectedIdx={selectedIdx}
             setSelectedIdx={setSelectedIdx}
+            isCodexAvailable={isCodexAvailable}
             isDark={isDark}
             setIsDark={setIsDark}
             handleDelete={handleDelete}
@@ -691,6 +729,8 @@ export default function EditorScreen() {
             handleOpenTrash={handleOpenTrash}
             handleDragEnd={handleDragEnd}
             handleInsertBlank={handleInsertBlankPage}
+            handleInsertCodex={openCodexCreate}
+            handleRedraw={openCodexRedraw}
             hasTitle={hasStoryTitle(projectState?.global_script || '')}
             imageAdjustments={projectState?.image_adjustments}
             textOverlays={textOverlays}
@@ -724,7 +764,21 @@ export default function EditorScreen() {
                         backgroundColor: '#ffffff'
                       };
                       return (
-                        <div className="absolute inset-0 flex items-center justify-center transition-colors" style={isTransparent ? transparentBgStyle : { backgroundColor: imageLayer.backgroundColor }}>
+                        <div
+                          className="absolute inset-0 flex items-center justify-center transition-colors"
+                          style={isTransparent ? transparentBgStyle : { backgroundColor: imageLayer.backgroundColor }}
+                          onContextMenu={event => {
+                            event.preventDefault();
+                            const source = selectedIdx === null ? null : images[selectedIdx];
+                            if (!source || selectedIdx === null) return;
+                            setCanvasContextMenu({
+                              x: event.clientX,
+                              y: event.clientY,
+                              id: source,
+                              index: selectedIdx,
+                            });
+                          }}
+                        >
                           <div className="relative w-full h-full" style={{ transform: `translate(${imageLayer.offsetX}%, ${imageLayer.offsetY}%) scale(${imageLayer.scale})` }}>
                             <ProImage 
                               src={imageLayer.source}
@@ -754,6 +808,19 @@ export default function EditorScreen() {
             )}
           </main>
 
+          {canvasContextMenu && (
+            <PageImageContextMenu
+              target={canvasContextMenu}
+              pageCount={images.length}
+              isCodexAvailable={isCodexAvailable}
+              onDismiss={() => setCanvasContextMenu(null)}
+              onRedraw={openCodexRedraw}
+              onCopy={handleCopyToClipboard}
+              onExport={handleExportImage}
+              onDelete={handleDelete}
+            />
+          )}
+
           <RightSidebar
             isRightOpen={isRightOpen}
             setIsRightOpen={setIsRightOpen}
@@ -766,6 +833,12 @@ export default function EditorScreen() {
             canvasH={canvasH}
             selectedIdx={selectedIdx}
             setSelectedIdx={setSelectedIdx}
+            selectedImage={selectedIdx === null ? null : images[selectedIdx] || null}
+            isCodexAvailable={isCodexAvailable}
+            onRedrawImage={() => {
+              if (selectedIdx === null || !images[selectedIdx]) return;
+              openCodexRedraw(images[selectedIdx], selectedIdx);
+            }}
             systemFonts={systemFonts}
             extractedColors={extractedColors}
             xyBounds={xyBounds}
@@ -779,6 +852,12 @@ export default function EditorScreen() {
       <AiIntegrationDialog
         open={isAiIntegrationOpen}
         onClose={() => setIsAiIntegrationOpen(false)}
+      />
+
+      <CodexImageDialog
+        request={codexImageRequest}
+        onClose={() => setCodexImageRequest(null)}
+        onCreated={pageIndex => setSelectedIdx(pageIndex)}
       />
 
       {/* Bottom Status Bar */}

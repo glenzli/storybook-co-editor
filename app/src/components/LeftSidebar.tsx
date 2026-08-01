@@ -1,9 +1,10 @@
 import { useState, useRef, useEffect } from 'react';
 import { DndContext, closestCenter, PointerSensor, KeyboardSensor, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy, sortableKeyboardCoordinates } from '@dnd-kit/sortable';
-import { LayoutTemplate, Archive, Sun, Moon, ChevronLeft, ChevronRight, FilePlus, ArrowUpToLine, ArrowDownToLine, Trash2, Download, Copy } from 'lucide-react';
+import { LayoutTemplate, Archive, Sun, Moon, ChevronLeft, ChevronRight, FilePlus } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { SortableImageItem, type TextOverlayInfo } from './SortableImageItem';
+import { PageImageContextMenu, type PageImageMenuTarget } from './PageImageContextMenu';
 import type { ImageAdjustments } from '../project/model';
 
 interface LeftSidebarProps {
@@ -12,6 +13,7 @@ interface LeftSidebarProps {
   images: string[];
   selectedIdx: number | null;
   setSelectedIdx: (idx: number | null) => void;
+  isCodexAvailable: boolean;
   isDark: boolean;
   setIsDark: (dark: boolean) => void;
   handleDelete: (id: string) => void;
@@ -22,6 +24,8 @@ interface LeftSidebarProps {
   handleOpenTrash: () => void;
   handleDragEnd: (event: DragEndEvent) => void;
   handleInsertBlank: () => void;
+  handleInsertCodex: () => void;
+  handleRedraw: (id: string, idx: number) => void;
   hasTitle?: boolean;
   imageAdjustments?: Record<string, ImageAdjustments>;
   textOverlays?: Record<number, TextOverlayInfo[]>;
@@ -34,6 +38,7 @@ export function LeftSidebar({
   images,
   selectedIdx,
   setSelectedIdx,
+  isCodexAvailable,
   isDark,
   setIsDark,
   handleDelete,
@@ -44,6 +49,8 @@ export function LeftSidebar({
   handleOpenTrash,
   handleDragEnd,
   handleInsertBlank,
+  handleInsertCodex,
+  handleRedraw,
   hasTitle,
   imageAdjustments,
   textOverlays,
@@ -58,14 +65,18 @@ export function LeftSidebar({
   const [sidebarWidth, setSidebarWidth] = useState(() => parseInt(localStorage.getItem('leftSidebarWidth') || '256', 10));
   const [isDraggingState, setIsDraggingState] = useState(false);
   const isDragging = useRef(false);
-  const [contextMenu, setContextMenu] = useState<{ x: number, y: number, id: string, idx: number } | null>(null);
+  const [contextMenu, setContextMenu] = useState<PageImageMenuTarget | null>(null);
+  const [isNewPageMenuOpen, setIsNewPageMenuOpen] = useState(false);
 
   useEffect(() => {
     localStorage.setItem('leftSidebarWidth', String(sidebarWidth));
   }, [sidebarWidth]);
 
   useEffect(() => {
-    const handleClickOutside = () => setContextMenu(null);
+    const handleClickOutside = () => {
+      setContextMenu(null);
+      setIsNewPageMenuOpen(false);
+    };
     document.addEventListener('click', handleClickOutside);
     return () => document.removeEventListener('click', handleClickOutside);
   }, []);
@@ -102,7 +113,8 @@ export function LeftSidebar({
 
   const onContextMenu = (e: React.MouseEvent, id: string, idx: number) => {
     e.preventDefault();
-    setContextMenu({ x: e.clientX, y: e.clientY, id, idx });
+    setContextMenu({ x: e.clientX, y: e.clientY, id, index: idx });
+    setIsNewPageMenuOpen(false);
   };
 
   return (
@@ -117,9 +129,46 @@ export function LeftSidebar({
             <h2 className="font-bold whitespace-nowrap">{t('sidebar.pages')}</h2>
           </div>
           <div className="flex gap-1">
-            <button onClick={handleInsertBlank} title={t('sidebar.insertBlank')} className="p-2 rounded-full hover:bg-muted text-muted-foreground transition-colors">
-              <FilePlus size={16} />
-            </button>
+            <div className="relative">
+              <button
+                type="button"
+                onClick={event => {
+                  event.stopPropagation();
+                  setIsNewPageMenuOpen(open => !open);
+                  setContextMenu(null);
+                }}
+                title={t('sidebar.newPage')}
+                className="p-2 rounded-full hover:bg-muted text-muted-foreground transition-colors"
+              >
+                <FilePlus size={16} />
+              </button>
+              {isNewPageMenuOpen && (
+                <div className="absolute right-0 top-full z-50 mt-1 min-w-[164px] rounded-md border border-border bg-popover py-1 text-sm text-popover-foreground shadow-lg">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      handleInsertBlank();
+                      setIsNewPageMenuOpen(false);
+                    }}
+                    className="w-full px-3 py-1.5 text-left hover:bg-muted transition-colors"
+                  >
+                    {t('sidebar.createBlank')}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      handleInsertCodex();
+                      setIsNewPageMenuOpen(false);
+                    }}
+                    disabled={!isCodexAvailable}
+                    title={!isCodexAvailable ? t('ai.codexUnavailable') : undefined}
+                    className="w-full px-3 py-1.5 text-left text-primary hover:bg-muted transition-colors disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {t('sidebar.createWithCodex')}
+                  </button>
+                </div>
+              )}
+            </div>
             <button onClick={handleOpenTrash} title={t('sidebar.trash')} className="p-2 rounded-full hover:bg-muted text-muted-foreground transition-colors">
               <Archive size={16} />
             </button>
@@ -169,64 +218,18 @@ export function LeftSidebar({
 
       {/* Context Menu */}
       {contextMenu && (
-        <div 
-          className="fixed z-[100] bg-popover border border-border shadow-lg rounded-md py-1 min-w-[140px] text-sm text-popover-foreground"
-          style={{ left: contextMenu.x, top: contextMenu.y }}
-        >
-          <button 
-            className="w-full px-3 py-1.5 text-left flex items-center gap-2 hover:bg-muted transition-colors disabled:opacity-50"
-            disabled={contextMenu.idx === 0}
-            onClick={() => {
-              handleMoveToTop?.(contextMenu.idx);
-              setContextMenu(null);
-            }}
-          >
-            <ArrowUpToLine size={14} />
-            {t('sidebar.moveTop')}
-          </button>
-          <button 
-            className="w-full px-3 py-1.5 text-left flex items-center gap-2 hover:bg-muted transition-colors disabled:opacity-50"
-            disabled={contextMenu.idx === images.length - 1}
-            onClick={() => {
-              handleMoveToBottom?.(contextMenu.idx);
-              setContextMenu(null);
-            }}
-          >
-            <ArrowDownToLine size={14} />
-            {t('sidebar.moveBottom')}
-          </button>
-          <button 
-            className="w-full px-3 py-1.5 text-left flex items-center gap-2 hover:bg-muted transition-colors"
-            onClick={() => {
-              handleCopyToClipboard?.(contextMenu.id, contextMenu.idx);
-              setContextMenu(null);
-            }}
-          >
-            <Copy size={14} />
-            {t('sidebar.copyImage')}
-          </button>
-          <div className="h-px bg-border my-1" />
-          <button 
-            className="w-full px-3 py-1.5 text-left flex items-center gap-2 hover:bg-muted transition-colors"
-            onClick={() => {
-              handleExportImage?.(contextMenu.id, contextMenu.idx);
-              setContextMenu(null);
-            }}
-          >
-            <Download size={14} />
-            {t('sidebar.exportOriginal')}
-          </button>
-          <button 
-            className="w-full px-3 py-1.5 text-left flex items-center gap-2 hover:bg-red-500/10 text-red-500 transition-colors"
-            onClick={() => {
-              handleDelete(contextMenu.id);
-              setContextMenu(null);
-            }}
-          >
-            <Trash2 size={14} />
-            {t('common.delete')}
-          </button>
-        </div>
+        <PageImageContextMenu
+          target={contextMenu}
+          pageCount={images.length}
+          isCodexAvailable={isCodexAvailable}
+          onDismiss={() => setContextMenu(null)}
+          onMoveToTop={handleMoveToTop}
+          onMoveToBottom={handleMoveToBottom}
+          onRedraw={handleRedraw}
+          onCopy={(id, index) => handleCopyToClipboard?.(id, index)}
+          onExport={(id, index) => handleExportImage?.(id, index)}
+          onDelete={handleDelete}
+        />
       )}
 
       {/* Left Sidebar Toggle Button */}

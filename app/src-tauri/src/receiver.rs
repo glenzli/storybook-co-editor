@@ -117,6 +117,10 @@ pub async fn start_server(app_handle: AppHandle) {
         .route("/api/list-trash", axum::routing::get(list_trash))
         .route("/api/log", post(receive_log))
         .route("/images/{filename}", axum::routing::get(serve_image))
+        .route(
+            "/generated-images/{filename}",
+            axum::routing::get(serve_generated_image),
+        )
         .layer(cors)
         .layer(DefaultBodyLimit::max(50 * 1024 * 1024))
         .with_state(state);
@@ -183,6 +187,37 @@ async fn serve_image(
     };
 
     (StatusCode::OK, [(header::CONTENT_TYPE, mime_type)], bytes).into_response()
+}
+
+async fn serve_generated_image(
+    State(state): State<Arc<AppState>>,
+    AxumPath(filename): AxumPath<String>,
+) -> impl IntoResponse {
+    let is_generated_image = filename
+        .strip_prefix("codex-")
+        .and_then(|value| value.strip_suffix(".png"))
+        .is_some_and(|hash| {
+            hash.len() == 64 && hash.chars().all(|character| character.is_ascii_hexdigit())
+        });
+    if !is_generated_image {
+        return (StatusCode::NOT_FOUND, "Not found".to_string()).into_response();
+    }
+
+    let ws_dir = match get_or_create_active_workspace(&state.app_handle) {
+        Ok(dir) => dir,
+        Err(_) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "No workspace".to_string(),
+            )
+                .into_response()
+        }
+    };
+    let path = ws_dir.join("codex-candidates").join(filename);
+    match tokio::fs::read(path).await {
+        Ok(bytes) => (StatusCode::OK, [(header::CONTENT_TYPE, "image/png")], bytes).into_response(),
+        Err(_) => (StatusCode::NOT_FOUND, "Not found".to_string()).into_response(),
+    }
 }
 
 async fn start_batch(

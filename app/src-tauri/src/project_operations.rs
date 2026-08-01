@@ -172,6 +172,140 @@ pub fn set_page_text_position(
     })
 }
 
+fn promote_codex_image_candidate(
+    workspace_dir: &std::path::Path,
+    generated_image: &str,
+) -> Result<bool, String> {
+    let candidate = workspace_dir.join("codex-candidates").join(generated_image);
+    let destination = workspace_dir.join(generated_image);
+    if destination.exists() {
+        if candidate.exists() {
+            std::fs::remove_file(&candidate).map_err(|_| "CODEX_IMAGE_WRITE_FAILED".to_string())?;
+        }
+        return Ok(false);
+    }
+    std::fs::rename(&candidate, &destination)
+        .map_err(|_| "CODEX_IMAGE_VARIANT_INVALID".to_string())?;
+    Ok(true)
+}
+
+pub fn activate_codex_image_variant(
+    app: &AppHandle,
+    manager: &ProjectManager,
+    expected_last_modified: &str,
+    page_index: usize,
+    source_image: String,
+    generated_image: String,
+    source: &str,
+) -> Result<ActiveProjectSnapshot, String> {
+    let _guard = manager
+        .operation_lock
+        .lock()
+        .map_err(|_| "PROJECT_LOCK_POISONED".to_string())?;
+    let mut snapshot = load_active_unlocked(app, manager)?;
+    if snapshot.state.last_modified != expected_last_modified {
+        return Err(format!(
+            "PROJECT_CONFLICT: expected {}, current {}",
+            expected_last_modified, snapshot.state.last_modified
+        ));
+    }
+    let current_image = snapshot
+        .state
+        .visible_images
+        .get(page_index)
+        .ok_or_else(|| format!("PAGE_OUT_OF_RANGE: {}", page_index))?;
+    if current_image != &source_image {
+        return Err("CODEX_IMAGE_SOURCE_CONFLICT".to_string());
+    }
+
+    let workspace_dir = project_storage::get_workspace_dir(app, &snapshot.workspace_id)?;
+    let destination = workspace_dir.join(&generated_image);
+    let moved_candidate = promote_codex_image_candidate(&workspace_dir, &generated_image)?;
+
+    snapshot.state.visible_images[page_index] = generated_image.clone();
+    snapshot
+        .state
+        .image_adjustments
+        .remove(&page_index.to_string());
+    if !snapshot.state.visible_images.contains(&source_image)
+        && !snapshot.state.trashed_images.contains(&source_image)
+    {
+        snapshot.state.trashed_images.push(source_image);
+    }
+    snapshot.state.last_modified = Utc::now().to_rfc3339_opts(SecondsFormat::Millis, true);
+    if let Err(error) = project_storage::save_state(&workspace_dir, &snapshot.state) {
+        if moved_candidate {
+            let _ = std::fs::rename(
+                &destination,
+                workspace_dir
+                    .join("codex-candidates")
+                    .join(&generated_image),
+            );
+        }
+        return Err(error);
+    }
+
+    app.emit(
+        EXTERNAL_PROJECT_UPDATE_EVENT,
+        ExternalProjectUpdate {
+            workspace_id: snapshot.workspace_id.clone(),
+            state: snapshot.state.clone(),
+            source: source.to_string(),
+        },
+    )
+    .map_err(|error| error.to_string())?;
+    Ok(snapshot)
+}
+
+pub fn append_codex_image(
+    app: &AppHandle,
+    manager: &ProjectManager,
+    expected_last_modified: &str,
+    generated_image: String,
+    source: &str,
+) -> Result<usize, String> {
+    let _guard = manager
+        .operation_lock
+        .lock()
+        .map_err(|_| "PROJECT_LOCK_POISONED".to_string())?;
+    let mut snapshot = load_active_unlocked(app, manager)?;
+    if snapshot.state.last_modified != expected_last_modified {
+        return Err(format!(
+            "PROJECT_CONFLICT: expected {}, current {}",
+            expected_last_modified, snapshot.state.last_modified
+        ));
+    }
+
+    let workspace_dir = project_storage::get_workspace_dir(app, &snapshot.workspace_id)?;
+    let destination = workspace_dir.join(&generated_image);
+    let moved_candidate = promote_codex_image_candidate(&workspace_dir, &generated_image)?;
+    let page_index = snapshot.state.visible_images.len();
+    snapshot.state.visible_images.push(generated_image);
+    snapshot.state.last_modified = Utc::now().to_rfc3339_opts(SecondsFormat::Millis, true);
+    if let Err(error) = project_storage::save_state(&workspace_dir, &snapshot.state) {
+        if moved_candidate {
+            let _ = std::fs::rename(
+                &destination,
+                workspace_dir
+                    .join("codex-candidates")
+                    .join(snapshot.state.visible_images[page_index].as_str()),
+            );
+        }
+        return Err(error);
+    }
+
+    app.emit(
+        EXTERNAL_PROJECT_UPDATE_EVENT,
+        ExternalProjectUpdate {
+            workspace_id: snapshot.workspace_id,
+            state: snapshot.state,
+            source: source.to_string(),
+        },
+    )
+    .map_err(|error| error.to_string())?;
+    Ok(page_index)
+}
+
 pub fn validate_story_script(script: &str) -> Result<(), String> {
     if script.trim().is_empty() {
         return Err("EMPTY_STORY_SCRIPT".to_string());

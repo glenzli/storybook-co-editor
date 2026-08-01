@@ -1,4 +1,4 @@
-import { Bot, FileBox, Undo2, Redo2, Save, FolderOpen, XCircle, Loader2, FileDown, BookMarked } from 'lucide-react';
+import { Bot, FileBox, Undo2, Redo2, Save, FolderOpen, XCircle, Loader2, Download, BookMarked } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import type { ProjectState } from '../project/model';
 import { LanguageSwitcher } from './LanguageSwitcher';
@@ -112,7 +112,7 @@ export function EditorHeader({
               ? t('header.exportingElectronicPdf', electronicPdfProgress)
               : t('header.exportElectronicPdf')}
           >
-              {electronicPdfProgress ? <Loader2 size={14} className="animate-spin" /> : <FileDown size={14} />}
+              {electronicPdfProgress ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />}
           </button>
           <div className="w-px h-4 bg-border mx-1"></div>
           <button onClick={undo} disabled={!canUndo} className={`p-1.5 rounded-md transition-colors ${canUndo ? 'hover:bg-muted text-foreground' : 'text-muted-foreground/30 cursor-not-allowed'}`} title={t('header.undo')}>
