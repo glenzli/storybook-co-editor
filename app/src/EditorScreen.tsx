@@ -652,13 +652,25 @@ export default function EditorScreen() {
 
   const openCodexCreate = useCallback(() => {
     if (!isCodexAvailable || !projectState) return;
+    const referencePages = projectState.visible_images
+      .map((image, pageIndex) => ({
+        pageIndex,
+        image,
+        sourceImageUrl: images[pageIndex],
+        script: parsedStory.pageText.get(pageIndex) || '',
+      }))
+      .filter(reference => !reference.image.startsWith('blank://') && Boolean(reference.sourceImageUrl));
+    const selectedReference = referencePages.find(reference => reference.pageIndex === selectedIdx)
+      || referencePages[referencePages.length - 1];
     setCodexImageRequest({
       kind: 'create',
       width: canvasW,
       height: canvasH,
       expectedLastModified: projectState.last_modified,
+      referencePages,
+      initialReferencePageIndexes: selectedReference ? [selectedReference.pageIndex] : [],
     });
-  }, [canvasH, canvasW, isCodexAvailable, projectState]);
+  }, [canvasH, canvasW, images, isCodexAvailable, parsedStory.pageText, projectState, selectedIdx]);
 
   const openCodexRedraw = useCallback((id: string, index: number) => {
     if (!isCodexAvailable || !projectState || id.startsWith('blank://')) return;

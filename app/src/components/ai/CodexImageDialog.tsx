@@ -1,6 +1,7 @@
 import { invoke } from '@tauri-apps/api/core';
+import { listen } from '@tauri-apps/api/event';
 import { Check, Loader2, Sparkles, X } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { localizeAppError } from '../../i18n';
 import {
@@ -13,6 +14,19 @@ interface CodexImageResult {
   filename: string;
   width: number;
   height: number;
+}
+
+interface CodexImageReference {
+  pageIndex: number;
+  image: string;
+  sourceImageUrl: string;
+  script: string;
+}
+
+interface CodexImageProgress {
+  requestId: string;
+  phase: string;
+  detail?: string | null;
 }
 
 export type CodexImageRequest =
@@ -28,6 +42,8 @@ export type CodexImageRequest =
       width: number;
       height: number;
       expectedLastModified: string;
+      referencePages: CodexImageReference[];
+      initialReferencePageIndexes: number[];
     };
 
 interface CodexImageDialogProps {
@@ -37,26 +53,47 @@ interface CodexImageDialogProps {
 }
 
 const MODEL_STORAGE_KEY = 'storybook-codex-image-model';
+const EFFORT_STORAGE_KEY = 'storybook-codex-image-effort';
+const IMAGE_EFFORTS = ['low', 'medium', 'high'] as const;
+type ImageEffort = typeof IMAGE_EFFORTS[number];
+
+function preferredImageEffort(): ImageEffort {
+  const storedEffort = localStorage.getItem(EFFORT_STORAGE_KEY);
+  return IMAGE_EFFORTS.find(effort => effort === storedEffort) || 'low';
+}
 
 export function CodexImageDialog({ request, onClose, onCreated }: CodexImageDialogProps) {
   const { t, i18n } = useTranslation();
   const [models, setModels] = useState<CodexModelOption[]>([]);
   const [selectedModel, setSelectedModel] = useState('');
+  const [selectedEffort, setSelectedEffort] = useState<ImageEffort>('low');
   const [instructions, setInstructions] = useState('');
   const [isLoadingModels, setIsLoadingModels] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   const [isApplying, setIsApplying] = useState(false);
   const [result, setResult] = useState<CodexImageResult | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [referencePageIndexes, setReferencePageIndexes] = useState<number[]>([]);
+  const [generationPhase, setGenerationPhase] = useState<string | null>(null);
+  const [generationDetail, setGenerationDetail] = useState<string | null>(null);
+  const [generationStartedAt, setGenerationStartedAt] = useState<number | null>(null);
+  const [elapsedSeconds, setElapsedSeconds] = useState(0);
+  const generationRequestId = useRef<string | null>(null);
 
   useEffect(() => {
     if (!request) return;
     let cancelled = false;
     setModels([]);
     setSelectedModel('');
+    setSelectedEffort(preferredImageEffort());
     setInstructions('');
     setResult(null);
     setError(null);
+    setReferencePageIndexes(request.kind === 'create' ? request.initialReferencePageIndexes : []);
+    setGenerationPhase(null);
+    setGenerationDetail(null);
+    setGenerationStartedAt(null);
+    setElapsedSeconds(0);
     setIsLoadingModels(true);
     listCodexModels()
       .then(availableModels => {
@@ -76,6 +113,31 @@ export function CodexImageDialog({ request, onClose, onCreated }: CodexImageDial
       cancelled = true;
     };
   }, [request, t]);
+
+  useEffect(() => {
+    let unlisten: (() => void) | undefined;
+    void listen<CodexImageProgress>('codex-image-progress', event => {
+      if (event.payload.requestId === generationRequestId.current) {
+        setGenerationPhase(event.payload.phase);
+        setGenerationDetail(event.payload.detail || null);
+      }
+    }).then(stopListening => {
+      unlisten = stopListening;
+    });
+    return () => {
+      unlisten?.();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!isGenerating || generationStartedAt === null) return;
+    const updateElapsed = () => {
+      setElapsedSeconds(Math.max(0, Math.floor((Date.now() - generationStartedAt) / 1000)));
+    };
+    updateElapsed();
+    const timer = window.setInterval(updateElapsed, 1000);
+    return () => window.clearInterval(timer);
+  }, [generationStartedAt, isGenerating]);
 
   const discardResult = async () => {
     if (!result) return;
@@ -102,9 +164,16 @@ export function CodexImageDialog({ request, onClose, onCreated }: CodexImageDial
 
   const generate = async () => {
     if (!selectedModel || !instructions.trim()) return;
+    const requestId = crypto.randomUUID();
     setIsGenerating(true);
     setError(null);
+    setGenerationPhase('preparing-request');
+    setGenerationDetail(null);
+    setGenerationStartedAt(Date.now());
+    setElapsedSeconds(0);
+    generationRequestId.current = requestId;
     localStorage.setItem(MODEL_STORAGE_KEY, selectedModel);
+    localStorage.setItem(EFFORT_STORAGE_KEY, selectedEffort);
     try {
       const language = i18n.resolvedLanguage || i18n.language;
       const proposal = redrawRequest
@@ -112,14 +181,21 @@ export function CodexImageDialog({ request, onClose, onCreated }: CodexImageDial
             sourceImage: redrawRequest.sourceImage,
             language,
             model: selectedModel,
+            effort: selectedEffort,
             instructions: instructions.trim(),
+            requestId,
           })
         : await invoke<CodexImageResult>('create_image_with_codex', {
             language,
             model: selectedModel,
+            effort: selectedEffort,
             instructions: instructions.trim(),
             width: createRequest!.width,
             height: createRequest!.height,
+            requestId,
+            references: createRequest!.referencePages
+              .filter(reference => referencePageIndexes.includes(reference.pageIndex))
+              .map(({ pageIndex, image, script }) => ({ pageIndex, image, script })),
           });
       setResult(proposal);
     } catch (reason) {
@@ -127,7 +203,9 @@ export function CodexImageDialog({ request, onClose, onCreated }: CodexImageDial
         error: localizeAppError(reason),
       }));
     } finally {
+      generationRequestId.current = null;
       setIsGenerating(false);
+      setGenerationStartedAt(null);
     }
   };
 
@@ -165,6 +243,19 @@ export function CodexImageDialog({ request, onClose, onCreated }: CodexImageDial
   const setupDescription = t(isRedraw ? 'ai.imageSetupDescription' : 'ai.imageCreateSetupDescription');
   const reviewTitle = t(isRedraw ? 'ai.imageReviewTitle' : 'ai.imageCreateReviewTitle');
   const reviewDescription = t(isRedraw ? 'ai.imageReviewDescription' : 'ai.imageCreateReviewDescription');
+  const selectedReferenceCount = createRequest
+    ? createRequest.referencePages.filter(reference => referencePageIndexes.includes(reference.pageIndex)).length
+    : 0;
+
+  const toggleReferencePage = (pageIndex: number) => {
+    setReferencePageIndexes(current => {
+      if (current.includes(pageIndex)) {
+        return current.filter(index => index !== pageIndex);
+      }
+      if (current.length >= 4) return current;
+      return [...current, pageIndex];
+    });
+  };
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/55 p-6">
@@ -224,6 +315,70 @@ export function CodexImageDialog({ request, onClose, onCreated }: CodexImageDial
               )}
             </div>
 
+            <fieldset className="flex flex-col gap-1.5">
+              <legend className="text-xs font-medium">{t('ai.imageEffort')}</legend>
+              <div
+                role="radiogroup"
+                aria-label={t('ai.imageEffort')}
+                className="grid h-9 grid-cols-3 overflow-hidden rounded border border-border"
+              >
+                {IMAGE_EFFORTS.map(effort => {
+                  const isSelected = selectedEffort === effort;
+                  return (
+                    <button
+                      key={effort}
+                      type="button"
+                      role="radio"
+                      aria-checked={isSelected}
+                      onClick={() => setSelectedEffort(effort)}
+                      disabled={isGenerating}
+                      className={`border-r border-border text-xs transition-colors last:border-r-0 ${isSelected ? 'bg-primary text-primary-foreground' : 'bg-background hover:bg-muted'} disabled:opacity-50`}
+                    >
+                      {t(`ai.imageEffortOptions.${effort}`)}
+                    </button>
+                  );
+                })}
+              </div>
+            </fieldset>
+
+            {createRequest && createRequest.referencePages.length > 0 && (
+              <fieldset className="flex flex-col gap-2 border-t border-border pt-3">
+                <legend className="text-xs font-medium">{t('ai.imageReferencePages')}</legend>
+                <p className="text-xs text-muted-foreground">{t('ai.imageReferencePagesHint')}</p>
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                  {createRequest.referencePages.map(reference => {
+                    const selected = referencePageIndexes.includes(reference.pageIndex);
+                    const unavailable = !selected && selectedReferenceCount >= 4;
+                    return (
+                      <label
+                        key={reference.image}
+                        className={`flex min-h-20 cursor-pointer gap-2 rounded border p-2 transition-colors ${selected ? 'border-primary bg-primary/5' : 'border-border hover:bg-muted/50'} ${unavailable ? 'cursor-not-allowed opacity-50' : ''}`}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={selected}
+                          disabled={isGenerating || unavailable}
+                          onChange={() => toggleReferencePage(reference.pageIndex)}
+                          className="mt-1 h-3.5 w-3.5 accent-primary"
+                        />
+                        <img
+                          src={reference.sourceImageUrl}
+                          alt=""
+                          className="h-14 w-14 flex-shrink-0 rounded border border-border object-cover"
+                        />
+                        <span className="min-w-0 text-xs">
+                          <span className="block font-medium">{t('ai.imageReferencePage', { page: reference.pageIndex + 1 })}</span>
+                          <span className="mt-0.5 block max-h-10 overflow-hidden text-muted-foreground">
+                            {reference.script || t('ai.imageReferenceNoScript')}
+                          </span>
+                        </span>
+                      </label>
+                    );
+                  })}
+                </div>
+              </fieldset>
+            )}
+
             <div className="flex flex-col gap-1.5">
               <label htmlFor="codex-image-instructions" className="text-xs font-medium">
                 {t(isRedraw ? 'ai.imageInstructions' : 'ai.imageCreateInstructions')}
@@ -246,7 +401,23 @@ export function CodexImageDialog({ request, onClose, onCreated }: CodexImageDial
 
             {error && (
               <div className="rounded border border-red-500/30 bg-red-500/10 p-2 text-xs text-red-500">
-                {error}
+                <p>{error}</p>
+                {generationPhase && (
+                  <p className="mt-1 text-red-500/80">
+                    {t('ai.imageLastProgress', {
+                      phase: t(`ai.imageProgress.${generationPhase}`),
+                      seconds: elapsedSeconds,
+                    })}
+                  </p>
+                )}
+              </div>
+            )}
+            {isGenerating && generationPhase && (
+              <div role="status" className="flex items-center gap-2 rounded border border-primary/25 bg-primary/5 p-2 text-xs text-foreground">
+                <Loader2 size={14} className="animate-spin text-primary" />
+                <span>{t(`ai.imageProgress.${generationPhase}`)}</span>
+                {generationDetail && <span className="min-w-0 truncate text-muted-foreground">{generationDetail}</span>}
+                <span className="ml-auto text-muted-foreground">{t('ai.imageElapsed', { seconds: elapsedSeconds })}</span>
               </div>
             )}
           </div>
