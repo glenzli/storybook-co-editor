@@ -28,6 +28,18 @@ pub struct CodexImageEditResult {
     pub filename: String,
     pub width: u32,
     pub height: u32,
+    pub usage: Option<CodexTokenUsage>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CodexTokenUsage {
+    pub input_tokens: u64,
+    pub cached_input_tokens: u64,
+    pub cache_write_input_tokens: u64,
+    pub output_tokens: u64,
+    pub reasoning_output_tokens: u64,
+    pub total_tokens: u64,
 }
 
 #[derive(Debug, Deserialize)]
@@ -229,6 +241,31 @@ fn request_failed_error(message: &Value) -> String {
         .unwrap_or_else(|| "CODEX_IMAGE_REQUEST_FAILED".to_string())
 }
 
+fn token_usage_from_value(value: &Value) -> Option<CodexTokenUsage> {
+    Some(CodexTokenUsage {
+        input_tokens: value.get("inputTokens")?.as_u64()?,
+        cached_input_tokens: value.get("cachedInputTokens")?.as_u64()?,
+        cache_write_input_tokens: value
+            .get("cacheWriteInputTokens")
+            .and_then(Value::as_u64)
+            .unwrap_or(0),
+        output_tokens: value.get("outputTokens")?.as_u64()?,
+        reasoning_output_tokens: value.get("reasoningOutputTokens")?.as_u64()?,
+        total_tokens: value.get("totalTokens")?.as_u64()?,
+    })
+}
+
+fn token_usage_from_message(message: &Value) -> Option<CodexTokenUsage> {
+    message
+        .pointer("/params/tokenUsage/total")
+        .and_then(token_usage_from_value)
+        .or_else(|| {
+            message
+                .pointer("/params/usage")
+                .and_then(token_usage_from_value)
+        })
+}
+
 fn persist_generated_image(
     workspace_dir: &Path,
     encoded_image: &str,
@@ -326,6 +363,7 @@ async fn run_image_generation(
         emit_progress(app, request_id, "waiting-for-codex");
 
         let mut output = None;
+        let mut usage = None;
         loop {
             let message = session.next_message().await?;
             if message.get("id").and_then(Value::as_i64) == Some(3) {
@@ -349,6 +387,7 @@ async fn run_image_generation(
                     .await?;
                 return Err("CODEX_IMAGE_PERMISSION_REQUIRED".to_string());
             }
+            usage = token_usage_from_message(&message).or(usage);
             if let Some(phase) = item_phase(&message) {
                 emit_progress(app, request_id, phase);
             }
@@ -390,6 +429,7 @@ async fn run_image_generation(
             filename,
             width,
             height,
+            usage,
         })
     }
     .await;
@@ -653,7 +693,7 @@ pub fn discard_codex_image_variant(app: AppHandle, generated_image: String) -> R
 mod tests {
     use super::{
         image_create_prompt, image_edit_prompt, is_generated_filename, normalize_image_effort,
-        output_from_message, valid_image_filename, CodexImageReference,
+        output_from_message, token_usage_from_message, valid_image_filename, CodexImageReference,
     };
     use serde_json::json;
 
@@ -730,5 +770,35 @@ mod tests {
         });
         let image_data = output_from_message(&message).unwrap();
         assert_eq!(image_data, "cG5nLWJ5dGVz");
+    }
+
+    #[test]
+    fn reads_total_token_usage_from_the_completed_thread() {
+        let message = json!({
+            "method": "thread/tokenUsage/updated",
+            "params": {
+                "tokenUsage": {
+                    "last": {
+                        "inputTokens": 80,
+                        "cachedInputTokens": 20,
+                        "outputTokens": 14,
+                        "reasoningOutputTokens": 10,
+                        "totalTokens": 94
+                    },
+                    "total": {
+                        "inputTokens": 120,
+                        "cachedInputTokens": 32,
+                        "cacheWriteInputTokens": 8,
+                        "outputTokens": 30,
+                        "reasoningOutputTokens": 22,
+                        "totalTokens": 150
+                    }
+                }
+            }
+        });
+        assert_eq!(
+            token_usage_from_message(&message).unwrap().total_tokens,
+            150
+        );
     }
 }

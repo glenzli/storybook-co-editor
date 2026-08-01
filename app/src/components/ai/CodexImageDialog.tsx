@@ -14,6 +14,16 @@ interface CodexImageResult {
   filename: string;
   width: number;
   height: number;
+  usage?: CodexTokenUsage | null;
+}
+
+interface CodexTokenUsage {
+  inputTokens: number;
+  cachedInputTokens: number;
+  cacheWriteInputTokens: number;
+  outputTokens: number;
+  reasoningOutputTokens: number;
+  totalTokens: number;
 }
 
 interface CodexImageReference {
@@ -161,6 +171,31 @@ export function CodexImageDialog({ request, onClose, onCreated }: CodexImageDial
   const isRedraw = redrawRequest !== null;
   const selectedModelInfo = models.find(option => option.model === selectedModel);
   const resultUrl = result ? `http://127.0.0.1:14320/generated-images/${result.filename}` : null;
+  const formatTokenCount = (value: number) => new Intl.NumberFormat(i18n.resolvedLanguage || i18n.language).format(value);
+  const tokenUsageSummary = result ? (
+    <section className="border-t border-border pt-3" aria-label={t('ai.imageTokenUsage')}>
+      <p className="text-xs font-medium">{t('ai.imageTokenUsage')}</p>
+      {result.usage ? (
+        <dl className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1 text-xs sm:grid-cols-3">
+          {[
+            ['total', result.usage.totalTokens],
+            ['input', result.usage.inputTokens],
+            ['cachedInput', result.usage.cachedInputTokens],
+            ['cacheWriteInput', result.usage.cacheWriteInputTokens],
+            ['output', result.usage.outputTokens],
+            ['reasoningOutput', result.usage.reasoningOutputTokens],
+          ].map(([key, value]) => (
+            <div key={key} className="flex items-baseline justify-between gap-2">
+              <dt className="text-muted-foreground">{t(`ai.imageTokenUsageFields.${key}`)}</dt>
+              <dd className="font-medium tabular-nums">{formatTokenCount(value as number)}</dd>
+            </div>
+          ))}
+        </dl>
+      ) : (
+        <p className="mt-1 text-xs text-muted-foreground">{t('ai.imageTokenUsageUnavailable')}</p>
+      )}
+    </section>
+  ) : null;
 
   const generate = async () => {
     if (!selectedModel || !instructions.trim()) return;
@@ -437,6 +472,7 @@ export function CodexImageDialog({ request, onClose, onCreated }: CodexImageDial
               <p className="text-xs text-muted-foreground">
                 {t('ai.imageDimensions', { width: result.width, height: result.height })}
               </p>
+              {tokenUsageSummary}
             </div>
           </div>
         ) : (
@@ -448,6 +484,7 @@ export function CodexImageDialog({ request, onClose, onCreated }: CodexImageDial
             <p className="text-xs text-muted-foreground">
               {t('ai.imageDimensions', { width: result.width, height: result.height })}
             </p>
+            {tokenUsageSummary}
           </div>
         )}
 
