@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  <img alt="Version" src="https://img.shields.io/badge/version-1.2.1-blue.svg?cacheSeconds=2592000" />
+  <img alt="Version" src="https://img.shields.io/badge/version-1.3.0-blue.svg?cacheSeconds=2592000" />
   <img alt="Tauri" src="https://img.shields.io/badge/Tauri-2-FFC131?logo=tauri&logoColor=white" />
   <img alt="React" src="https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=white" />
   <img alt="Rust" src="https://img.shields.io/badge/Rust-1.85+-000000?logo=rust&logoColor=white" />
@@ -20,7 +20,7 @@ Storybook Co-Editor is a local collaborative layout tool for AI-generated and we
 
 It is intended for storybooks created with ChatGPT, Gemini, Midjourney, Discord, or other browser-based tools, when the generated images need to become an editable, persistent, and exportable local project.
 
-- Current version: `1.2.1`
+- Current version: `1.3.0`
 - Downloads: [GitLab Releases](https://gitlab.com/glenzli/storybook-co-editor/-/releases)
 - Project format: `.scproj`
 - Interface languages: English and Simplified Chinese
@@ -128,7 +128,7 @@ flowchart LR
 - Every MCP write requires the `last_modified` value from a preceding read. Concurrent changes are rejected instead of overwritten, and successful updates synchronize into the open editor.
 - Before `Polish with Codex` runs, you can select from the models available in local Codex and provide editing direction. Codex returns a proposal only; the app presents the current and proposed scripts side by side and writes the result only after approval.
 - The new-page menu offers a blank page or `Create with Codex`. Creation uses the current canvas aspect ratio and references the selected page by default; you can select up to four reference pages. An isolated PNG copy and matching page script from each reference are sent as one-time creation context, and the candidate becomes a page only after you confirm it.
-- `Redraw image with Codex` is available at the top of page styling and from the thumbnail and main-canvas context menus. For redraw, the app supplies an isolated PNG copy to Codex's `imagegen` tool. The dialog shows connection, reconnection, processing, generation, and candidate-saving states with elapsed time; candidates do not change a page or enter the `.scproj` package until you confirm them, after which the original moves to the trash.
+- `Redraw image with Codex` is available at the top of page styling and from the thumbnail and main-canvas context menus. Creation and redraw both offer Fast, Standard, and Deep response modes. The dialog shows connection, reconnection, processing, generation, and candidate-saving states, elapsed time, and the token usage returned by Codex for the task. Candidates do not change a page or enter the `.scproj` package until you confirm them, after which the original moves to the trash.
 - Polishing, creation, and redraw reuse the local Codex login and model configuration. The script, creation direction, and redraw direction are sent to the selected model service; redraw also sends the isolated copy of the selected page image.
 
 PDF permissions communicate the publisher's intended restrictions, but they are not DRM. Screenshots and specialized tools may bypass them. The project never stores the PDF open password.
@@ -138,8 +138,8 @@ PDF permissions communicate the publisher's intended restrictions, but they are 
 Download the current packages from [Releases](https://gitlab.com/glenzli/storybook-co-editor/-/releases):
 
 ```text
-storybook-co-editor_1.2.1_aarch64.dmg
-storybook-co-editor-extension-v1.2.1.zip
+storybook-co-editor_1.3.0_aarch64.dmg
+storybook-co-editor-extension-v1.3.0.zip
 ```
 
 Installation:
@@ -256,12 +256,12 @@ Expected artifacts:
 
 ```text
 release/storybook-co-editor.app
-release/storybook-co-editor_1.2.1_aarch64.dmg
+release/storybook-co-editor_1.3.0_aarch64.dmg
 release/storybook-co-editor.app.zip
-release/storybook-co-editor-extension-v1.2.1.zip
-release/storybook-co-editor-licenses-v1.2.1.zip
+release/storybook-co-editor-extension-v1.3.0.zip
+release/storybook-co-editor-licenses-v1.3.0.zip
 release/SHA256SUMS.txt
-release/RELEASE_NOTES_v1.2.1.md
+release/RELEASE_NOTES_v1.3.0.md
 ```
 
 See [RELEASE.md](RELEASE.md) for the complete manual release workflow.

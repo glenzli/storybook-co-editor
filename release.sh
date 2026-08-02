@@ -146,23 +146,17 @@ This release provides the macOS desktop app and a manually installed Chrome exte
 
 ### 本次更新 / What's New
 
-- 新增逐页电子 PDF 导出，以及打印、复制、修改、批注和打开密码等发布权限设置。
-- 新增作品标题、参与者、版权、许可、ISBN、DOI、URL 等出版元数据和可选版权页。
-- 电子 PDF、印刷 PDF 和编辑预览共用页面渲染规则。
-- 桌面端新增简体中文与英文实时切换；Chrome 扩展跟随浏览器语言。
-- 补充适合绘本排版的本地字体、应用内许可证入口和随发布包分发的第三方 notice。
-- 改进 Chrome 扩展发送状态、重复图片和回收站图片提示。
-- 新增带本机访问令牌的 MCP 服务，可让 Codex 读取和调整剧本及基础文字排版；支持一键写入 Codex 配置和令牌轮换。
-- 剧本面板新增可选择模型与编辑意见的 Codex 润色建议流程，确认后才会写入项目。
+- 新增 Codex 新绘制和重绘图片：从新建页面、样式区和图片右键菜单发起，先审阅候选图再写入项目。
+- 新绘制可引用最多 4 页的图片与脚本文字，维持角色、画风和叙事连续性。
+- 绘制和重绘支持快速、标准、深入三种响应方式，并显示连接、处理、生成和保存候选等进度。
+- 候选图审阅页显示 Codex 返回的本次 token 用量，包括输入、缓存、输出和推理统计。
+- 移除了云端 CI 工作流；构建和发布继续完全在本机完成。
 
-- Added page-by-page electronic PDF export with printing, copying, modification, annotation, and open-password controls.
-- Added publication metadata for titles, contributors, copyright, licenses, ISBN, DOI, URLs, and optional copyright pages.
-- Unified page rendering across the editor, electronic PDF, and print PDF outputs.
-- Added runtime English and Simplified Chinese switching in the desktop app; the Chrome extension follows the browser language.
-- Added locally bundled storybook fonts, an in-app license viewer, and third-party notices in release packages.
-- Improved Chrome extension delivery feedback for successful, duplicate, and trashed images.
-- Added a token-protected local MCP server for Codex to read and adjust story scripts and basic text layout, including one-click Codex configuration and token rotation.
-- Added a Codex script-polish proposal flow with selectable models and editing direction; proposals are written only after approval.
+- Added Codex image creation and redraw from the new-page menu, style panel, and image context menus; candidates are reviewed before they change a project.
+- Creation can reference the images and scripts of up to four pages to preserve characters, visual style, and narrative continuity.
+- Creation and redraw offer Fast, Standard, and Deep response modes with connection, processing, generation, and candidate-saving progress.
+- Candidate review displays the token usage returned by Codex for the task, including input, cache, output, and reasoning counters.
+- Removed hosted CI workflows; builds and releases continue to run entirely locally.
 
 ### 下载内容 / Downloads
 

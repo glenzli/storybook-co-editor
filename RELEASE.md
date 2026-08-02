@@ -13,7 +13,7 @@ git status --short
 2. Confirm all public versions match.
 
 ```bash
-rg -n '"version": "1.2.1"|version = "1.2.1"|v1.2.1' \
+rg -n '"version": "1.3.0"|version = "1.3.0"|v1.3.0' \
   app/package.json \
   app/src-tauri/tauri.conf.json \
   app/src-tauri/Cargo.toml \
@@ -33,13 +33,13 @@ rg -n '"version": "1.2.1"|version = "1.2.1"|v1.2.1' \
 The script writes artifacts to `release/`:
 
 ```text
-storybook-co-editor_1.2.1_aarch64.dmg
+storybook-co-editor_1.3.0_aarch64.dmg
 storybook-co-editor.app
 storybook-co-editor.app.zip
-storybook-co-editor-extension-v1.2.1.zip
-storybook-co-editor-licenses-v1.2.1.zip
+storybook-co-editor-extension-v1.3.0.zip
+storybook-co-editor-licenses-v1.3.0.zip
 SHA256SUMS.txt
-RELEASE_NOTES_v1.2.1.md
+RELEASE_NOTES_v1.3.0.md
 ```
 
 4. Smoke test the build.
@@ -59,37 +59,37 @@ RELEASE_NOTES_v1.2.1.md
 5. Create and push the version tag.
 
 ```bash
-git tag -a v1.2.1 -m "Storybook Co-Editor v1.2.1"
-git push gitlab main v1.2.1
-git push github main v1.2.1
+git tag -a v1.3.0 -m "Storybook Co-Editor v1.3.0"
+git push gitlab main v1.3.0
+git push github main v1.3.0
 ```
 
 6. Create a GitLab Release.
 
 ```bash
-glab release create v1.2.1 \
-  release/storybook-co-editor_1.2.1_aarch64.dmg \
+glab release create v1.3.0 \
+  release/storybook-co-editor_1.3.0_aarch64.dmg \
   release/storybook-co-editor.app.zip \
-  release/storybook-co-editor-extension-v1.2.1.zip \
-  release/storybook-co-editor-licenses-v1.2.1.zip \
+  release/storybook-co-editor-extension-v1.3.0.zip \
+  release/storybook-co-editor-licenses-v1.3.0.zip \
   release/SHA256SUMS.txt \
   --repo glenzli/storybook-co-editor \
-  --name "Storybook Co-Editor v1.2.1" \
-  --notes-file release/RELEASE_NOTES_v1.2.1.md
+  --name "Storybook Co-Editor v1.3.0" \
+  --notes-file release/RELEASE_NOTES_v1.3.0.md
 ```
 
 7. Create a GitHub Release with one CLI invocation.
 
 ```bash
-gh release create v1.2.1 \
-  release/storybook-co-editor_1.2.1_aarch64.dmg \
+gh release create v1.3.0 \
+  release/storybook-co-editor_1.3.0_aarch64.dmg \
   release/storybook-co-editor.app.zip \
-  release/storybook-co-editor-extension-v1.2.1.zip \
-  release/storybook-co-editor-licenses-v1.2.1.zip \
+  release/storybook-co-editor-extension-v1.3.0.zip \
+  release/storybook-co-editor-licenses-v1.3.0.zip \
   release/SHA256SUMS.txt \
   --repo glenzli/storybook-co-editor \
-  --title "Storybook Co-Editor v1.2.1" \
-  --notes-file release/RELEASE_NOTES_v1.2.1.md \
+  --title "Storybook Co-Editor v1.3.0" \
+  --notes-file release/RELEASE_NOTES_v1.3.0.md \
   --verify-tag
 ```
 

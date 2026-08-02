@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  <img alt="Version" src="https://img.shields.io/badge/version-1.2.1-blue.svg?cacheSeconds=2592000" />
+  <img alt="Version" src="https://img.shields.io/badge/version-1.3.0-blue.svg?cacheSeconds=2592000" />
   <img alt="Tauri" src="https://img.shields.io/badge/Tauri-2-FFC131?logo=tauri&logoColor=white" />
   <img alt="React" src="https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=white" />
   <img alt="Rust" src="https://img.shields.io/badge/Rust-1.85+-000000?logo=rust&logoColor=white" />
@@ -20,7 +20,7 @@ Storybook Co-Editor 是一套面向 AI 绘本和网页绘本内容的本地协�
 
 适合用 ChatGPT、Gemini、Midjourney、Discord 或其他网页工具生成绘本后，把图片整理成可编辑、可保存、可导出的本地项目。
 
-- 当前版本：`1.2.1`
+- 当前版本：`1.3.0`
 - 下载发布版：[GitLab Releases](https://gitlab.com/glenzli/storybook-co-editor/-/releases)
 - 项目格式：`.scproj`
 - 界面语言：简体中文、English
@@ -128,7 +128,7 @@ flowchart LR
 - 所有 MCP 写入都要求携带最近一次读取到的 `last_modified`，检测到并发修改时会拒绝覆盖，并把成功修改实时同步回编辑器。
 - 剧本面板提供 `Codex 润色`：执行前可以从本机 Codex 的可用模型中选择，并填写本次修改意见。Codex 只返回建议版本，应用会先显示原文与建议对照，确认后才写入项目。
 - 新建页面菜单可选空白页或 `使用 Codex 绘制`。新绘制会按当前画布比例生成候选图，默认引用当前选中页；也可选择最多 4 个参考页。每个参考页都会把隔离 PNG 副本及其对应的页脚本文字作为仅本次绘制的上下文发送，确认后才会追加为新页面。
-- 页面样式区顶部、缩略图右键菜单和中心画布右键菜单均提供 `Codex 重绘图片`。重绘时应用把当前图片的隔离 PNG 副本作为输入，调用 Codex 的 `imagegen` 工具生成候选图；窗口会显示连接、重连、处理、生成和保存候选等状态与已用时间。候选图在确认前不会改变页面，也不会打包进 `.scproj`，确认后才替换当前页并保留原图至回收站。
+- 页面样式区顶部、缩略图右键菜单和中心画布右键菜单均提供 `Codex 重绘图片`。新绘制和重绘均可选择快速、标准或深入响应方式；窗口会显示连接、重连、处理、生成和保存候选等状态、已用时间，以及 Codex 返回的本次 token 用量。候选图在确认前不会改变页面，也不会打包进 `.scproj`，确认后才替换当前页并保留原图至回收站。
 - 润色、绘制和重绘复用本机 Codex 登录和模型配置。剧本文本、绘制要求和重绘要求会发送给所选模型服务；重绘时还会发送对应页面的隔离图片副本。
 
 PDF 权限用于表达发布者的使用限制，不等同于 DRM；截图或专用工具仍可能绕过限制。项目不会保存 PDF 打开密码。
@@ -138,8 +138,8 @@ PDF 权限用于表达发布者的使用限制，不等同于 DRM；截图或专
 从 [Releases](https://gitlab.com/glenzli/storybook-co-editor/-/releases) 下载对应版本：
 
 ```text
-storybook-co-editor_1.2.1_aarch64.dmg
-storybook-co-editor-extension-v1.2.1.zip
+storybook-co-editor_1.3.0_aarch64.dmg
+storybook-co-editor-extension-v1.3.0.zip
 ```
 
 安装步骤：
@@ -258,12 +258,12 @@ chmod +x release.sh
 
 ```text
 release/storybook-co-editor.app
-release/storybook-co-editor_1.2.1_aarch64.dmg
+release/storybook-co-editor_1.3.0_aarch64.dmg
 release/storybook-co-editor.app.zip
-release/storybook-co-editor-extension-v1.2.1.zip
-release/storybook-co-editor-licenses-v1.2.1.zip
+release/storybook-co-editor-extension-v1.3.0.zip
+release/storybook-co-editor-licenses-v1.3.0.zip
 release/SHA256SUMS.txt
-release/RELEASE_NOTES_v1.2.1.md
+release/RELEASE_NOTES_v1.3.0.md
 ```
 
 详细手动发布流程见 [RELEASE.md](RELEASE.md)。
