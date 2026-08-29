@@ -5,152 +5,63 @@
 </p>
 
 <p align="center">
-  <img src="docs/images/banner.png" alt="Storybook Co-Editor banner" width="100%" />
+  <img src="docs/images/banner.png" alt="Storybook Co-Editor" width="100%" />
 </p>
 
-<p align="center">
-  <img alt="Version" src="https://img.shields.io/badge/version-1.3.0-blue.svg?cacheSeconds=2592000" />
-  <img alt="Tauri" src="https://img.shields.io/badge/Tauri-2-FFC131?logo=tauri&logoColor=white" />
-  <img alt="React" src="https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=white" />
-  <img alt="Rust" src="https://img.shields.io/badge/Rust-1.85+-000000?logo=rust&logoColor=white" />
-  <img alt="License" src="https://img.shields.io/badge/license-MIT-green.svg" />
-</p>
+Storybook Co-Editor is a local storybook layout tool. Its Chrome extension collects images from web pages. The macOS desktop app manages page order and scripts, adjusts images, saves projects, and exports electronic and print PDFs.
 
-Storybook Co-Editor is a local collaborative layout tool for AI-generated and web-based storybooks. It connects the workflow from images created in a browser to editable local projects and electronic or print-ready PDFs. The Chrome extension captures illustrations, while the Tauri desktop app handles page ordering, typography, image adjustments, project storage, and prepress imposition.
+The current version is `1.3.0`. Projects use the `.scproj` format, and the interface is available in English and Simplified Chinese.
 
-It is intended for storybooks created with ChatGPT, Gemini, Midjourney, Discord, or other browser-based tools, when the generated images need to become an editable, persistent, and exportable local project.
+- [Download a release](https://gitlab.com/glenzli/storybook-co-editor/-/releases)
+- Local service: `http://127.0.0.1:14320`
 
-- Current version: `1.3.0`
-- Downloads: [GitLab Releases](https://gitlab.com/glenzli/storybook-co-editor/-/releases)
-- Project format: `.scproj`
-- Interface languages: English and Simplified Chinese
-- Local bridge: `http://127.0.0.1:14320`
+![Chrome extension image controls](docs/images/extension-overlay.png)
 
-## Preview
+*The Chrome extension sends web images to a local project and can mark reference images.*
 
-**Chrome extension: capture images from the page**
+![Storybook editor](docs/images/app-editor.png)
 
-Hover over an image on a supported page and send it directly to the local editor. An image can also be marked as a style reference for later alignment.
+*The desktop app manages pages, scripts, text styles, and image settings.*
 
-<img src="docs/images/extension-overlay.png" alt="Chrome extension capture overlay" width="680" />
+![Prepress imposition](docs/images/app-prepress.png)
 
-**Content editor: pages, covers, title pages, body text, and typography**
+*The prepress view covers paper, binding, margins, crop marks, and duplex printing.*
 
-Manage page order on the left, preview the canvas in the center, and adjust the script, fonts, sizes, colors, strokes, backdrops, and offsets on the right.
+## Current Capabilities
 
-<img src="docs/images/app-editor.png" alt="Storybook Co-Editor content editor" width="100%" />
+- **Web capture**: read images from web pages, lazy-loaded elements, and common image links; send images or references from an overlay; and deduplicate them by content hash.
+- **Storybook editing**: reorder pages and manage covers, title pages, body pages, blank pages, and trash. Text styles, page backgrounds, image scale, and image position can be set per page type or page.
+- **Script layout**: map script text to pages with `[Cover]`, `[Author]`, `[Title]`, and numbered tags. Equivalent Chinese tags are also supported.
+- **Image adjustments**: adjust brightness, exposure, contrast, highlights, shadows, saturation, temperature, tint, and selective HSL per page, with background processing based on a selected color.
+- **Project storage**: `.scproj` packages contain project data, image assets, and trash. The app supports recent projects, autosave, Save As, undo, and redo.
+- **PDF export**: export page-by-page electronic PDFs or print PDFs based on paper, binding, and printer margins. Publication metadata, copyright pages, and electronic PDF permissions are supported.
+- **Codex (optional)**: use the local Codex App Server to propose script edits, create pages, and redraw images. Changes and image candidates are reviewed before they are written to the project.
+- **MCP (optional)**: the local MCP service can read the active project and script, replace the script, read page layout, and adjust text positions. Writes use the project modification time to detect concurrent updates.
 
-**Script editor: bind text to pages with tags**
+## Current Boundaries
 
-Maintain the complete book script in one panel. `[Cover]`, `[Author]`, `[Title]`, and numbered page tags map automatically to the corresponding page previews.
-
-<img src="docs/images/app-script-editor.png" alt="Storybook Co-Editor script editor" width="100%" />
-
-**Image adjustments: local processing for individual pages**
-
-Adjust canvas color, background-color removal, scale and offset, exposure, shadows, highlights, saturation, temperature, tint, and selective HSL.
-
-<img src="docs/images/app-image-tuning.png" alt="Storybook Co-Editor image tuning panel" width="100%" />
-
-**Prepress imposition: a physical print preview**
-
-Preview single-page or 2-up layouts on A4, A5, or A3 paper, with binding methods, glue margins, printer margins, crop marks, and duplex printing.
-
-<img src="docs/images/app-prepress.png" alt="Storybook Co-Editor prepress preview" width="100%" />
-
-## Workflow
-
-```mermaid
-flowchart LR
-  A["Generate storybook images on the web"] --> B["Send with Chrome extension"]
-  B --> C["Local bridge at 127.0.0.1:14320"]
-  C --> D["Tauri desktop project"]
-  D --> E["Page and script layout"]
-  E --> F["Image adjustments"]
-  D <--> K["Local AI client / MCP"]
-  D <--> L["Local Codex App Server"]
-  L --> M["Script polish proposal"]
-  L --> N["Creation / redraw candidates"]
-  F --> G{"Choose export mode"}
-  G --> H["Page-by-page electronic PDF"]
-  G --> I["Prepress imposition"]
-  I --> J["Print PDF"]
-```
-
-## Features
-
-**Web capture**
-
-- Image overlay actions for `Send` and `Reference`.
-- Extracts images from the page DOM, lazy-loaded elements, and common AI image URLs.
-- Sends images to the desktop app as base64 data or URLs.
-- Uses content hashes to avoid importing the same image more than once.
-
-**Local storybook editing**
-
-- Drag to reorder pages, move pages to the beginning or end, delete, restore, copy, and export original images.
-- Insert virtual `blank://` pages to complete print signatures.
-- Configure independent styles for covers, title pages, body text, and author credits.
-- Use English or Chinese script tags: `[Cover]`, `[封面]`, `[Title]`, `[扉页]`, `[Author]`, `[作者]`, `[1]`, and `[2]`.
-
-**Image processing**
-
-- Basic color controls: brightness, exposure, contrast, highlights, shadows, saturation, temperature, and tint.
-- Selective HSL adjustments for matching colors across AI-generated illustrations.
-- Background-color removal for correcting pale, yellow, or gray image edges.
-- Per-page scale, offset, background, and image adjustment settings.
-
-**Prepress and export**
-
-- Saddle stitch, perfect binding, and butterfly binding layouts.
-- 1-up and 2-up imposition, front and back previews, crop marks, glue margins, and printer margins.
-- Electronic PDF export at the project canvas ratio without imposition, crop marks, or binding margins.
-- Publication metadata for title, contributors, copyright, licenses, ISBN, DOI, URLs, and other identifiers, written to PDF Info and XMP metadata.
-- Optional copyright pages for electronic PDFs only or for both electronic and print exports.
-- Screen release, personal reading, and open reading presets, with independent printing, copying, modification, and annotation permissions.
-- Restricted electronic PDFs use PDF 2.0 AES-256 permission encryption and can require an open password. Passwords are used only during export and are not stored in the project.
-- Editing previews, electronic PDFs, and print PDFs share the same logical page-rendering rules.
-
-**Project management**
-
-- A `.scproj` file is a zip package containing `project.json`, image assets, and the trash.
-- Publication metadata and electronic PDF permission preferences are optional project-level data.
-- Recent projects, save, save as, autosave, undo, and redo.
-- The desktop interface switches between English and Simplified Chinese at runtime and remembers the selection. The Chrome extension follows the browser language.
-- Core editing and export remain local. Optional Codex polishing follows the active Codex model configuration.
-
-**AI collaboration (experimental)**
-
-- **Codex is an optional local dependency.** To use Codex polishing, creation, or redraw, install and sign in to the Codex / ChatGPT desktop app so its local Codex App Server is available. The app checks for available models at launch; when no usable Codex is found, those controls are disabled while editing, export, and MCP remain available independently.
-- The AI toolbar entry shows a token-protected local MCP endpoint and can generate a Codex configuration block.
-- The app generates the access token randomly and lets you rotate it from the AI entry. Rotation invalidates the old token immediately, so reconnect Codex or other clients with the new configuration.
-- The first MCP version can read the active project and complete script, replace the script, read page layout, and adjust per-page text position.
-- Every MCP write requires the `last_modified` value from a preceding read. Concurrent changes are rejected instead of overwritten, and successful updates synchronize into the open editor.
-- Before `Polish with Codex` runs, you can select from the models available in local Codex and provide editing direction. Codex returns a proposal only; the app presents the current and proposed scripts side by side and writes the result only after approval.
-- The new-page menu offers a blank page or `Create with Codex`. Creation uses the current canvas aspect ratio and references the selected page by default; you can select up to four reference pages. An isolated PNG copy and matching page script from each reference are sent as one-time creation context, and the candidate becomes a page only after you confirm it.
-- `Redraw image with Codex` is available at the top of page styling and from the thumbnail and main-canvas context menus. Creation and redraw both offer Fast, Standard, and Deep response modes. The dialog shows connection, reconnection, processing, generation, and candidate-saving states, elapsed time, and the token usage returned by Codex for the task. Candidates do not change a page or enter the `.scproj` package until you confirm them, after which the original moves to the trash.
-- Polishing, creation, and redraw reuse the local Codex login and model configuration. The script, creation direction, and redraw direction are sent to the selected model service; redraw also sends the isolated copy of the selected page image.
-
-PDF permissions communicate the publisher's intended restrictions, but they are not DRM. Screenshots and specialized tools may bypass them. The project never stores the PDF open password.
+- The current release targets Apple silicon macOS and has not been Apple-notarized.
+- The Chrome extension is distributed as a zip archive and must be loaded through Developer Mode in `chrome://extensions`.
+- Editing, storage, image processing, and PDF export run locally. Codex polishing, creation, and redraw send the relevant text, instructions, and selected reference images to the active model service.
+- MCP listens only on `127.0.0.1:14320` and uses a random local token. The token grants read and write access to the open project and should be shared only with trusted local clients.
+- MCP resources omit image pixels. Creation and redraw are started separately by the desktop app, and candidates stay outside `.scproj` until confirmed.
+- PDF permissions record the publisher's intended restrictions. Screenshots and specialized tools can still bypass them. Open passwords apply to one export and are not stored in the project.
 
 ## Installation
 
-Download the current packages from [Releases](https://gitlab.com/glenzli/storybook-co-editor/-/releases):
+Download the current packages from [GitLab Releases](https://gitlab.com/glenzli/storybook-co-editor/-/releases):
 
 ```text
 storybook-co-editor_1.3.0_aarch64.dmg
 storybook-co-editor-extension-v1.3.0.zip
 ```
 
-Installation:
-
 1. Install and open the macOS desktop app.
 2. Unzip the Chrome extension package.
-3. Open `chrome://extensions` and enable Developer Mode.
-4. Load the unzipped extension directory.
-5. Keep the desktop app open and use the `Send` overlay on a web image.
+3. Open `chrome://extensions`, enable Developer Mode, and load the unzipped directory.
+4. Keep the desktop app running and use the extension's `Send` control on a web image.
 
-The current macOS package is not Apple-notarized. If macOS blocks the first launch, right-click the app in Finder and choose Open, or allow it in System Settings.
+If macOS blocks the first launch, right-click the app in Finder and choose Open, or allow it in System Settings.
 
 ## Script Format
 
@@ -170,109 +81,54 @@ Above the clouds, the golden staff shook the celestial palace.
 
 [2]
 The Monkey King stood at the edge of the cloud sea and saw distant halls stretching across the horizon.
-
-[3]
-The wind swept through the clouds as celestial soldiers approached from every direction.
 ```
-
-Rules:
 
 - `[Cover]` or `[封面]` maps to page 0.
 - `[Author]` or `[作者]` maps to the cover author credit.
 - `[Title]` or `[扉页]` maps to the title page. When a title page exists, numbered body pages shift automatically.
 - `[1]`, `[2]`, and other numeric tags map to body pages.
 
-## Connect An AI Client
+## Connect Codex
 
-1. Open a project and select the robot icon in the top toolbar.
-2. Select `Install to Codex` and confirm. The app creates or updates only the `storybook` entry in the Codex user configuration (`~/.codex/config.toml`), keeping your other settings intact. You can still copy the configuration block for another client.
-3. Restart Codex or open a new task, then keep Storybook Co-Editor running while you use the `storybook` MCP server.
+1. Open a project and select the robot icon in the toolbar.
+2. Select `Install to Codex` and confirm. The app updates only the `storybook` entry in the Codex user configuration.
+3. Restart Codex or open a new task, then keep Storybook Co-Editor running while using the `storybook` MCP service.
 
-The MCP server listens only on `127.0.0.1:14320` and uses a locally generated token. The token grants read and edit access to the active project; do not commit it or share it with untrusted clients. Rotating the token requires installing the Codex entry again. Image pixels are not exposed as MCP resources in this first version. The server exposes project structure, the script, and a small set of layout parameters. Codex creation and redraw are separate desktop-initiated requests: creation sends the requested visual direction, while redraw additionally sends an isolated copy of the current image.
+The same screen can copy an MCP configuration for another local client or rotate the access token. Existing clients must reconnect with the new configuration after a rotation.
 
 ## Local Development
 
-### Desktop app
+Desktop app:
 
-```bash
+```sh
 cd app
 pnpm install
 pnpm tauri dev
 ```
 
-The desktop app starts a local bridge at:
+Chrome extension:
 
-```text
-http://127.0.0.1:14320
-```
-
-### Chrome extension
-
-```bash
+```sh
 cd extension
 pnpm install
 pnpm dev
 ```
 
-Open `chrome://extensions`, enable Developer Mode, and load `extension/dist` as an unpacked extension.
+Then load `extension/dist` from `chrome://extensions`.
 
-### Quality checks
+Run the project's maintained checks:
 
-Run the maintained checks from the repository root before committing:
-
-```bash
+```sh
 ./scripts/check.sh
 ```
 
-The command checks architecture boundaries, lint, TypeScript, frontend tests and builds, the extension build, Rust formatting, and Rust tests. See [ARCHITECTURE.md](ARCHITECTURE.md) for module ownership, schema synchronization, and the legacy `utils/` ratchet.
+## Project Navigation
 
-## Repository Layout
+- [Architecture and module ownership](ARCHITECTURE.md)
+- [Release workflow](RELEASE.md)
+- [Third-party assets and licenses](THIRD_PARTY_NOTICES.md)
+- [Desktop app guide](app/README.md)
 
-```text
-.
-├── app/                  # Tauri desktop app: React frontend and Rust backend
-│   ├── src/              # Project, story, editor, print owners, and UI
-│   └── src-tauri/        # Project contract, storage, archive, and receiver
-├── extension/            # Chrome Manifest V3 extension
-│   ├── src/content.ts    # Injected image overlay, sending, and references
-│   └── src/background.ts # Forwards images to the local desktop app
-├── fixtures/             # Shared TypeScript/Rust data contracts
-├── scripts/              # Quality checks shared by local development and CI
-├── docs/images/          # README screenshots
-├── release/              # Local release artifacts
-└── release.sh            # Manual release build script
-```
+## License
 
-## Release Build
-
-The root release script packages the Chrome extension and macOS desktop app into `release/`:
-
-```bash
-chmod +x release.sh
-./release.sh
-```
-
-Expected artifacts:
-
-```text
-release/storybook-co-editor.app
-release/storybook-co-editor_1.3.0_aarch64.dmg
-release/storybook-co-editor.app.zip
-release/storybook-co-editor-extension-v1.3.0.zip
-release/storybook-co-editor-licenses-v1.3.0.zip
-release/SHA256SUMS.txt
-release/RELEASE_NOTES_v1.3.0.md
-```
-
-See [RELEASE.md](RELEASE.md) for the complete manual release workflow.
-
-## Technology
-
-- Desktop: Tauri 2, Rust, Axum, Tokio
-- Frontend: React 19, Vite, TypeScript, Tailwind CSS
-- Extension: Chrome Manifest V3, TypeScript, Vite
-- Export: html2canvas, jsPDF, lopdf
-
-## License And Third-Party Assets
-
-Storybook Co-Editor application code is licensed under the MIT License. Bundled fonts use their respective SIL Open Font License 1.1 terms. Full texts are distributed with the source and release packages and are available from **Licenses & acknowledgements** in the app. See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+Storybook Co-Editor application code is licensed under the MIT License. Bundled fonts use their respective SIL Open Font License 1.1 terms. See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
