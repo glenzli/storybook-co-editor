@@ -1,0 +1,105 @@
+{
+  "format": "storybook-publication",
+  "formatVersion": 1,
+  "createdAt": "2026-09-04T00:00:00Z",
+  "publication": {
+    "id": "publication-contract-fixture",
+    "title": "Contract Fixture",
+    "contributors": [
+      {
+        "role": "author",
+        "name": "Example Author"
+      }
+    ],
+    "language": "en-US",
+    "readingDirection": "ltr",
+    "description": "Published contract fixture.",
+    "keywords": [],
+    "publisher": null,
+    "publicationDate": null,
+    "edition": null,
+    "copyrightHolder": null,
+    "copyrightYear": null,
+    "copyrightNotice": null,
+    "license": {
+      "name": null,
+      "url": null
+    },
+    "identifiers": []
+  },
+  "canvas": {
+    "width": 320,
+    "height": 240
+  },
+  "fontPack": {
+    "id": "glenzli-books-webfonts",
+    "version": "1",
+    "compatibility": "storybook-co-editor-fonts-v1"
+  },
+  "pages": [
+    {
+      "id": "page-contract-fixture",
+      "order": 0,
+      "role": "cover",
+      "image": {
+        "src": "pages/0001.webp",
+        "width": 320,
+        "height": 240,
+        "alt": null,
+        "mimeType": "image/webp",
+        "bytes": 86,
+        "sha256": "03cbcfa783b6be7afcbbedcf3fded666fac25dbe240a26e3b21942459080d1eb"
+      },
+      "textLayers": [
+        {
+          "id": "main",
+          "text": "Contract Fixture",
+          "lines": [
+            {
+              "text": "Contract Fixture",
+              "x": 160,
+              "y": 200
+            }
+          ],
+          "position": {
+            "x": 160,
+            "y": 200,
+            "maxWidth": 224,
+            "anchor": "center-bottom"
+          },
+          "style": {
+            "font": "noto-serif-sc",
+            "fontFamily": "serif",
+            "fontSize": 24,
+            "lineHeight": 36,
+            "color": "#ffffff",
+            "align": "center",
+            "strokeColor": "rgba(0,0,0,0.8)",
+            "strokeWidth": 1.92,
+            "shadow": null,
+            "backdropColor": null,
+            "backdropX": null,
+            "backdropY": null,
+            "backdropWidth": null,
+            "backdropHeight": null,
+            "backdropPaddingX": 12,
+            "backdropPaddingY": 4.8,
+            "backdropRadius": 0
+          }
+        }
+      ]
+    }
+  ],
+  "resources": [
+    {
+      "path": "pages/0001.webp",
+      "mimeType": "image/webp",
+      "bytes": 86,
+      "sha256": "03cbcfa783b6be7afcbbedcf3fded666fac25dbe240a26e3b21942459080d1eb"
+    }
+  ],
+  "integrity": {
+    "algorithm": "sha256",
+    "publicationSha256": "84829f1184dfb2a26eadbf3fd23ce92b34af72cefd3008f66e026073c93ab609"
+  }
+}

@@ -1,4 +1,4 @@
-import { Bot, FileBox, Undo2, Redo2, Save, FolderOpen, XCircle, Loader2, Download, BookMarked } from 'lucide-react';
+import { Bot, FileBox, Undo2, Redo2, Save, FolderOpen, XCircle, Loader2, Download, BookMarked, Package } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import type { ProjectState } from '../project/model';
 import { LanguageSwitcher } from './LanguageSwitcher';
@@ -21,6 +21,9 @@ interface EditorHeaderProps {
   saveProgress?: { current: number, total: number } | null;
   exportElectronicPdf: () => void;
   electronicPdfProgress?: { current: number, total: number } | null;
+  exportWebPublication: () => void;
+  webPublicationProgress?: { current: number, total: number } | null;
+  isPublicationExportBusy: boolean;
   openPublicationMetadata: () => void;
   hasPublicationMetadata: boolean;
   openAiIntegration: () => void;
@@ -43,6 +46,9 @@ export function EditorHeader({
   saveProgress,
   exportElectronicPdf,
   electronicPdfProgress,
+  exportWebPublication,
+  webPublicationProgress,
+  isPublicationExportBusy,
   openPublicationMetadata,
   hasPublicationMetadata,
   openAiIntegration,
@@ -105,9 +111,20 @@ export function EditorHeader({
               <BookMarked size={14} />
           </button>
           <button
+            onClick={exportWebPublication}
+            disabled={isPublicationExportBusy}
+            className={`p-1.5 rounded-md transition-colors ${webPublicationProgress ? 'text-primary' : isPublicationExportBusy ? 'text-muted-foreground/30 cursor-not-allowed' : 'hover:bg-muted text-foreground'}`}
+            title={webPublicationProgress
+              ? t('header.exportingWebPublication', webPublicationProgress)
+              : t('header.exportWebPublication')}
+            aria-label={t('header.exportWebPublication')}
+          >
+              {webPublicationProgress ? <Loader2 size={14} className="animate-spin" /> : <Package size={14} />}
+          </button>
+          <button
             onClick={exportElectronicPdf}
-            disabled={Boolean(electronicPdfProgress)}
-            className={`p-1.5 rounded-md transition-colors ${electronicPdfProgress ? 'text-primary' : 'hover:bg-muted text-foreground'}`}
+            disabled={isPublicationExportBusy}
+            className={`p-1.5 rounded-md transition-colors ${electronicPdfProgress ? 'text-primary' : isPublicationExportBusy ? 'text-muted-foreground/30 cursor-not-allowed' : 'hover:bg-muted text-foreground'}`}
             title={electronicPdfProgress
               ? t('header.exportingElectronicPdf', electronicPdfProgress)
               : t('header.exportElectronicPdf')}

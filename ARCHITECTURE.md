@@ -8,6 +8,8 @@ owner below; application roots compose owners and do not absorb their policies.
 - `app/src/project/`: TypeScript project data contract, migration, recent-project
   persistence, history, and externally-originated update propagation.
 - `app/src/story/`: Story script language and its parsing and validation policy.
+- `app/src/publication/`: Versioned web publication schema, frozen text layout,
+  and `.scpub` export lifecycle.
 - `app/src/editor/`: Editor-specific collection projection and asynchronous
   receive lifecycles.
 - `app/src/components/right-sidebar/`: Cohesive right-sidebar interaction
@@ -20,6 +22,8 @@ owner below; application roots compose owners and do not absorb their policies.
 - `app/src-tauri/src/project_model.rs`: Native project serialization contract.
 - `app/src-tauri/src/project_storage.rs`: The only owner of `project.json`.
 - `app/src-tauri/src/project_archive.rs`: `.scproj` extraction and atomic writing.
+- `app/src-tauri/src/publication_archive.rs`: `.scpub` validation, digest checks,
+  safe archive paths, and atomic writing.
 - `app/src-tauri/src/project_manager.rs`: Active project session commands.
 - `app/src-tauri/src/project_operations.rs`: Serialized project reads and
   revision-checked external mutations shared by MCP and the frontend.
@@ -43,6 +47,9 @@ changes must update both the TypeScript migration test and Rust round-trip test.
 Metadata additions remain schema v2 while they are optional and backward
 compatible. MCP and Codex operations do not change the project schema. Codex
 image candidates remain outside `.scproj` until the user confirms replacement.
+
+`fixtures/publication-v1/` is the cross-language web publication contract. Its
+manifest digest and packaged WebP digest are checked by TypeScript and Rust.
 
 ## Growth Rules
 

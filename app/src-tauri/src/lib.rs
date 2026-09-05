@@ -9,6 +9,7 @@ mod project_manager;
 mod project_model;
 mod project_operations;
 mod project_storage;
+mod publication_archive;
 mod receiver;
 mod system_fonts;
 
@@ -59,6 +60,7 @@ pub fn run() {
             codex_image_edit::discard_codex_image_variant,
             system_fonts::get_system_fonts,
             pdf_security::protect_pdf,
+            publication_archive::write_publication_package,
             greet
         ])
         .run(tauri::generate_context!())

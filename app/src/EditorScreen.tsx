@@ -51,6 +51,7 @@ import {
 } from './editor/pageCollection';
 import { usePluginReceive, type SavedImageEvent } from './editor/usePluginReceive';
 import { subscribeExternalProjectUpdates } from './project/externalUpdates';
+import { exportWebPublication, type PublicationExportProgress } from './publication/export';
 
 const logger = createLogger('App');
 
@@ -86,13 +87,14 @@ export default function EditorScreen() {
   // Tabs
   const [activeTab, setActiveTab] = useState<'edit' | 'print'>('edit');
   const [electronicPdfProgress, setElectronicPdfProgress] = useState<ElectronicPdfProgress | null>(null);
+  const [webPublicationProgress, setWebPublicationProgress] = useState<PublicationExportProgress | null>(null);
   const [isElectronicPdfExportOpen, setIsElectronicPdfExportOpen] = useState(false);
   const [isPublicationMetadataOpen, setIsPublicationMetadataOpen] = useState(false);
   const [isMissingMetadataPromptOpen, setIsMissingMetadataPromptOpen] = useState(false);
   const [isAiIntegrationOpen, setIsAiIntegrationOpen] = useState(false);
   const [codexImageRequest, setCodexImageRequest] = useState<CodexImageRequest | null>(null);
   const [canvasContextMenu, setCanvasContextMenu] = useState<PageImageMenuTarget | null>(null);
-  const pendingPdfExportRef = useRef<(() => void) | null>(null);
+  const pendingPublicationExportRef = useRef<(() => void) | null>(null);
 
 
 
@@ -383,7 +385,7 @@ export default function EditorScreen() {
     electronicPdfSettings: ElectronicPdfSettings,
     secrets: ElectronicPdfExportSecrets,
   ) => {
-    if (!projectState || electronicPdfProgress) return;
+    if (!projectState || electronicPdfProgress || webPublicationProgress) return;
 
     const exportState: ProjectState = {
       ...projectState,
@@ -417,12 +419,12 @@ export default function EditorScreen() {
     } finally {
       setElectronicPdfProgress(null);
     }
-  }, [electronicPdfProgress, globalScript, images, projectState, t]);
+  }, [electronicPdfProgress, globalScript, images, projectState, t, webPublicationProgress]);
 
-  const requestPdfExport = useCallback((exportAction: () => void) => {
+  const requestPublicationExport = useCallback((exportAction: () => void) => {
     if (!projectState) return;
     if (!hasPublicationMetadata(projectState.publication_metadata)) {
-      pendingPdfExportRef.current = exportAction;
+      pendingPublicationExportRef.current = exportAction;
       setIsMissingMetadataPromptOpen(true);
       return;
     }
@@ -430,9 +432,51 @@ export default function EditorScreen() {
   }, [projectState]);
 
   const handleExportElectronicPdf = useCallback(() => {
-    if (electronicPdfProgress) return;
-    requestPdfExport(() => setIsElectronicPdfExportOpen(true));
-  }, [electronicPdfProgress, requestPdfExport]);
+    if (electronicPdfProgress || webPublicationProgress) return;
+    requestPublicationExport(() => setIsElectronicPdfExportOpen(true));
+  }, [electronicPdfProgress, requestPublicationExport, webPublicationProgress]);
+
+  const handleExportWebPublication = useCallback(() => {
+    if (!projectState || isElectronicPdfExportOpen || electronicPdfProgress || webPublicationProgress) return;
+    requestPublicationExport(() => {
+      void (async () => {
+        const exportState: ProjectState = {
+          ...projectState,
+          global_script: globalScript,
+          visible_images: images.map(source => (
+            source.startsWith('blank://') ? source : source.split('/').pop()!
+          )),
+        };
+        if (exportState.visible_images.length === 0) {
+          alert(t('export.noPages'));
+          return;
+        }
+
+        try {
+          const filePath = await save({
+            filters: [{ name: t('common.publicationPackage'), extensions: ['scpub'] }],
+            defaultPath: `${getDefaultExportFilename(exportState, t('export.webPublicationSuffix'))}.scpub`,
+          });
+          if (!filePath) return;
+
+          setWebPublicationProgress({ current: 0, total: exportState.visible_images.length });
+          await waitForProjectFonts(exportState);
+          const result = await exportWebPublication({
+            projectState: exportState,
+            imageSources: images,
+            targetPath: filePath,
+            onProgress: setWebPublicationProgress,
+          });
+          alert(t('export.webPublicationSuccess', { path: result.path }));
+        } catch (error) {
+          logger.error('Web publication export failed', error);
+          alert(t('export.webPublicationFailure', { error: localizeAppError(error) }));
+        } finally {
+          setWebPublicationProgress(null);
+        }
+      })();
+    });
+  }, [electronicPdfProgress, globalScript, images, isElectronicPdfExportOpen, projectState, requestPublicationExport, t, webPublicationProgress]);
 
   const handleExportImage = useCallback(async (id: string, idx: number) => {
       if (id.startsWith('blank://')) {
@@ -715,6 +759,9 @@ export default function EditorScreen() {
         saveProgress={saveProgress}
         exportElectronicPdf={handleExportElectronicPdf}
         electronicPdfProgress={electronicPdfProgress}
+        exportWebPublication={handleExportWebPublication}
+        webPublicationProgress={webPublicationProgress}
+        isPublicationExportBusy={Boolean(isElectronicPdfExportOpen || electronicPdfProgress || webPublicationProgress)}
         openPublicationMetadata={() => setIsPublicationMetadataOpen(true)}
         hasPublicationMetadata={hasPublicationMetadata(projectState?.publication_metadata)}
         openAiIntegration={() => setIsAiIntegrationOpen(true)}
@@ -858,7 +905,7 @@ export default function EditorScreen() {
           />
       </div>
       ) : (
-        <PrintScreen requestPdfExport={requestPdfExport} />
+        <PrintScreen requestPdfExport={requestPublicationExport} />
       )}
 
       <AiIntegrationDialog
@@ -1002,17 +1049,17 @@ export default function EditorScreen() {
       <MissingPublicationMetadataDialog
         open={isMissingMetadataPromptOpen}
         onClose={() => {
-          pendingPdfExportRef.current = null;
+          pendingPublicationExportRef.current = null;
           setIsMissingMetadataPromptOpen(false);
         }}
         onConfigure={() => {
-          pendingPdfExportRef.current = null;
+          pendingPublicationExportRef.current = null;
           setIsMissingMetadataPromptOpen(false);
           setIsPublicationMetadataOpen(true);
         }}
         onContinue={() => {
-          const exportAction = pendingPdfExportRef.current;
-          pendingPdfExportRef.current = null;
+          const exportAction = pendingPublicationExportRef.current;
+          pendingPublicationExportRef.current = null;
           setIsMissingMetadataPromptOpen(false);
           exportAction?.();
         }}

@@ -45,6 +45,36 @@ export interface StoryPageViewport {
   height: number;
 }
 
+export interface StoryTextLineLayout {
+  text: string;
+  x: number;
+  y: number;
+}
+
+export interface StoryTextLayout {
+  id: StoryTextLayer['id'];
+  sourceText: string;
+  fontFamily: string;
+  fontFamilyStack: string;
+  fontSize: number;
+  lineHeight: number;
+  color: string;
+  alignment: 'center';
+  baseline: 'bottom';
+  maxWidth: number;
+  lines: StoryTextLineLayout[];
+  stroke: { color: string; width: number; lineJoin: 'round' } | null;
+  shadow: null;
+  backdrop: {
+    color: string;
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+    radius: number;
+  } | null;
+}
+
 export function getStrokeColor(hexColor: string): string {
   let hex = hexColor.replace('#', '');
   if (hex.length === 3) hex = hex.split('').map(char => char + char).join('');
@@ -194,58 +224,106 @@ function drawRoundedRect(
   ctx.closePath();
 }
 
+export function layoutStoryPageText(
+  ctx: CanvasRenderingContext2D,
+  page: StoryPage,
+  viewport: StoryPageViewport = { x: 0, y: 0, width: page.width, height: page.height },
+): StoryTextLayout[] {
+  const scale = Math.min(viewport.width / page.width, viewport.height / page.height);
+
+  return page.textLayers.flatMap(layer => {
+    if (!layer.text) return [];
+
+    ctx.save();
+    const fontSize = layer.fontSize * scale;
+    const fontFamilyStack = getFontFamilyStack(layer.fontFamily);
+    ctx.font = `${fontSize}px ${fontFamilyStack}`;
+    const centerX = viewport.x + viewport.width / 2 + layer.offsetX * scale;
+    const bottomY = viewport.y + viewport.height - (STORY_TEXT_BOTTOM - layer.offsetY) * scale;
+    const maxWidth = Math.max(1, (page.width - STORY_TEXT_HORIZONTAL_PADDING * 2) * scale);
+    const frozenLines = wrapText(ctx, layer.text, maxWidth);
+    const lineHeight = fontSize * STORY_TEXT_LINE_HEIGHT;
+    const lines = frozenLines.map((text, lineIndex) => ({
+      text,
+      x: centerX,
+      y: bottomY - (frozenLines.length - 1 - lineIndex) * lineHeight,
+    }));
+    const maxLineWidth = frozenLines.length > 0
+      ? Math.max(...frozenLines.map(line => ctx.measureText(line).width))
+      : 0;
+    const paddingX = fontSize * 0.5;
+    const paddingY = fontSize * 0.2;
+    const textHeight = frozenLines.length * lineHeight;
+    const backdrop = layer.hasBackdrop && frozenLines.length > 0
+      ? {
+          color: getBackdropColor(layer.color),
+          x: centerX - (maxLineWidth + paddingX * 2) / 2,
+          y: bottomY - textHeight - paddingY + lineHeight * 0.25,
+          width: maxLineWidth + paddingX * 2,
+          height: textHeight + paddingY * 2,
+          radius: fontSize * 0.3,
+        }
+      : null;
+    ctx.restore();
+
+    return [{
+      id: layer.id,
+      sourceText: layer.text,
+      fontFamily: layer.fontFamily,
+      fontFamilyStack,
+      fontSize,
+      lineHeight,
+      color: layer.color,
+      alignment: 'center',
+      baseline: 'bottom',
+      maxWidth,
+      lines,
+      stroke: layer.hasShadow
+        ? { color: getStrokeColor(layer.color), width: fontSize * 0.08, lineJoin: 'round' }
+        : null,
+      shadow: null,
+      backdrop,
+    }];
+  });
+}
+
 export function drawStoryPageText(
   ctx: CanvasRenderingContext2D,
   page: StoryPage,
   viewport: StoryPageViewport = { x: 0, y: 0, width: page.width, height: page.height },
 ): void {
-  const scale = Math.min(viewport.width / page.width, viewport.height / page.height);
-
-  page.textLayers.forEach(layer => {
-    if (!layer.text) return;
-
+  layoutStoryPageText(ctx, page, viewport).forEach(layout => {
     ctx.save();
-    const scaledFontSize = layer.fontSize * scale;
-    ctx.font = `${scaledFontSize}px ${getFontFamilyStack(layer.fontFamily)}`;
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'bottom';
+    ctx.font = `${layout.fontSize}px ${layout.fontFamilyStack}`;
+    ctx.textAlign = layout.alignment;
+    ctx.textBaseline = layout.baseline;
 
-    const centerX = viewport.x + viewport.width / 2 + layer.offsetX * scale;
-    const bottomY = viewport.y + viewport.height - (STORY_TEXT_BOTTOM - layer.offsetY) * scale;
-    const maxWidth = Math.max(1, (page.width - STORY_TEXT_HORIZONTAL_PADDING * 2) * scale);
-    const lines = wrapText(ctx, layer.text, maxWidth);
-    const lineHeight = scaledFontSize * STORY_TEXT_LINE_HEIGHT;
-
-    if (layer.hasBackdrop && lines.length > 0) {
-      const maxLineWidth = Math.max(...lines.map(line => ctx.measureText(line).width));
-      const paddingX = scaledFontSize * 0.5;
-      const paddingY = scaledFontSize * 0.2;
-      const textHeight = lines.length * lineHeight;
-      const rectWidth = maxLineWidth + paddingX * 2;
-      const rectHeight = textHeight + paddingY * 2;
-      const rectX = centerX - rectWidth / 2;
-      const rectY = bottomY - textHeight - paddingY + lineHeight * 0.25;
-
-      ctx.fillStyle = getBackdropColor(layer.color);
-      drawRoundedRect(ctx, rectX, rectY, rectWidth, rectHeight, scaledFontSize * 0.3);
+    if (layout.backdrop) {
+      ctx.fillStyle = layout.backdrop.color;
+      drawRoundedRect(
+        ctx,
+        layout.backdrop.x,
+        layout.backdrop.y,
+        layout.backdrop.width,
+        layout.backdrop.height,
+        layout.backdrop.radius,
+      );
       ctx.fill();
     }
 
-    if (layer.hasShadow) {
-      ctx.strokeStyle = getStrokeColor(layer.color);
-      ctx.lineWidth = scaledFontSize * 0.08;
-      ctx.lineJoin = 'round';
+    if (layout.stroke) {
+      ctx.strokeStyle = layout.stroke.color;
+      ctx.lineWidth = layout.stroke.width;
+      ctx.lineJoin = layout.stroke.lineJoin;
       ctx.miterLimit = 2;
-      for (let lineIndex = lines.length - 1; lineIndex >= 0; lineIndex -= 1) {
-        const y = bottomY - (lines.length - 1 - lineIndex) * lineHeight;
-        ctx.strokeText(lines[lineIndex], centerX, y);
+      for (const line of layout.lines) {
+        ctx.strokeText(line.text, line.x, line.y);
       }
     }
 
-    ctx.fillStyle = layer.color;
-    for (let lineIndex = lines.length - 1; lineIndex >= 0; lineIndex -= 1) {
-      const y = bottomY - (lines.length - 1 - lineIndex) * lineHeight;
-      ctx.fillText(lines[lineIndex], centerX, y);
+    ctx.fillStyle = layout.color;
+    for (const line of layout.lines) {
+      ctx.fillText(line.text, line.x, line.y);
     }
     ctx.restore();
   });
@@ -274,7 +352,7 @@ function hasPixelAdjustments(adjustments: ProAdjustments): boolean {
     || (adjustments.selective_colors?.length ?? 0) > 0;
 }
 
-export async function renderStoryPageToCanvas(page: StoryPage): Promise<HTMLCanvasElement> {
+export async function renderStoryPageArtworkToCanvas(page: StoryPage): Promise<HTMLCanvasElement> {
   const canvas = document.createElement('canvas');
   canvas.width = page.width;
   canvas.height = page.height;
@@ -309,6 +387,13 @@ export async function renderStoryPageToCanvas(page: StoryPage): Promise<HTMLCanv
     ctx.drawImage(processed, drawX, drawY, drawWidth, drawHeight);
   }
 
+  return canvas;
+}
+
+export async function renderStoryPageToCanvas(page: StoryPage): Promise<HTMLCanvasElement> {
+  const canvas = await renderStoryPageArtworkToCanvas(page);
+  const ctx = canvas.getContext('2d');
+  if (!ctx) throw new Error(i18n.t('errors.canvasUnavailable'));
   drawStoryPageText(ctx, page);
   return canvas;
 }
