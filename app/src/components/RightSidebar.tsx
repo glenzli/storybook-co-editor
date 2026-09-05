@@ -3,6 +3,7 @@ import { PenTool, Type, Maximize2, ChevronDown, ChevronRight, ChevronLeft, Layou
 import { HexColorPicker } from 'react-colorful';
 import { useTranslation } from 'react-i18next';
 import type { ImageAdjustments, ProjectState, SelectiveColor, TextSettings } from '../project/model';
+import { isPagePrintOnly, setPagePrintOnly } from '../project/pageSettings';
 import { BUILT_IN_FONT_OPTIONS } from '../utils/fonts';
 import { hasStoryTitle } from '../story/script';
 import { ScriptPanel } from './right-sidebar/ScriptPanel';
@@ -546,6 +547,27 @@ export function RightSidebar({
                 <Sparkles size={16} className="text-primary" />
                 {t('ai.redrawImage')}
               </button>
+
+              {projectState && selectedIdx !== null && (
+                <label className="flex items-start gap-3 rounded-md border border-border bg-background px-3 py-2.5 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={isPagePrintOnly(projectState, selectedIdx)}
+                    onChange={event => updateProjectState({
+                      page_settings: setPagePrintOnly(
+                        projectState.page_settings,
+                        selectedIdx,
+                        event.target.checked,
+                      ),
+                    })}
+                    className="mt-0.5 h-4 w-4 accent-primary cursor-pointer"
+                  />
+                  <span className="flex min-w-0 flex-col gap-0.5">
+                    <span className="text-sm font-medium text-foreground">{t('rightSidebar.printOnly')}</span>
+                    <span className="text-xs leading-5 text-muted-foreground">{t('rightSidebar.printOnlyHint')}</span>
+                  </span>
+                </label>
+              )}
 
 
               {/* Canvas Settings */}

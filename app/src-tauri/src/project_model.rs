@@ -41,6 +41,17 @@ pub struct PageTextOverride {
     pub text_color: Option<String>,
 }
 
+fn is_false(value: &bool) -> bool {
+    !*value
+}
+
+#[derive(Serialize, Deserialize, Clone, Default)]
+#[serde(default)]
+pub struct PageSettings {
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub print_only: bool,
+}
+
 #[derive(Serialize, Deserialize, Clone)]
 #[serde(default)]
 pub struct PrintSettings {
@@ -241,6 +252,8 @@ pub struct ProjectState {
     pub author_text_settings: TextSettings,
     #[serde(default)]
     pub page_text_overrides: HashMap<String, PageTextOverride>,
+    #[serde(default, skip_serializing_if = "HashMap::is_empty")]
+    pub page_settings: HashMap<String, PageSettings>,
     #[serde(default)]
     pub publication_metadata: Option<PublicationMetadata>,
     #[serde(default)]
@@ -275,6 +288,7 @@ impl Default for ProjectState {
                 ..TextSettings::default()
             },
             page_text_overrides: HashMap::new(),
+            page_settings: HashMap::new(),
             publication_metadata: None,
             electronic_pdf_settings: None,
         }
@@ -316,5 +330,19 @@ mod tests {
         let state: ProjectState = serde_json::from_value(source.clone()).unwrap();
         let serialized = serde_json::to_value(state).unwrap();
         assert_json_equivalent(&serialized, &source);
+    }
+
+    #[test]
+    fn project_v2_accepts_optional_print_only_page_settings() {
+        let mut source: serde_json::Value =
+            serde_json::from_str(include_str!("../../../fixtures/project-v2.json")).unwrap();
+        source["page_settings"] = serde_json::json!({ "1": { "print_only": true } });
+
+        let state: ProjectState = serde_json::from_value(source).unwrap();
+
+        assert!(state.page_settings["1"].print_only);
+        assert_eq!(state.schema_version, Some(2));
+        let serialized = serde_json::to_value(state).unwrap();
+        assert_eq!(serialized["page_settings"]["1"]["print_only"], true);
     }
 }

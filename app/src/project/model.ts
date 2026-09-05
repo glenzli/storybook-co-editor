@@ -93,6 +93,10 @@ export interface ElectronicPdfSettings {
   allow_annotations?: boolean;
 }
 
+export interface PageSettings {
+  print_only?: boolean;
+}
+
 export interface ProjectState {
   schema_version?: number;
   project_name: string;
@@ -111,6 +115,7 @@ export interface ProjectState {
   canvas_height: number;
   author_text_settings?: TextSettings;
   page_text_overrides?: Record<string, { offset_x: number; offset_y: number; text_color?: string }>;
+  page_settings?: Record<string, PageSettings>;
   publication_metadata?: PublicationMetadata;
   electronic_pdf_settings?: ElectronicPdfSettings;
 }

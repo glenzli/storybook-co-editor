@@ -27,6 +27,8 @@ The directory structure is normative. `.scpub` is the portable transport form.
 
 Each page has a stable `id`, zero-based `order`, `role`, one text-free WebP `image`, and zero or more `textLayers`. Image background, scale, crop, offset, and image adjustments are baked into the WebP.
 
+Pages marked as print-only in the source project are omitted from web publications. The remaining pages and resource paths are numbered contiguously.
+
 Each text layer records its original `text`, frozen `lines` as `{text, x, y}`, an anchor position, and final style values. Coordinates and font sizes use canvas pixels. The current format supports centered text, optional stroke, and an optional rounded backdrop. `shadow` is reserved and is `null` in v1.
 
 Image `alt` is nullable in v1 because the editor does not currently author image descriptions.

@@ -51,7 +51,12 @@ import {
 } from './editor/pageCollection';
 import { usePluginReceive, type SavedImageEvent } from './editor/usePluginReceive';
 import { subscribeExternalProjectUpdates } from './project/externalUpdates';
-import { exportWebPublication, type PublicationExportProgress } from './publication/export';
+import { getElectronicStoryPageCount, setPagePrintOnly } from './project/pageSettings';
+import {
+  exportWebPublication,
+  getWebPublicationPageCount,
+  type PublicationExportProgress,
+} from './publication/export';
 
 const logger = createLogger('App');
 
@@ -396,7 +401,7 @@ export default function EditorScreen() {
       electronic_pdf_settings: electronicPdfSettings,
     };
 
-    if (exportState.visible_images.length === 0) {
+    if (getElectronicStoryPageCount(exportState) === 0) {
       alert(t('export.noPages'));
       return;
     }
@@ -447,7 +452,8 @@ export default function EditorScreen() {
             source.startsWith('blank://') ? source : source.split('/').pop()!
           )),
         };
-        if (exportState.visible_images.length === 0) {
+        const pageCount = getWebPublicationPageCount(exportState);
+        if (pageCount === 0) {
           alert(t('export.noPages'));
           return;
         }
@@ -459,7 +465,7 @@ export default function EditorScreen() {
           });
           if (!filePath) return;
 
-          setWebPublicationProgress({ current: 0, total: exportState.visible_images.length });
+          setWebPublicationProgress({ current: 0, total: pageCount });
           await waitForProjectFonts(exportState);
           const result = await exportWebPublication({
             projectState: exportState,
@@ -687,6 +693,11 @@ export default function EditorScreen() {
     return () => window.removeEventListener('keydown', handler, { capture: true });
   }, [isDirty, isSaving, saveProject, undo, redo]);
   const handleInsertBlankPage = () => {
+    if (!projectState) return;
+    const pageIndex = images.length;
+    updateProjectState({
+      page_settings: setPagePrintOnly(projectState.page_settings, pageIndex, true),
+    });
     setImages(prev => {
         const next = [...prev, `blank://${Date.now()}`];
         setSelectedIdx(next.length - 1);

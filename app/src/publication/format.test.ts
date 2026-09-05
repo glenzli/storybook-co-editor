@@ -39,6 +39,9 @@ const projectState: ProjectState = {
     auto_snap_content: true,
     double_sided: false,
   },
+  page_settings: {
+    '0': { print_only: true },
+  },
   publication_metadata: {
     title: 'Contract Fixture',
     language: 'en-US',
@@ -116,6 +119,7 @@ describe('publication format v1', () => {
     expect(serialized).not.toContain('/private/source');
     expect(serialized).not.toContain('trashed_images');
     expect(serialized).not.toContain('print_settings');
+    expect(serialized).not.toContain('page_settings');
     expect(serialized).not.toContain('copyright_page_mode');
   });
 

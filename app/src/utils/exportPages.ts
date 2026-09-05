@@ -12,6 +12,7 @@ import {
   type StoryPage,
 } from './storyPageRenderer';
 import { parseStoryScript } from '../story/script';
+import { isPagePrintOnly } from '../project/pageSettings';
 
 export type ExportPage =
   | { kind: 'story'; exportIndex: number; width: number; height: number; story: StoryPage }
@@ -26,7 +27,9 @@ export function buildExportPages(
   imageSources: string[] | undefined,
   target: PublicationPageTarget,
 ): ExportPage[] {
-  const storyPages = buildStoryPages(projectState, imageSources);
+  const storyPages = buildStoryPages(projectState, imageSources).filter(
+    story => target === 'print' || !isPagePrintOnly(projectState, story.index),
+  );
   const pages: UnindexedExportPage[] = storyPages.map(story => ({
     kind: 'story',
     width: story.width,

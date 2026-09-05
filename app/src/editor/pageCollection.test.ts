@@ -24,6 +24,9 @@ const projectState: ProjectState = {
     '0': { offset_x: 1, offset_y: 1 },
     '2': { offset_x: 3, offset_y: 3 },
   },
+  page_settings: {
+    '1': { print_only: true },
+  },
 };
 
 describe('page collection indexing', () => {
@@ -41,6 +44,9 @@ describe('page collection indexing', () => {
         '0': { offset_x: 3, offset_y: 3 },
         '1': { offset_x: 1, offset_y: 1 },
       },
+      page_settings: {
+        '2': { print_only: true },
+      },
     });
   });
 
@@ -53,5 +59,6 @@ describe('page collection indexing', () => {
       '0': { brightness: 1 },
       '1': { brightness: 3 },
     });
+    expect(result.page_settings).toEqual({});
   });
 });

@@ -319,6 +319,8 @@ export const enUS = {
     expand: 'Expand settings sidebar',
     script: 'Script',
     style: 'Style',
+    printOnly: 'Print only',
+    printOnlyHint: 'Skip this page in electronic PDF and web publication exports.',
     scriptHelp: 'Use [Cover] and [1], [2] tags to associate script text with images. The first image is the cover.',
     invalidTags: 'Invalid tag format',
     invalidTagLine: 'Line {{line}}: unrecognized tag',

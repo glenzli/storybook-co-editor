@@ -319,6 +319,8 @@ export const zhCN = {
     expand: '展开设置栏',
     script: '剧本',
     style: '样式',
+    printOnly: '仅用于印刷',
+    printOnlyHint: '导出电子 PDF 和网页出版包时跳过此页。',
     scriptHelp: '使用 [Cover] 和 [1], [2] 标记将剧本与图片关联。第一张图默认为封面。',
     invalidTags: '标签格式有误',
     invalidTagLine: '第 {{line}} 行：无法识别的标签',

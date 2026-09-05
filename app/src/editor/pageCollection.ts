@@ -1,4 +1,4 @@
-import type { ImageAdjustments, ProjectState } from '../project/model';
+import type { ImageAdjustments, PageSettings, ProjectState } from '../project/model';
 
 export type PageIndexMapping = (oldIndex: number) => number | null;
 
@@ -17,9 +17,10 @@ export function remapPageIndexedState(
   projectState: ProjectState,
   itemCount: number,
   mapping: PageIndexMapping,
-): Pick<ProjectState, 'image_adjustments' | 'page_text_overrides'> {
+): Pick<ProjectState, 'image_adjustments' | 'page_text_overrides' | 'page_settings'> {
   const imageAdjustments: Record<string, ImageAdjustments> = {};
   const pageTextOverrides: NonNullable<ProjectState['page_text_overrides']> = {};
+  const pageSettings: Record<string, PageSettings> = {};
 
   for (let oldIndex = 0; oldIndex < itemCount; oldIndex += 1) {
     const newIndex = mapping(oldIndex);
@@ -32,10 +33,14 @@ export function remapPageIndexedState(
     if (projectState.page_text_overrides?.[oldKey]) {
       pageTextOverrides[newKey] = projectState.page_text_overrides[oldKey];
     }
+    if (projectState.page_settings?.[oldKey]) {
+      pageSettings[newKey] = projectState.page_settings[oldKey];
+    }
   }
 
   return {
     image_adjustments: imageAdjustments,
     page_text_overrides: pageTextOverrides,
+    page_settings: pageSettings,
   };
 }

@@ -1,5 +1,6 @@
 import { invoke } from '@tauri-apps/api/core';
 import type { ProjectState } from '../project/model';
+import { getElectronicStoryPageCount, isPagePrintOnly } from '../project/pageSettings';
 import {
   buildStoryPages,
   layoutStoryPageText,
@@ -38,6 +39,10 @@ export interface ExportWebPublicationOptions {
   onProgress?: (progress: PublicationExportProgress) => void;
 }
 
+export function getWebPublicationPageCount(projectState: ProjectState): number {
+  return getElectronicStoryPageCount(projectState);
+}
+
 function canvasToWebp(canvas: HTMLCanvasElement): Promise<Blob> {
   return new Promise((resolve, reject) => {
     canvas.toBlob(blob => {
@@ -67,18 +72,23 @@ export async function exportWebPublication({
   onProgress,
 }: ExportWebPublicationOptions): Promise<PublicationWriteResult> {
   const storyPages = buildStoryPages(projectState, imageSources);
+  const totalPages = storyPages.filter(page => !isPagePrintOnly(projectState, page.index)).length;
+  if (totalPages === 0) throw new Error('PUBLICATION_NO_PAGES');
   const resources: PublishedResource[] = [];
   const archiveAssets: PublicationArchiveAsset[] = [];
   const pages: PublishedPage[] = [];
   const sourceOccurrences = new Map<string, number>();
 
-  for (let index = 0; index < storyPages.length; index += 1) {
-    const page = storyPages[index];
-    const sourceKey = projectState.visible_images[index] || `blank:${index}`;
+  for (const page of storyPages) {
+    const sourceIndex = page.index;
+    const sourceKey = projectState.visible_images[sourceIndex] || `blank:${sourceIndex}`;
     const occurrence = sourceOccurrences.get(sourceKey) ?? 0;
     sourceOccurrences.set(sourceKey, occurrence + 1);
+    if (isPagePrintOnly(projectState, sourceIndex)) continue;
+
+    const outputIndex = pages.length;
     const pageId = await createPublishedPageId(sourceKey, occurrence);
-    const artworkPath = `pages/${String(index + 1).padStart(4, '0')}.webp`;
+    const artworkPath = `pages/${String(outputIndex + 1).padStart(4, '0')}.webp`;
     const artworkCanvas = await renderStoryPageArtworkToCanvas(page);
     const artworkBlob = await canvasToWebp(artworkCanvas);
     const artworkBytes = new Uint8Array(await artworkBlob.arrayBuffer());
@@ -122,7 +132,7 @@ export async function exportWebPublication({
 
     pages.push({
       id: pageId,
-      order: index,
+      order: outputIndex,
       role: page.role,
       image: {
         src: artworkPath,
@@ -142,7 +152,7 @@ export async function exportWebPublication({
       sha256,
     });
     archiveAssets.push({ path: artworkPath, dataBase64: bytesToBase64(artworkBytes) });
-    onProgress?.({ current: index + 1, total: storyPages.length });
+    onProgress?.({ current: outputIndex + 1, total: totalPages });
   }
 
   const manifest = await buildPublicationManifest({ projectState, createdAt, pages, resources });
