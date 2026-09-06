@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
-pub const PROJECT_SCHEMA_VERSION: &str = "20260906.01";
+pub const PROJECT_SCHEMA_VERSION: &str = "20260906.02";
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
 #[serde(untagged)]
@@ -14,10 +14,18 @@ pub enum ProjectSchemaVersion {
 #[serde(default)]
 pub struct TextSettings {
     pub font_family: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub font_weight: Option<u16>,
     pub font_size: f64,
     pub text_color: String,
     pub has_shadow: bool,
     pub has_backdrop: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub readability_mode: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub readability_strength: Option<f64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub max_width_percent: Option<f64>,
     pub offset_x: f64,
     pub offset_y: f64,
     pub paper_alignment: String,
@@ -28,10 +36,14 @@ impl Default for TextSettings {
     fn default() -> Self {
         Self {
             font_family: "serif".to_string(),
+            font_weight: None,
             font_size: 20.0,
             text_color: "#ffffff".to_string(),
             has_shadow: true,
             has_backdrop: false,
+            readability_mode: None,
+            readability_strength: None,
+            max_width_percent: None,
             offset_x: 0.0,
             offset_y: 0.0,
             paper_alignment: "left".to_string(),
@@ -48,6 +60,12 @@ pub struct PageTextOverride {
     pub offset_y: f64,
     #[serde(default)]
     pub text_color: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub readability_mode: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub readability_strength: Option<f64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub max_width_percent: Option<f64>,
 }
 
 fn is_false(value: &bool) -> bool {
@@ -517,5 +535,41 @@ mod tests {
                 .map(|metadata| metadata.language.as_str()),
             Some("zh-CN")
         );
+    }
+
+    #[test]
+    fn current_project_round_trips_text_readability_and_width() {
+        let mut state = ProjectState::default();
+        let language = state.languages.get_mut("zh-CN").unwrap();
+        language.inner_text_settings.readability_mode = Some("halo".to_string());
+        language.inner_text_settings.readability_strength = Some(65.0);
+        language.inner_text_settings.max_width_percent = Some(72.0);
+        language.page_text_overrides.insert(
+            "1".to_string(),
+            super::PageTextOverride {
+                offset_x: 24.0,
+                offset_y: -18.0,
+                text_color: Some("#13283a".to_string()),
+                readability_mode: Some("wash".to_string()),
+                readability_strength: Some(80.0),
+                max_width_percent: Some(48.0),
+            },
+        );
+
+        let serialized = serde_json::to_value(&state).unwrap();
+        let decoded: ProjectState = serde_json::from_value(serialized.clone()).unwrap();
+
+        assert_eq!(
+            serialized["languages"]["zh-CN"]["inner_text_settings"]["readability_mode"],
+            "halo"
+        );
+        assert_eq!(
+            serialized["languages"]["zh-CN"]["page_text_overrides"]["1"]["max_width_percent"],
+            48.0
+        );
+        let page_override = decoded.page_text_override(Some("zh-CN"), 1).unwrap();
+        assert_eq!(page_override.readability_mode.as_deref(), Some("wash"));
+        assert_eq!(page_override.readability_strength, Some(80.0));
+        assert_eq!(page_override.max_width_percent, Some(48.0));
     }
 }

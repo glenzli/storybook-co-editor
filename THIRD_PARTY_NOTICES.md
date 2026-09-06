@@ -9,6 +9,8 @@ The application source license is in `LICENSE`. The bundled fonts below are lice
 | Font | License | Source | Bundled license |
 | --- | --- | --- | --- |
 | LXGW WenKai / 霞鹜文楷 | SIL Open Font License 1.1 | https://github.com/lxgw/LxgwWenKai | `app/src/assets/fonts/lxgw/OFL-LXGW-WenKai.txt` |
+| Yozai / 悠哉字体 | SIL Open Font License 1.1 | https://github.com/lxgw/yozai-font | `app/src/assets/fonts/handwriting/OFL-Yozai.txt` |
+| Xiaolai / 小赖字体 | SIL Open Font License 1.1 | https://github.com/lxgw/kose-font | `app/src/assets/fonts/handwriting/OFL-Xiaolai.txt` |
 | Smiley Sans / 得意黑 | SIL Open Font License 1.1 | https://github.com/atelier-anchor/smiley-sans | `app/src/assets/fonts/display/OFL-Smiley-Sans.txt` |
 | ZCOOL QingKe HuangYou / 站酷庆科黄油体 | SIL Open Font License 1.1 | https://github.com/google/fonts/tree/main/ofl/zcoolqingkehuangyou | `app/src/assets/fonts/display/OFL-ZCOOL-QingKe-HuangYou.txt` |
 | ZCOOL XiaoWei / 站酷小薇体 | SIL Open Font License 1.1 | https://github.com/google/fonts/tree/main/ofl/zcoolxiaowei | `app/src/assets/fonts/display/OFL-ZCOOL-XiaoWei.txt` |

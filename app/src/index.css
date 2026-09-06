@@ -1,5 +1,9 @@
 @import './assets/fonts/google/google-fonts.css';
 @import './assets/fonts/lxgw/lxgw-wenkai.css';
+@import './assets/fonts/lxgw/lxgw-wenkai-light.css';
+@import './assets/fonts/handwriting/yozai-light/font.css';
+@import './assets/fonts/handwriting/yozai-regular/font.css';
+@import './assets/fonts/handwriting/xiaolai/font.css';
 @import './assets/fonts/display/display-fonts.css';
 
 @tailwind base;

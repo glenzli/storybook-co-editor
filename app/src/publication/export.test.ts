@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ProjectState } from '../project/model';
 import { PROJECT_SCHEMA_VERSION } from '../project/migrate';
-import type { StoryPage } from '../utils/storyPageRenderer';
+import type { StoryPage, StoryTextLayout } from '../utils/storyPageRenderer';
 
 const mocks = vi.hoisted(() => ({
   invoke: vi.fn(),
@@ -72,6 +72,38 @@ function storyPage(index: number): StoryPage {
   };
 }
 
+function washTextLayout(): StoryTextLayout {
+  return {
+    id: 'main',
+    sourceText: 'A quiet line',
+    fontFamily: 'serif',
+    fontFamilyStack: 'serif',
+    fontWeight: 300,
+    fontSize: 20,
+    lineHeight: 30,
+    color: '#ffffff',
+    alignment: 'center',
+    baseline: 'bottom',
+    maxWidth: 48,
+    lines: [{ text: 'A quiet line', x: 50, y: 60 }],
+    stroke: null,
+    shadow: null,
+    backdrop: {
+      kind: 'wash',
+      color: 'rgba(18,32,46,0.355)',
+      x: 10,
+      y: 30,
+      width: 80,
+      height: 40,
+      paddingX: 13.6,
+      paddingY: 6.4,
+      radius: 10,
+      feather: 1.8,
+      path: 'M10 30 L90 70 Z',
+    },
+  };
+}
+
 describe('web publication export', () => {
   beforeEach(() => {
     mocks.invoke.mockReset().mockImplementation((command: string) => {
@@ -95,6 +127,7 @@ describe('web publication export', () => {
 
   it('omits print-only pages and writes contiguous output order and paths', async () => {
     const progress = vi.fn();
+    mocks.layoutStoryPageText.mockReturnValue([washTextLayout()]);
 
     await exportWebPublication({
       projectState,
@@ -116,7 +149,7 @@ describe('web publication export', () => {
     const manifest = JSON.parse(args.manifestJson);
 
     expect(command).toBe('write_publication_package');
-    expect(manifest.formatVersion).toBe('20260906.01');
+    expect(manifest.formatVersion).toBe('20260906.02');
     expect(manifest.defaultLanguage).toBe('zh-CN');
     expect(manifest.languages.map((language: { language: string }) => language.language)).toEqual([
       'zh-CN',
@@ -130,6 +163,14 @@ describe('web publication export', () => {
     expect(manifest.pages[0].id).not.toBe(manifest.pages[1].id);
     expect(manifest.pages[0]).not.toHaveProperty('textLayers');
     expect(manifest.languages.every((language: { pages: unknown[] }) => language.pages.length === 2)).toBe(true);
+    expect(manifest.languages[0].pages[0].textLayers[0].style).toMatchObject({
+      fontWeight: 300,
+      backdropKind: 'wash',
+      backdropPaddingX: 13.6,
+      backdropPaddingY: 6.4,
+      backdropFeather: 1.8,
+      backdropPath: 'M10 30 L90 70 Z',
+    });
     expect(mocks.buildStoryPages.mock.calls.map(([state]) => state.global_script)).toEqual([
       '[Cover]\n出版物',
       '[Cover]\n出版物',

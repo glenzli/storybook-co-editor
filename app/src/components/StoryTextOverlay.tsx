@@ -1,10 +1,9 @@
 import type { Ref } from 'react';
 import {
-  getBackdropColor,
-  getStrokeColor,
+  getStoryTextReadabilityPaint,
   STORY_TEXT_BOTTOM,
-  STORY_TEXT_HORIZONTAL_PADDING,
   STORY_TEXT_LINE_HEIGHT,
+  STORY_TEXT_WASH_SVG_PATH,
   type StoryTextLayer,
 } from '../utils/storyPageRenderer';
 import { getFontFamilyStack } from '../utils/fonts';
@@ -25,6 +24,13 @@ export function StoryTextOverlay({
   interactive = false,
 }: StoryTextOverlayProps) {
   const fontSize = layer.fontSize * scale;
+  const paint = getStoryTextReadabilityPaint(
+    layer.readabilityMode,
+    layer.color,
+    fontSize,
+    layer.readabilityStrength,
+  );
+  const backdrop = paint.backdrop;
 
   return (
     <div
@@ -37,8 +43,6 @@ export function StoryTextOverlay({
         justifyContent: 'flex-end',
         alignItems: 'center',
         paddingBottom: STORY_TEXT_BOTTOM * scale,
-        paddingLeft: STORY_TEXT_HORIZONTAL_PADDING * scale,
-        paddingRight: STORY_TEXT_HORIZONTAL_PADDING * scale,
         boxSizing: 'border-box',
         pointerEvents: 'none',
       }}
@@ -47,25 +51,53 @@ export function StoryTextOverlay({
         ref={textRef}
         className="text-center whitespace-pre-wrap"
         style={{
-          maxWidth: '100%',
+          position: 'relative',
+          width: 'fit-content',
+          maxWidth: `${layer.maxWidthPercent}%`,
           fontFamily: getFontFamilyStack(layer.fontFamily),
+          fontWeight: layer.fontWeight,
           fontSize,
           lineHeight: STORY_TEXT_LINE_HEIGHT,
           color: layer.color,
+          overflowWrap: 'anywhere',
           pointerEvents: interactive ? 'auto' : 'none',
           transform: `translate(${layer.offsetX * scale}px, ${layer.offsetY * scale}px)`,
-          ...(layer.hasBackdrop ? {
-            background: getBackdropColor(layer.color),
-            padding: `${fontSize * 0.2}px ${fontSize * 0.5}px`,
-            borderRadius: `${fontSize * 0.3}px`,
-          } : {}),
-          ...(layer.hasShadow ? {
-            WebkitTextStroke: `${fontSize * 0.04}px ${getStrokeColor(layer.color)}`,
+          ...(paint.stroke ? {
+            WebkitTextStroke: `${paint.stroke.width / 2}px ${paint.stroke.color}`,
             paintOrder: 'stroke fill',
+          } : {}),
+          ...(paint.shadow ? {
+            textShadow: [
+              `0 0 ${paint.shadow.blur * 0.45}px ${paint.shadow.color}`,
+              `0 0 ${paint.shadow.blur}px ${paint.shadow.color}`,
+            ].join(', '),
           } : {}),
         }}
       >
-        {layer.text}
+        {backdrop && (
+          <svg
+            aria-hidden="true"
+            viewBox="0 0 100 100"
+            preserveAspectRatio="none"
+            style={{
+              position: 'absolute',
+              left: -backdrop.paddingX,
+              top: -backdrop.paddingY,
+              width: `calc(100% + ${backdrop.paddingX * 2}px)`,
+              height: `calc(100% + ${backdrop.paddingY * 2}px)`,
+              overflow: 'visible',
+              filter: backdrop.kind === 'wash' ? `blur(${backdrop.feather}px)` : undefined,
+              pointerEvents: 'none',
+            }}
+          >
+            {backdrop.kind === 'wash' ? (
+              <path d={STORY_TEXT_WASH_SVG_PATH} fill={backdrop.color} />
+            ) : (
+              <rect x="0" y="0" width="100" height="100" rx="10" fill={backdrop.color} />
+            )}
+          </svg>
+        )}
+        <span style={{ position: 'relative' }}>{layer.text}</span>
       </div>
     </div>
   );

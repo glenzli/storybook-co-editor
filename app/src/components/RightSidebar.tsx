@@ -2,13 +2,30 @@ import { useState, useEffect, useRef } from 'react';
 import { PenTool, Type, Maximize2, ChevronDown, ChevronRight, ChevronLeft, LayoutTemplate, Pipette, Trash2, Copy, ClipboardPaste, Sparkles } from 'lucide-react';
 import { HexColorPicker } from 'react-colorful';
 import { useTranslation } from 'react-i18next';
-import type { ImageAdjustments, ProjectState, SelectiveColor, TextSettings } from '../project/model';
+import type {
+  ImageAdjustments,
+  PageTextOverride,
+  ProjectState,
+  SelectiveColor,
+  TextReadabilityMode,
+  TextSettings,
+} from '../project/model';
 import type { ProjectLanguageSeed } from '../project/languages';
 import { isPagePrintOnly, setPagePrintOnly } from '../project/pageSettings';
-import { BUILT_IN_FONT_OPTIONS } from '../utils/fonts';
+import {
+  BUILT_IN_FONT_OPTIONS,
+  getAvailableFontWeights,
+  normalizeFontWeight,
+} from '../utils/fonts';
 import { hasStoryTitle } from '../story/script';
 import { ScriptPanel } from './right-sidebar/ScriptPanel';
 import { ContentLanguageSwitcher } from './ContentLanguageSwitcher';
+import { TextReadabilityControls } from './right-sidebar/TextReadabilityControls';
+import {
+  normalizeStoryTextWidthPercent,
+  normalizeTextReadabilityStrength,
+  resolveTextReadabilityMode,
+} from '../utils/storyPageRenderer';
 
 const useEyedropper = () => {
   const [isSupported] = useState(() => 'EyeDropper' in window);
@@ -218,6 +235,74 @@ function SliderControl({
   );
 }
 
+function FontControls({
+  fontFamily,
+  fontWeight,
+  systemFonts = [],
+  onChange,
+}: {
+  fontFamily: string;
+  fontWeight?: number;
+  systemFonts?: string[];
+  onChange: (updates: Pick<TextSettings, 'font_family' | 'font_weight'>) => void;
+}) {
+  const { t } = useTranslation();
+  const availableWeights = getAvailableFontWeights(fontFamily);
+  const normalizedWeight = normalizeFontWeight(fontFamily, fontWeight);
+
+  return (
+    <div className="flex flex-col gap-2">
+      <div className="flex flex-col gap-1.5">
+        <label className="text-xs text-muted-foreground">{t('rightSidebar.font')}</label>
+        <select
+          className="w-full bg-background border border-border rounded-md p-2 text-sm focus:ring-1 focus:ring-primary outline-none"
+          value={fontFamily}
+          onChange={(event) => {
+            const nextFamily = event.target.value;
+            onChange({
+              font_family: nextFamily,
+              font_weight: normalizeFontWeight(nextFamily, fontWeight),
+            });
+          }}
+        >
+          <optgroup label={t('rightSidebar.bundledFonts')}>
+            {BUILT_IN_FONT_OPTIONS.map((font) => (
+              <option key={font.value} value={font.value}>
+                {t(`rightSidebar.fonts.${font.translationKey}`)}
+              </option>
+            ))}
+          </optgroup>
+          {systemFonts.length > 0 && (
+            <optgroup label={t('rightSidebar.systemFonts')}>
+              {systemFonts.map(font => <option key={font} value={font}>{font}</option>)}
+            </optgroup>
+          )}
+        </select>
+      </div>
+
+      {availableWeights.length > 1 && (
+        <div className="flex flex-col gap-1.5">
+          <label className="text-xs text-muted-foreground">{t('rightSidebar.fontWeight')}</label>
+          <select
+            className="w-full bg-background border border-border rounded-md p-2 text-sm focus:ring-1 focus:ring-primary outline-none"
+            value={normalizedWeight}
+            onChange={(event) => onChange({
+              font_family: fontFamily,
+              font_weight: Number.parseInt(event.target.value, 10),
+            })}
+          >
+            {availableWeights.map(weight => (
+              <option key={weight} value={weight}>
+                {t(`rightSidebar.fontWeights.${weight}`, { defaultValue: String(weight) })}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function ColorPickerPanel({ 
   colors, 
   value, 
@@ -313,18 +398,26 @@ function SyncTextSettingsDialog({
   effectiveColor,
   effectiveOffsetX,
   effectiveOffsetY,
+  effectiveReadabilityMode,
+  effectiveReadabilityStrength,
+  effectiveMaxWidthPercent,
   onSync
 }: {
   effectiveColor: string,
   effectiveOffsetX: number,
   effectiveOffsetY: number,
-  onSync: (opts: { color: boolean, offsetX: boolean, offsetY: boolean }) => void
+  effectiveReadabilityMode: TextReadabilityMode,
+  effectiveReadabilityStrength: number,
+  effectiveMaxWidthPercent: number,
+  onSync: (opts: { color: boolean, offsetX: boolean, offsetY: boolean, readability: boolean, width: boolean }) => void
 }) {
   const { t } = useTranslation();
   const [isOpen, setIsOpen] = useState(false);
   const [syncColor, setSyncColor] = useState(true);
   const [syncOffsetX, setSyncOffsetX] = useState(true);
   const [syncOffsetY, setSyncOffsetY] = useState(true);
+  const [syncReadability, setSyncReadability] = useState(true);
+  const [syncWidth, setSyncWidth] = useState(true);
 
   if (!isOpen) {
     return (
@@ -355,10 +448,27 @@ function SyncTextSettingsDialog({
         <input type="checkbox" checked={syncOffsetY} onChange={(e) => setSyncOffsetY(e.target.checked)} className="accent-primary w-3.5 h-3.5" />
         {t('rightSidebar.syncOffsetY', { value: effectiveOffsetY })}
       </label>
+      <label className="flex items-center gap-2 text-xs text-muted-foreground cursor-pointer hover:text-foreground transition-colors">
+        <input type="checkbox" checked={syncReadability} onChange={(e) => setSyncReadability(e.target.checked)} className="accent-primary w-3.5 h-3.5" />
+        {t('rightSidebar.syncReadability', {
+          mode: t(`rightSidebar.readabilityModes.${effectiveReadabilityMode}`),
+          strength: Math.round(effectiveReadabilityStrength),
+        })}
+      </label>
+      <label className="flex items-center gap-2 text-xs text-muted-foreground cursor-pointer hover:text-foreground transition-colors">
+        <input type="checkbox" checked={syncWidth} onChange={(e) => setSyncWidth(e.target.checked)} className="accent-primary w-3.5 h-3.5" />
+        {t('rightSidebar.syncTextWidth', { value: Math.round(effectiveMaxWidthPercent) })}
+      </label>
       <div className="flex gap-2 mt-1">
         <button 
           onClick={() => {
-            onSync({ color: syncColor, offsetX: syncOffsetX, offsetY: syncOffsetY });
+            onSync({
+              color: syncColor,
+              offsetX: syncOffsetX,
+              offsetY: syncOffsetY,
+              readability: syncReadability,
+              width: syncWidth,
+            });
             setIsOpen(false);
           }}
           className="flex-1 bg-primary text-primary-foreground text-xs py-1.5 rounded hover:bg-primary/90 font-medium transition-colors"
@@ -673,20 +783,11 @@ export function RightSidebar({
                   const updateAts = (updates: Partial<TextSettings>) => updateProjectState({ author_text_settings: { ...ats, ...updates } });
                   return (
                     <>
-                      <div className="flex flex-col gap-1.5">
-                        <label className="text-xs text-muted-foreground">{t('rightSidebar.font')}</label>
-                        <select 
-                          className="w-full bg-background border border-border rounded-md p-2 text-sm focus:ring-1 focus:ring-primary outline-none"
-                          value={ats.font_family || 'serif'}
-                          onChange={(e) => updateAts({ font_family: e.target.value })}
-                        >
-                          <optgroup label={t('rightSidebar.bundledFonts')}>
-                            {BUILT_IN_FONT_OPTIONS.map((font) => (
-                              <option key={font.value} value={font.value}>{t(`rightSidebar.fonts.${font.translationKey}`)}</option>
-                            ))}
-                          </optgroup>
-                        </select>
-                      </div>
+                      <FontControls
+                        fontFamily={ats.font_family || 'serif'}
+                        fontWeight={ats.font_weight}
+                        onChange={updateAts}
+                      />
 
                       <SliderControl
                         label={t('rightSidebar.fontSize')}
@@ -699,28 +800,23 @@ export function RightSidebar({
                         onChange={(val) => updateAts({ font_size: val })}
                       />
 
-                      <div className="flex items-center justify-between mt-1 border-t border-border pt-2">
+                      <div className="mt-1 border-t border-border pt-2">
                         <ColorPickerPanel 
                           colors={extractedColors}
                           value={ats.text_color || '#ffffff'}
                           onChange={(c) => updateAts({ text_color: c })}
-                          className="flex-1 pr-4 border-r border-border"
                         />
-                        <div className="flex flex-col gap-1.5 pl-4 items-center justify-center">
-                          <label className="text-xs text-muted-foreground">{t('rightSidebar.stroke')}</label>
-                          <input type="checkbox" className="accent-primary w-4 h-4"
-                            checked={ats.has_shadow ?? true}
-                            onChange={(e) => updateAts({ has_shadow: e.target.checked })}
-                          />
-                        </div>
-                        <div className="flex flex-col gap-1.5 pl-4 items-center justify-center">
-                          <label className="text-xs text-muted-foreground">{t('rightSidebar.backdrop')}</label>
-                          <input type="checkbox" className="accent-primary w-4 h-4"
-                            checked={ats.has_backdrop ?? false}
-                            onChange={(e) => updateAts({ has_backdrop: e.target.checked })}
-                          />
-                        </div>
                       </div>
+
+                      <TextReadabilityControls
+                        mode={resolveTextReadabilityMode(ats)}
+                        strength={normalizeTextReadabilityStrength(ats.readability_strength)}
+                        maxWidthPercent={normalizeStoryTextWidthPercent(ats.max_width_percent)}
+                        pageSpecific={false}
+                        onModeChange={mode => updateAts({ readability_mode: mode })}
+                        onStrengthChange={readabilityStrength => updateAts({ readability_strength: readabilityStrength })}
+                        onMaxWidthChange={maxWidthPercent => updateAts({ max_width_percent: maxWidthPercent })}
+                      />
 
                       <div className="flex flex-col gap-3 mt-2 border-t border-border pt-2">
                         <SliderControl
@@ -776,7 +872,10 @@ export function RightSidebar({
                             font_size: isCover ? 40 : (isTitle ? 32 : 20), 
                             text_color: '#ffffff', 
                             font_family: 'serif',
+                            font_weight: 400,
                             has_shadow: true,
+                            readability_strength: 55,
+                            max_width_percent: 90,
                             offset_x: 0,
                             offset_y: 0
                         };
@@ -784,8 +883,12 @@ export function RightSidebar({
                             font_size: currentSettings?.font_size ?? defaultSettings.font_size,
                             text_color: currentSettings?.text_color ?? defaultSettings.text_color,
                             font_family: currentSettings?.font_family ?? defaultSettings.font_family,
+                            font_weight: currentSettings?.font_weight ?? defaultSettings.font_weight,
                             has_shadow: currentSettings?.has_shadow ?? defaultSettings.has_shadow,
                             has_backdrop: currentSettings?.has_backdrop ?? false,
+                            readability_mode: currentSettings?.readability_mode,
+                            readability_strength: normalizeTextReadabilityStrength(currentSettings?.readability_strength),
+                            max_width_percent: normalizeStoryTextWidthPercent(currentSettings?.max_width_percent),
                             offset_x: currentSettings?.offset_x ?? defaultSettings.offset_x,
                             offset_y: currentSettings?.offset_y ?? defaultSettings.offset_y,
                         };
@@ -798,8 +901,21 @@ export function RightSidebar({
                         const effectiveColor = (isCover || isTitle) ? settings.text_color : (pageOverride?.text_color ?? settings.text_color ?? '#ffffff');
                         const effectiveOffsetX = (isCover || isTitle) ? (settings.offset_x || 0) : (pageOverride?.offset_x ?? settings.offset_x ?? 0);
                         const effectiveOffsetY = (isCover || isTitle) ? (settings.offset_y || 0) : (pageOverride?.offset_y ?? settings.offset_y ?? 0);
+                        const effectiveReadabilityMode = (isCover || isTitle)
+                          ? resolveTextReadabilityMode(settings)
+                          : (pageOverride?.readability_mode ?? resolveTextReadabilityMode(settings));
+                        const effectiveReadabilityStrength = normalizeTextReadabilityStrength(
+                          (isCover || isTitle)
+                            ? settings.readability_strength
+                            : (pageOverride?.readability_strength ?? settings.readability_strength),
+                        );
+                        const effectiveMaxWidthPercent = normalizeStoryTextWidthPercent(
+                          (isCover || isTitle)
+                            ? settings.max_width_percent
+                            : (pageOverride?.max_width_percent ?? settings.max_width_percent),
+                        );
 
-                        // Update shared style (font/size/shadow)
+                        // Update style shared by pages in the same role.
                         const updateSharedSettings = (updates: Partial<TextSettings>) => {
                           if (isCover) {
                             updateProjectState({ cover_text_settings: { ...settings, ...updates } });
@@ -810,8 +926,8 @@ export function RightSidebar({
                           }
                         };
 
-                        // Update per-page overrides (color/offset) — for inner pages only
-                        const updatePageOverride = (updates: Partial<{ offset_x: number; offset_y: number; text_color: string }>) => {
+                        // Update scene-dependent properties per page for inner pages.
+                        const updatePageOverride = (updates: Partial<PageTextOverride>) => {
                           if (isCover) {
                             updateProjectState({ cover_text_settings: { ...settings, ...updates } });
                           } else if (isTitle) {
@@ -827,25 +943,12 @@ export function RightSidebar({
 
                   return (
                     <>
-                      <div className="flex flex-col gap-1.5">
-                        <label className="text-xs text-muted-foreground">{t('rightSidebar.font')}</label>
-                        <select 
-                          className="w-full bg-background border border-border rounded-md p-2 text-sm focus:ring-1 focus:ring-primary outline-none"
-                          value={settings.font_family}
-                          onChange={(e) => updateSharedSettings({ font_family: e.target.value })}
-                        >
-                          <optgroup label={t('rightSidebar.bundledFonts')}>
-                              {BUILT_IN_FONT_OPTIONS.map((font) => (
-                                <option key={font.value} value={font.value}>{t(`rightSidebar.fonts.${font.translationKey}`)}</option>
-                              ))}
-                          </optgroup>
-                          {systemFonts.length > 0 && (
-                              <optgroup label={t('rightSidebar.systemFonts')}>
-                                  {systemFonts.map(f => <option key={f} value={f}>{f}</option>)}
-                              </optgroup>
-                          )}
-                        </select>
-                      </div>
+                      <FontControls
+                        fontFamily={settings.font_family}
+                        fontWeight={settings.font_weight}
+                        systemFonts={systemFonts}
+                        onChange={updateSharedSettings}
+                      />
 
                       <SliderControl
                         label={t('rightSidebar.fontSize')}
@@ -858,38 +961,29 @@ export function RightSidebar({
                         onChange={(val) => updateSharedSettings({ font_size: val })}
                       />
 
-                      <div className="flex items-center justify-between mt-1 border-t border-border pt-2">
+                      <div className="mt-1 border-t border-border pt-2">
                           <ColorPickerPanel 
                             colors={extractedColors}
                             value={effectiveColor}
                             onChange={(c) => updatePageOverride({ text_color: c })}
-                            className="flex-1 pr-4 border-r border-border"
                             title={<>{t('rightSidebar.color')}{!isCover && <span className="text-primary/60 ml-1">({t('rightSidebar.currentPage')})</span>}</>}
                           />
-                          <div className="flex flex-col gap-1.5 pl-4 items-center justify-center">
-                              <label className="text-xs text-muted-foreground">{t('rightSidebar.stroke')}</label>
-                              <input 
-                                type="checkbox" 
-                                checked={settings.has_shadow ?? true}
-                                onChange={(e) => updateSharedSettings({ has_shadow: e.target.checked })}
-                                className="w-4 h-4 accent-primary cursor-pointer"
-                              />
-                          </div>
-                          <div className="flex flex-col gap-1.5 pl-4 items-center justify-center">
-                              <label className="text-xs text-muted-foreground">{t('rightSidebar.backdrop')}</label>
-                              <input 
-                                type="checkbox" 
-                                checked={settings.has_backdrop ?? false}
-                                onChange={(e) => updateSharedSettings({ has_backdrop: e.target.checked })}
-                                className="w-4 h-4 accent-primary cursor-pointer"
-                              />
-                          </div>
                       </div>
+
+                      <TextReadabilityControls
+                        mode={effectiveReadabilityMode}
+                        strength={effectiveReadabilityStrength}
+                        maxWidthPercent={effectiveMaxWidthPercent}
+                        pageSpecific={!isCover && !isTitle}
+                        onModeChange={readabilityMode => updatePageOverride({ readability_mode: readabilityMode })}
+                        onStrengthChange={readabilityStrength => updatePageOverride({ readability_strength: readabilityStrength })}
+                        onMaxWidthChange={maxWidthPercent => updatePageOverride({ max_width_percent: maxWidthPercent })}
+                      />
 
                       <div className="flex flex-col gap-3 mt-2 border-t border-border pt-2">
                         {!isCover && (
                           <div className="text-[10px] text-muted-foreground/60 text-center">
-                            {t('rightSidebar.pageOffset')}
+                            {t('rightSidebar.pageTextPlacement')}
                           </div>
                         )}
                         <SliderControl
@@ -916,6 +1010,9 @@ export function RightSidebar({
                           effectiveColor={effectiveColor}
                           effectiveOffsetX={effectiveOffsetX}
                           effectiveOffsetY={effectiveOffsetY}
+                          effectiveReadabilityMode={effectiveReadabilityMode}
+                          effectiveReadabilityStrength={effectiveReadabilityStrength}
+                          effectiveMaxWidthPercent={effectiveMaxWidthPercent}
                           onSync={(opts) => {
                             const overrides = { ...(projectState?.page_text_overrides || {}) };
                             const paragraphs = (globalScript || '').split(/\n\s*\n/).filter((p: string) => p.trim().length > 0);
@@ -927,6 +1024,11 @@ export function RightSidebar({
                               if (opts.color) currentOverride.text_color = effectiveColor;
                               if (opts.offsetX) currentOverride.offset_x = effectiveOffsetX;
                               if (opts.offsetY) currentOverride.offset_y = effectiveOffsetY;
+                              if (opts.readability) {
+                                currentOverride.readability_mode = effectiveReadabilityMode;
+                                currentOverride.readability_strength = effectiveReadabilityStrength;
+                              }
+                              if (opts.width) currentOverride.max_width_percent = effectiveMaxWidthPercent;
                               overrides[String(i)] = currentOverride;
                             }
                             updateProjectState({ page_text_overrides: overrides });

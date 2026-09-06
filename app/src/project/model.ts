@@ -1,13 +1,28 @@
+export type TextReadabilityMode = 'none' | 'outline' | 'halo' | 'wash' | 'panel';
+
 export interface TextSettings {
   font_size?: number;
   text_color?: string;
   font_family?: string;
+  font_weight?: number;
   has_shadow?: boolean;
   has_backdrop?: boolean;
+  readability_mode?: TextReadabilityMode;
+  readability_strength?: number;
+  max_width_percent?: number;
   offset_x?: number;
   offset_y?: number;
   paper_alignment?: 'center' | 'left' | 'top-left';
   auto_snap_content?: boolean;
+}
+
+export interface PageTextOverride {
+  offset_x: number;
+  offset_y: number;
+  text_color?: string;
+  readability_mode?: TextReadabilityMode;
+  readability_strength?: number;
+  max_width_percent?: number;
 }
 
 export interface SelectiveColor {
@@ -103,7 +118,7 @@ export interface ProjectLanguage {
   title_text_settings?: TextSettings;
   inner_text_settings?: TextSettings;
   author_text_settings?: TextSettings;
-  page_text_overrides?: Record<string, { offset_x: number; offset_y: number; text_color?: string }>;
+  page_text_overrides?: Record<string, PageTextOverride>;
   publication_metadata?: PublicationMetadata;
 }
 
@@ -127,7 +142,7 @@ export interface ProjectState {
   canvas_width: number;
   canvas_height: number;
   author_text_settings?: TextSettings;
-  page_text_overrides?: Record<string, { offset_x: number; offset_y: number; text_color?: string }>;
+  page_text_overrides?: Record<string, PageTextOverride>;
   page_settings?: Record<string, PageSettings>;
   publication_metadata?: PublicationMetadata;
   electronic_pdf_settings?: ElectronicPdfSettings;

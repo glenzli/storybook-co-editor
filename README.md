@@ -10,9 +10,9 @@
 
 Storybook Co-Editor 是一款本地绘本排版工具。Chrome 扩展从网页收集图片；macOS 桌面端用于管理页序和脚本文字、调整图片、保存项目，以及导出电子 PDF 和印刷 PDF。
 
-当前版本为 `1.3.0`，项目文件使用 `.scproj` 格式，界面支持简体中文和 English。
+当前版本为 `1.4.0`，项目文件使用 `.scproj` 格式，界面支持简体中文和 English。
 
-- [下载发布版](https://gitlab.com/glenzli/storybook-co-editor/-/releases)
+- [下载发布版](https://github.com/glenzli/storybook-co-editor/releases)
 - 本地服务：`http://127.0.0.1:14320`
 
 ![Chrome 扩展图片发送界面](docs/images/extension-overlay.png)
@@ -30,10 +30,10 @@ Storybook Co-Editor 是一款本地绘本排版工具。Chrome 扩展从网页�
 ## 当前能力
 
 - **网页采集**：从网页图片、懒加载元素和常见图片链接读取内容，通过悬浮按钮发送图片或参考图，并按内容哈希去重。
-- **绘本编辑**：拖拽调整页序，管理封面、扉页、正文、空白页和回收站；分别设置文字样式、页面底色、图片缩放与位置。
+- **绘本编辑**：拖拽调整页序，管理封面、扉页、正文、空白页和回收站；分别设置文字样式、页面底色、图片缩放与位置。正文支持描边、柔光、绘画底纹和清晰面板等复杂背景可读性模式，并可按页控制文本宽度。
 - **脚本排版**：使用 `[Cover]`、`[Author]`、`[Title]` 和数字标签将脚本文字映射到页面，同时支持对应的中文标签。
 - **图片调整**：按页调整亮度、曝光、对比度、高光、阴影、饱和度、色温、色调和局部 HSL，并可按指定底色处理图片背景。
-- **项目保存**：`.scproj` 项目包保存项目数据、图片资源和回收站，支持最近项目、自动保存、另存为、撤销和重做。
+- **项目保存**：`.scproj` 项目包保存项目数据、图片资源和回收站，支持最近项目、自动保存、另存为、撤销和重做；多语言版本可共享画面并分别维护脚本和文字样式。
 - **PDF 导出**：导出按页排列的电子 PDF，或按纸张、装订方式和打印边距生成印刷 PDF；可写入出版信息、生成版权页并设置电子 PDF 权限。
 - **Codex（可选）**：通过本机 Codex App Server 提供剧本润色、绘制新页面和重绘图片。修改与候选图先供用户检查，确认后写入项目。
 - **MCP（可选）**：本地 MCP 服务可读取当前项目和剧本、替换剧本、读取页面布局并调整文字位置。写入操作使用项目修改时间检查并发更新。
@@ -49,11 +49,11 @@ Storybook Co-Editor 是一款本地绘本排版工具。Chrome 扩展从网页�
 
 ## 安装
 
-从 [GitLab Releases](https://gitlab.com/glenzli/storybook-co-editor/-/releases) 下载当前版本：
+从 [GitHub Releases](https://github.com/glenzli/storybook-co-editor/releases) 下载当前版本：
 
 ```text
-storybook-co-editor_1.3.0_aarch64.dmg
-storybook-co-editor-extension-v1.3.0.zip
+storybook-co-editor_1.4.0_aarch64.dmg
+storybook-co-editor-extension-v1.4.0.zip
 ```
 
 1. 安装并打开 macOS 桌面端。

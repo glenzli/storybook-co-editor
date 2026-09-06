@@ -13,7 +13,7 @@ use zip::ZipWriter;
 const MAX_ASSET_BYTES: usize = 64 * 1024 * 1024;
 const MAX_PACKAGE_BYTES: usize = 512 * 1024 * 1024;
 const MAX_MANIFEST_BYTES: usize = 16 * 1024 * 1024;
-const PUBLICATION_FORMAT_VERSION: &str = "20260906.01";
+const PUBLICATION_FORMAT_VERSION: &str = "20260906.02";
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -188,8 +188,8 @@ fn validate_manifest(
         return Err(invalid("default language is not included"));
     }
     if manifest.font_pack.id != "glenzli-books-webfonts"
-        || manifest.font_pack.version != "1"
-        || manifest.font_pack.compatibility != "storybook-co-editor-fonts-v1"
+        || manifest.font_pack.version != "2"
+        || manifest.font_pack.compatibility != "storybook-co-editor-fonts-v2"
     {
         return Err(invalid("unsupported font pack"));
     }
@@ -412,8 +412,8 @@ mod tests {
             "canvas": { "width": 64, "height": 64 },
             "fontPack": {
                 "id": "glenzli-books-webfonts",
-                "version": "1",
-                "compatibility": "storybook-co-editor-fonts-v1"
+                "version": "2",
+                "compatibility": "storybook-co-editor-fonts-v2"
             },
             "pages": [{
                 "id": "page-fixture",
@@ -455,8 +455,8 @@ mod tests {
         let root = std::env::temp_dir().join(format!("storybook-publication-{}", Uuid::new_v4()));
         fs::create_dir_all(&root).unwrap();
         let target = root.join("fixture.scpub");
-        let artwork = include_bytes!("../../../fixtures/publication-20260906.01/pages/0001.webp");
-        let manifest = include_str!("../../../fixtures/publication-20260906.01/manifest.json");
+        let artwork = include_bytes!("../../../fixtures/publication-20260906.02/pages/0001.webp");
+        let manifest = include_str!("../../../fixtures/publication-20260906.02/manifest.json");
 
         let result = write_package(
             target.to_str().unwrap(),

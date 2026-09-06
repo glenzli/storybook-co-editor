@@ -10,9 +10,9 @@
 
 Storybook Co-Editor is a local storybook layout tool. Its Chrome extension collects images from web pages. The macOS desktop app manages page order and scripts, adjusts images, saves projects, and exports electronic and print PDFs.
 
-The current version is `1.3.0`. Projects use the `.scproj` format, and the interface is available in English and Simplified Chinese.
+The current version is `1.4.0`. Projects use the `.scproj` format, and the interface is available in English and Simplified Chinese.
 
-- [Download a release](https://gitlab.com/glenzli/storybook-co-editor/-/releases)
+- [Download a release](https://github.com/glenzli/storybook-co-editor/releases)
 - Local service: `http://127.0.0.1:14320`
 
 ![Chrome extension image controls](docs/images/extension-overlay.png)
@@ -30,10 +30,10 @@ The current version is `1.3.0`. Projects use the `.scproj` format, and the inter
 ## Current Capabilities
 
 - **Web capture**: read images from web pages, lazy-loaded elements, and common image links; send images or references from an overlay; and deduplicate them by content hash.
-- **Storybook editing**: reorder pages and manage covers, title pages, body pages, blank pages, and trash. Text styles, page backgrounds, image scale, and image position can be set per page type or page.
+- **Storybook editing**: reorder pages and manage covers, title pages, body pages, blank pages, and trash. Text styles, page backgrounds, image scale, and image position can be set per page type or page. Outline, soft-halo, painted-wash, and clear-panel readability modes keep body text legible over complex art, with per-page text-width control.
 - **Script layout**: map script text to pages with `[Cover]`, `[Author]`, `[Title]`, and numbered tags. Equivalent Chinese tags are also supported.
 - **Image adjustments**: adjust brightness, exposure, contrast, highlights, shadows, saturation, temperature, tint, and selective HSL per page, with background processing based on a selected color.
-- **Project storage**: `.scproj` packages contain project data, image assets, and trash. The app supports recent projects, autosave, Save As, undo, and redo.
+- **Project storage**: `.scproj` packages contain project data, image assets, and trash. The app supports recent projects, autosave, Save As, undo, and redo; multilingual editions can share artwork while keeping scripts and text styles independent.
 - **PDF export**: export page-by-page electronic PDFs or print PDFs based on paper, binding, and printer margins. Publication metadata, copyright pages, and electronic PDF permissions are supported.
 - **Codex (optional)**: use the local Codex App Server to propose script edits, create pages, and redraw images. Changes and image candidates are reviewed before they are written to the project.
 - **MCP (optional)**: the local MCP service can read the active project and script, replace the script, read page layout, and adjust text positions. Writes use the project modification time to detect concurrent updates.
@@ -49,11 +49,11 @@ The current version is `1.3.0`. Projects use the `.scproj` format, and the inter
 
 ## Installation
 
-Download the current packages from [GitLab Releases](https://gitlab.com/glenzli/storybook-co-editor/-/releases):
+Download the current packages from [GitHub Releases](https://github.com/glenzli/storybook-co-editor/releases):
 
 ```text
-storybook-co-editor_1.3.0_aarch64.dmg
-storybook-co-editor-extension-v1.3.0.zip
+storybook-co-editor_1.4.0_aarch64.dmg
+storybook-co-editor-extension-v1.4.0.zip
 ```
 
 1. Install and open the macOS desktop app.

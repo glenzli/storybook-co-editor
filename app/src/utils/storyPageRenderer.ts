@@ -1,21 +1,33 @@
-import type { ImageAdjustments, ProjectState, TextSettings } from '../project/model';
+import type {
+  ImageAdjustments,
+  PageTextOverride,
+  ProjectState,
+  TextReadabilityMode,
+  TextSettings,
+} from '../project/model';
 import i18n from '../i18n';
 import { applyProAdjustments, type ProAdjustments } from './imageProcessor';
-import { getFontFamilyStack } from './fonts';
+import { getFontFamilyStack, normalizeFontWeight } from './fonts';
 import { parseStoryScript } from '../story/script';
 
 export const STORY_TEXT_BOTTOM = 40;
-export const STORY_TEXT_HORIZONTAL_PADDING = 48;
 export const STORY_TEXT_LINE_HEIGHT = 1.5;
+export const STORY_TEXT_DEFAULT_WIDTH_PERCENT = 90;
+export const STORY_TEXT_MIN_WIDTH_PERCENT = 30;
+export const STORY_TEXT_MAX_WIDTH_PERCENT = 96;
+export const STORY_TEXT_DEFAULT_READABILITY_STRENGTH = 55;
+export const STORY_TEXT_WASH_SVG_PATH = 'M3 21 C8 8 21 12 31 6 C43 1 55 10 66 5 C79 0 92 9 97 20 L99 73 C94 89 81 83 69 94 C55 101 43 91 31 97 C18 102 7 91 2 77 Z';
 
 export interface StoryTextLayer {
   id: 'main' | 'author';
   text: string;
   fontFamily: string;
+  fontWeight: number;
   fontSize: number;
   color: string;
-  hasShadow: boolean;
-  hasBackdrop: boolean;
+  readabilityMode: TextReadabilityMode;
+  readabilityStrength: number;
+  maxWidthPercent: number;
   offsetX: number;
   offsetY: number;
 }
@@ -56,6 +68,7 @@ export interface StoryTextLayout {
   sourceText: string;
   fontFamily: string;
   fontFamilyStack: string;
+  fontWeight: number;
   fontSize: number;
   lineHeight: number;
   color: string;
@@ -64,29 +77,160 @@ export interface StoryTextLayout {
   maxWidth: number;
   lines: StoryTextLineLayout[];
   stroke: { color: string; width: number; lineJoin: 'round' } | null;
-  shadow: null;
+  shadow: { color: string; blur: number; spread: number } | null;
   backdrop: {
+    kind: 'panel' | 'wash';
     color: string;
     x: number;
     y: number;
     width: number;
     height: number;
+    paddingX: number;
+    paddingY: number;
     radius: number;
+    feather: number;
+    path: string | null;
   } | null;
 }
 
-export function getStrokeColor(hexColor: string): string {
+export interface StoryTextReadabilityPaint {
+  stroke: StoryTextLayout['stroke'];
+  shadow: StoryTextLayout['shadow'];
+  backdrop: null | {
+    kind: 'panel' | 'wash';
+    color: string;
+    paddingX: number;
+    paddingY: number;
+    radius: number;
+    feather: number;
+  };
+}
+
+function clamp(value: number, minimum: number, maximum: number): number {
+  return Math.min(maximum, Math.max(minimum, value));
+}
+
+function isTextReadabilityMode(value: unknown): value is TextReadabilityMode {
+  return value === 'none'
+    || value === 'outline'
+    || value === 'halo'
+    || value === 'wash'
+    || value === 'panel';
+}
+
+export function resolveTextReadabilityMode(settings?: TextSettings): TextReadabilityMode {
+  if (isTextReadabilityMode(settings?.readability_mode)) return settings.readability_mode;
+  if (settings?.has_backdrop) return 'panel';
+  return settings?.has_shadow === false ? 'none' : 'outline';
+}
+
+export function normalizeTextReadabilityStrength(value?: number): number {
+  return clamp(value ?? STORY_TEXT_DEFAULT_READABILITY_STRENGTH, 20, 100);
+}
+
+export function normalizeStoryTextWidthPercent(value?: number): number {
+  return clamp(
+    value ?? STORY_TEXT_DEFAULT_WIDTH_PERCENT,
+    STORY_TEXT_MIN_WIDTH_PERCENT,
+    STORY_TEXT_MAX_WIDTH_PERCENT,
+  );
+}
+
+function getTextBrightness(hexColor: string): number {
   let hex = hexColor.replace('#', '');
   if (hex.length === 3) hex = hex.split('').map(char => char + char).join('');
   const red = Number.parseInt(hex.substring(0, 2), 16) || 0;
   const green = Number.parseInt(hex.substring(2, 4), 16) || 0;
   const blue = Number.parseInt(hex.substring(4, 6), 16) || 0;
-  const brightness = ((red * 299) + (green * 587) + (blue * 114)) / 1000;
-  return brightness >= 128 ? 'rgba(0,0,0,0.8)' : 'rgba(255,255,255,0.8)';
+  return ((red * 299) + (green * 587) + (blue * 114)) / 1000;
+}
+
+function getContrastRgba(hexColor: string, alpha: number, warm: boolean): string {
+  if (getTextBrightness(hexColor) >= 128) {
+    return `rgba(${warm ? '18,32,46' : '0,0,0'},${alpha.toFixed(3)})`;
+  }
+  return `rgba(${warm ? '255,250,235' : '255,255,255'},${alpha.toFixed(3)})`;
+}
+
+export function getStrokeColor(hexColor: string): string {
+  return getContrastRgba(hexColor, 0.8, false);
 }
 
 export function getBackdropColor(color: string): string {
-  return getStrokeColor(color).replace('0.8)', '0.35)');
+  return getContrastRgba(color, 0.35, true);
+}
+
+export function getStoryTextReadabilityPaint(
+  mode: TextReadabilityMode,
+  color: string,
+  fontSize: number,
+  strength: number,
+): StoryTextReadabilityPaint {
+  const normalizedStrength = normalizeTextReadabilityStrength(strength);
+  if (mode === 'outline') {
+    return {
+      stroke: {
+        color: getContrastRgba(color, 0.72 + normalizedStrength * 0.0016, false),
+        width: fontSize * (0.045 + normalizedStrength * 0.00064),
+        lineJoin: 'round',
+      },
+      shadow: null,
+      backdrop: null,
+    };
+  }
+  if (mode === 'halo') {
+    return {
+      stroke: null,
+      shadow: {
+        color: getContrastRgba(color, 0.5 + normalizedStrength * 0.0025, true),
+        blur: fontSize * (0.09 + normalizedStrength * 0.0015),
+        spread: fontSize * (0.018 + normalizedStrength * 0.00025),
+      },
+      backdrop: null,
+    };
+  }
+  if (mode === 'panel' || mode === 'wash') {
+    const wash = mode === 'wash';
+    return {
+      stroke: null,
+      shadow: null,
+      backdrop: {
+        kind: mode,
+        color: getContrastRgba(
+          color,
+          wash
+            ? 0.18 + normalizedStrength * 0.0025
+            : 0.23 + normalizedStrength * 0.0022,
+          wash,
+        ),
+        paddingX: fontSize * (wash ? 0.68 : 0.5),
+        paddingY: fontSize * (wash ? 0.32 : 0.2),
+        radius: fontSize * (wash ? 0.5 : 0.3),
+        feather: wash ? fontSize * (0.035 + normalizedStrength * 0.0008) : 0,
+      },
+    };
+  }
+  return { stroke: null, shadow: null, backdrop: null };
+}
+
+export function createStoryTextWashPath(
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+): string {
+  const point = (xRatio: number, yRatio: number) => `${(x + width * xRatio).toFixed(2)} ${(y + height * yRatio).toFixed(2)}`;
+  return [
+    `M${point(0.03, 0.21)}`,
+    `C${point(0.08, 0.08)} ${point(0.21, 0.12)} ${point(0.31, 0.06)}`,
+    `C${point(0.43, 0.01)} ${point(0.55, 0.10)} ${point(0.66, 0.05)}`,
+    `C${point(0.79, 0)} ${point(0.92, 0.09)} ${point(0.97, 0.20)}`,
+    `L${point(0.99, 0.73)}`,
+    `C${point(0.94, 0.89)} ${point(0.81, 0.83)} ${point(0.69, 0.94)}`,
+    `C${point(0.55, 1.01)} ${point(0.43, 0.91)} ${point(0.31, 0.97)}`,
+    `C${point(0.18, 1.02)} ${point(0.07, 0.91)} ${point(0.02, 0.77)}`,
+    'Z',
+  ].join(' ');
 }
 
 export function getProAdjustments(adjustments?: ImageAdjustments): ProAdjustments {
@@ -110,16 +254,23 @@ function buildTextLayer(
   text: string,
   settings: TextSettings | undefined,
   defaultFontSize: number,
-  overrides?: { offset_x: number; offset_y: number; text_color?: string },
+  overrides?: PageTextOverride,
 ): StoryTextLayer {
+  const readabilityMode = overrides?.readability_mode ?? resolveTextReadabilityMode(settings);
   return {
     id,
     text,
     fontFamily: settings?.font_family || 'serif',
+    fontWeight: normalizeFontWeight(settings?.font_family, settings?.font_weight),
     fontSize: settings?.font_size || defaultFontSize,
     color: (overrides?.text_color ?? settings?.text_color) || '#ffffff',
-    hasShadow: settings?.has_shadow ?? true,
-    hasBackdrop: settings?.has_backdrop ?? false,
+    readabilityMode,
+    readabilityStrength: normalizeTextReadabilityStrength(
+      overrides?.readability_strength ?? settings?.readability_strength,
+    ),
+    maxWidthPercent: normalizeStoryTextWidthPercent(
+      overrides?.max_width_percent ?? settings?.max_width_percent,
+    ),
     offsetX: overrides?.offset_x ?? settings?.offset_x ?? 0,
     offsetY: overrides?.offset_y ?? settings?.offset_y ?? 0,
   };
@@ -237,10 +388,10 @@ export function layoutStoryPageText(
     ctx.save();
     const fontSize = layer.fontSize * scale;
     const fontFamilyStack = getFontFamilyStack(layer.fontFamily);
-    ctx.font = `${fontSize}px ${fontFamilyStack}`;
+    ctx.font = `${layer.fontWeight} ${fontSize}px ${fontFamilyStack}`;
     const centerX = viewport.x + viewport.width / 2 + layer.offsetX * scale;
     const bottomY = viewport.y + viewport.height - (STORY_TEXT_BOTTOM - layer.offsetY) * scale;
-    const maxWidth = Math.max(1, (page.width - STORY_TEXT_HORIZONTAL_PADDING * 2) * scale);
+    const maxWidth = Math.max(1, page.width * (layer.maxWidthPercent / 100) * scale);
     const frozenLines = wrapText(ctx, layer.text, maxWidth);
     const lineHeight = fontSize * STORY_TEXT_LINE_HEIGHT;
     const lines = frozenLines.map((text, lineIndex) => ({
@@ -251,19 +402,38 @@ export function layoutStoryPageText(
     const maxLineWidth = frozenLines.length > 0
       ? Math.max(...frozenLines.map(line => ctx.measureText(line).width))
       : 0;
-    const paddingX = fontSize * 0.5;
-    const paddingY = fontSize * 0.2;
+    const readability = getStoryTextReadabilityPaint(
+      layer.readabilityMode,
+      layer.color,
+      fontSize,
+      layer.readabilityStrength,
+    );
+    const paddingX = readability.backdrop?.paddingX ?? 0;
+    const paddingY = readability.backdrop?.paddingY ?? 0;
     const textHeight = frozenLines.length * lineHeight;
-    const backdrop = layer.hasBackdrop && frozenLines.length > 0
+    const backdrop = readability.backdrop && frozenLines.length > 0
       ? {
-          color: getBackdropColor(layer.color),
+          kind: readability.backdrop.kind,
+          color: readability.backdrop.color,
           x: centerX - (maxLineWidth + paddingX * 2) / 2,
           y: bottomY - textHeight - paddingY + lineHeight * 0.25,
           width: maxLineWidth + paddingX * 2,
           height: textHeight + paddingY * 2,
-          radius: fontSize * 0.3,
+          paddingX,
+          paddingY,
+          radius: readability.backdrop.radius,
+          feather: readability.backdrop.feather,
+          path: null as string | null,
         }
       : null;
+    if (backdrop?.kind === 'wash') {
+      backdrop.path = createStoryTextWashPath(
+        backdrop.x,
+        backdrop.y,
+        backdrop.width,
+        backdrop.height,
+      );
+    }
     ctx.restore();
 
     return [{
@@ -271,6 +441,7 @@ export function layoutStoryPageText(
       sourceText: layer.text,
       fontFamily: layer.fontFamily,
       fontFamilyStack,
+      fontWeight: layer.fontWeight,
       fontSize,
       lineHeight,
       color: layer.color,
@@ -278,10 +449,8 @@ export function layoutStoryPageText(
       baseline: 'bottom',
       maxWidth,
       lines,
-      stroke: layer.hasShadow
-        ? { color: getStrokeColor(layer.color), width: fontSize * 0.08, lineJoin: 'round' }
-        : null,
-      shadow: null,
+      stroke: readability.stroke,
+      shadow: readability.shadow,
       backdrop,
     }];
   });
@@ -294,11 +463,17 @@ export function drawStoryPageText(
 ): void {
   layoutStoryPageText(ctx, page, viewport).forEach(layout => {
     ctx.save();
-    ctx.font = `${layout.fontSize}px ${layout.fontFamilyStack}`;
+    ctx.font = `${layout.fontWeight} ${layout.fontSize}px ${layout.fontFamilyStack}`;
     ctx.textAlign = layout.alignment;
     ctx.textBaseline = layout.baseline;
 
-    if (layout.backdrop) {
+    if (layout.backdrop?.kind === 'wash' && layout.backdrop.path) {
+      ctx.save();
+      ctx.fillStyle = layout.backdrop.color;
+      ctx.filter = `blur(${layout.backdrop.feather}px)`;
+      ctx.fill(new Path2D(layout.backdrop.path));
+      ctx.restore();
+    } else if (layout.backdrop) {
       ctx.fillStyle = layout.backdrop.color;
       drawRoundedRect(
         ctx,
@@ -309,6 +484,19 @@ export function drawStoryPageText(
         layout.backdrop.radius,
       );
       ctx.fill();
+    }
+
+    if (layout.shadow) {
+      ctx.save();
+      ctx.strokeStyle = layout.shadow.color;
+      ctx.lineWidth = layout.shadow.spread * 2;
+      ctx.lineJoin = 'round';
+      ctx.shadowColor = layout.shadow.color;
+      ctx.shadowBlur = layout.shadow.blur;
+      for (const line of layout.lines) {
+        ctx.strokeText(line.text, line.x, line.y);
+      }
+      ctx.restore();
     }
 
     if (layout.stroke) {

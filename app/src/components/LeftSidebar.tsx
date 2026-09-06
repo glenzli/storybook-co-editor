@@ -3,9 +3,10 @@ import { DndContext, closestCenter, PointerSensor, KeyboardSensor, useSensor, us
 import { SortableContext, verticalListSortingStrategy, sortableKeyboardCoordinates } from '@dnd-kit/sortable';
 import { LayoutTemplate, Archive, ChevronLeft, ChevronRight, FilePlus } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { SortableImageItem, type TextOverlayInfo } from './SortableImageItem';
+import { SortableImageItem } from './SortableImageItem';
 import { PageImageContextMenu, type PageImageMenuTarget } from './PageImageContextMenu';
 import type { ImageAdjustments } from '../project/model';
+import type { StoryTextLayer } from '../utils/storyPageRenderer';
 
 interface LeftSidebarProps {
   isLeftOpen: boolean;
@@ -26,7 +27,7 @@ interface LeftSidebarProps {
   handleRedraw: (id: string, idx: number) => void;
   hasTitle?: boolean;
   imageAdjustments?: Record<string, ImageAdjustments>;
-  textOverlays?: Record<number, TextOverlayInfo[]>;
+  textOverlays?: Record<number, StoryTextLayer[]>;
   canvasSize?: number;
 }
 

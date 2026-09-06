@@ -2,6 +2,8 @@ import type { ProjectState, TextSettings } from '../project/model';
 
 export const BUNDLED_FONT_FAMILIES = [
   'LXGW WenKai',
+  'Yozai',
+  'Xiaolai',
   'Smiley Sans',
   'ZCOOL QingKe HuangYou',
   'ZCOOL XiaoWei',
@@ -14,6 +16,8 @@ export const BUILT_IN_FONT_OPTIONS = [
   { value: 'serif', translationKey: 'serif' },
   { value: 'sans', translationKey: 'sans' },
   { value: 'LXGW WenKai', translationKey: 'lxgwWenkai' },
+  { value: 'Yozai', translationKey: 'yozai' },
+  { value: 'Xiaolai', translationKey: 'xiaolai' },
   { value: 'Smiley Sans', translationKey: 'smileySans' },
   { value: 'ZCOOL QingKe HuangYou', translationKey: 'zcoolQingKeHuangYou' },
   { value: 'ZCOOL XiaoWei', translationKey: 'zcoolXiaoWei' },
@@ -37,6 +41,14 @@ export function getFontFamilyStack(fontFamily?: string): string {
 
   if (ff === 'LXGW WenKai') {
     return '"LXGW WenKai", "Noto Serif SC", "Songti SC", serif';
+  }
+
+  if (ff === 'Yozai') {
+    return '"Yozai", "LXGW WenKai", "Noto Serif SC", "Songti SC", serif';
+  }
+
+  if (ff === 'Xiaolai') {
+    return '"Xiaolai", "LXGW WenKai", "Noto Serif SC", "Songti SC", serif';
   }
 
   if (ff === 'Smiley Sans') {
@@ -70,6 +82,8 @@ const PUBLICATION_TEXT_FAMILIES = new Set([
   'serif',
   'sans',
   'LXGW WenKai',
+  'Yozai',
+  'Xiaolai',
   'Noto Serif SC',
   'Noto Sans SC',
 ]);
@@ -81,12 +95,26 @@ export function getPublicationFontFamily(projectState: ProjectState): string {
     : 'Noto Sans SC';
 }
 
-function getBundledFontWeights(fontFamily: string): number[] {
-  if (fontFamily === 'Noto Sans SC' || fontFamily === 'Noto Serif SC') {
-    return [400, 700];
-  }
+export const DEFAULT_FONT_WEIGHT = 400;
 
-  return [400];
+const BUNDLED_FONT_WEIGHTS: Record<string, readonly number[]> = {
+  'LXGW WenKai': [300, 400],
+  Yozai: [300, 400],
+  Xiaolai: [400],
+  'Noto Sans SC': [400, 700],
+  'Noto Serif SC': [400, 700],
+};
+
+export function getAvailableFontWeights(fontFamily?: string): readonly number[] {
+  return BUNDLED_FONT_WEIGHTS[getPrimaryLoadFamily(fontFamily)] || [DEFAULT_FONT_WEIGHT];
+}
+
+export function normalizeFontWeight(fontFamily?: string, fontWeight?: number): number {
+  const weights = getAvailableFontWeights(fontFamily);
+  const requested = Number.isFinite(fontWeight) ? fontWeight as number : DEFAULT_FONT_WEIGHT;
+  return weights.reduce((closest, weight) => (
+    Math.abs(weight - requested) < Math.abs(closest - requested) ? weight : closest
+  ), weights[0] ?? DEFAULT_FONT_WEIGHT);
 }
 
 function getPrimaryLoadFamily(fontFamily?: string): string {
@@ -141,7 +169,7 @@ export async function waitForProjectFonts(projectState: ProjectState | null | un
 
   const loads = [...loadFamilies].flatMap(family => {
     const quoted = quoteFontFamily(family);
-    return getBundledFontWeights(family).map(weight => fontSet.load(`${weight} 32px ${quoted}`));
+    return getAvailableFontWeights(family).map(weight => fontSet.load(`${weight} 32px ${quoted}`));
   });
 
   await Promise.allSettled(loads);

@@ -1,12 +1,12 @@
 import type { ProjectState, PublicationContributor, PublicationIdentifier } from '../project/model';
 
 export const PUBLICATION_FORMAT = 'storybook-publication';
-export const PUBLICATION_VERSION = '20260906.01';
+export const PUBLICATION_VERSION = '20260906.02';
 
 export const PUBLICATION_FONT_REGISTRY = {
   id: 'glenzli-books-webfonts',
-  version: '1',
-  compatibility: 'storybook-co-editor-fonts-v1',
+  version: '2',
+  compatibility: 'storybook-co-editor-fonts-v2',
 } as const;
 
 export type PublicationReadingDirection = 'ltr' | 'rtl';
@@ -48,13 +48,15 @@ export interface PublishedTextLayer {
   style: {
     font: string;
     fontFamily: string;
+    fontWeight: number;
     fontSize: number;
     lineHeight: number;
     color: string;
     align: 'center';
     strokeColor: string | null;
     strokeWidth: number;
-    shadow: null;
+    shadow: { color: string; blur: number; spread: number } | null;
+    backdropKind: 'panel' | 'wash' | null;
     backdropColor: string | null;
     backdropX: number | null;
     backdropY: number | null;
@@ -63,6 +65,8 @@ export interface PublishedTextLayer {
     backdropPaddingX: number;
     backdropPaddingY: number;
     backdropRadius: number;
+    backdropFeather: number;
+    backdropPath: string | null;
   };
 }
 
@@ -146,6 +150,8 @@ export function getPublishedFontId(fontFamily: string): string {
     serif: 'noto-serif-sc',
     sans: 'noto-sans-sc',
     'LXGW WenKai': 'lxgw-wenkai',
+    Yozai: 'yozai',
+    Xiaolai: 'xiaolai',
     'Smiley Sans': 'smiley-sans',
     'ZCOOL QingKe HuangYou': 'zcool-qingke-huangyou',
     'ZCOOL XiaoWei': 'zcool-xiaowei',

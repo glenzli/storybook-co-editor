@@ -54,4 +54,20 @@ describe('migrateProjectState', () => {
       schema_version: PROJECT_SCHEMA_VERSION,
     });
   });
+
+  it('moves the previous dated schema to the text-readability schema', () => {
+    const state = {
+      ...fixture,
+      schema_version: '20260906.01',
+      default_language: 'en-US',
+      languages: {
+        'en-US': createProjectLanguage('en-US', '[Cover]\nMoon'),
+      },
+    };
+
+    expect(migrateProjectState(state)).toEqual({
+      ...state,
+      schema_version: PROJECT_SCHEMA_VERSION,
+    });
+  });
 });

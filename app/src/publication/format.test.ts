@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import fixtureManifestJson from '../../../fixtures/publication-20260906.01/manifest.json?raw';
+import fixtureManifestJson from '../../../fixtures/publication-20260906.02/manifest.json?raw';
 import type { ProjectState } from '../project/model';
 import {
   buildPublicationManifest,
@@ -77,6 +77,7 @@ const languagePages: PublishedLanguagePage[] = [{
     style: {
       font: 'noto-serif-sc',
       fontFamily: 'serif',
+      fontWeight: 400,
       fontSize: 40,
       lineHeight: 60,
       color: '#ffffff',
@@ -84,6 +85,7 @@ const languagePages: PublishedLanguagePage[] = [{
       strokeColor: 'rgba(0,0,0,0.8)',
       strokeWidth: 3.2,
       shadow: null,
+      backdropKind: null,
       backdropColor: null,
       backdropX: null,
       backdropY: null,
@@ -92,6 +94,8 @@ const languagePages: PublishedLanguagePage[] = [{
       backdropPaddingX: 20,
       backdropPaddingY: 8,
       backdropRadius: 0,
+      backdropFeather: 0,
+      backdropPath: null,
     },
   }],
 }];
@@ -103,7 +107,7 @@ const resources: PublishedResource[] = [{
   sha256: '054edec1d0211f624fed0cbca9d4f9400b0e491c43742af2c5b0abebf0c990d8',
 }];
 
-describe('publication format 20260906.01', () => {
+describe('publication format 20260906.02', () => {
   it('separates shared artwork from language-specific metadata and text', async () => {
     const manifest = await buildPublicationManifest({
       projectState,
@@ -116,9 +120,9 @@ describe('publication format 20260906.01', () => {
     const serialized = JSON.stringify(manifest);
 
     expect(manifest.format).toBe('storybook-publication');
-    expect(manifest.formatVersion).toBe('20260906.01');
+    expect(manifest.formatVersion).toBe('20260906.02');
     expect(manifest.canvas).toEqual({ width: 1024, height: 768 });
-    expect(manifest.fontPack.compatibility).toBe('storybook-co-editor-fonts-v1');
+    expect(manifest.fontPack.compatibility).toBe('storybook-co-editor-fonts-v2');
     expect(manifest.defaultLanguage).toBe('en-US');
     expect(manifest.languages[0].publication.language).toBe('en-US');
     expect(manifest.languages[0].publication.readingDirection).toBe('ltr');
@@ -147,6 +151,8 @@ describe('publication format 20260906.01', () => {
     expect(await createPublishedPageId('cover.png')).toBe(await createPublishedPageId('cover.png'));
     expect(await createPublishedPageId('cover.png', 1)).not.toBe(await createPublishedPageId('cover.png'));
     expect(getPublishedFontId('LXGW WenKai')).toBe('lxgw-wenkai');
+    expect(getPublishedFontId('Yozai')).toBe('yozai');
+    expect(getPublishedFontId('Xiaolai')).toBe('xiaolai');
     expect(getPublishedFontId('Unknown Local Font')).toBe('noto-sans-sc');
   });
 

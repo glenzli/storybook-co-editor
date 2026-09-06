@@ -146,17 +146,17 @@ This release provides the macOS desktop app and a manually installed Chrome exte
 
 ### 本次更新 / What's New
 
-- 新增 Codex 新绘制和重绘图片：从新建页面、样式区和图片右键菜单发起，先审阅候选图再写入项目。
-- 新绘制可引用最多 4 页的图片与脚本文字，维持角色、画风和叙事连续性。
-- 绘制和重绘支持快速、标准、深入三种响应方式，并显示连接、处理、生成和保存候选等进度。
-- 候选图审阅页显示 Codex 返回的本次 token 用量，包括输入、缓存、输出和推理统计。
-- 移除了云端 CI 工作流；构建和发布继续完全在本机完成。
+- 新增无效果、描边、柔光、绘画底纹和清晰面板五种正文可读性模式，强度可调，适应复杂绘本背景。
+- 新增按页文本宽度控制，并可将位置、颜色、字体粗细和可读性设置同步到全部正文页。
+- 新增悠哉字体、小赖字体和霞鹜文楷 Light；字体粗细会真实写入项目、预览、PDF 和网页出版包。
+- 新增多语言项目与网页出版流程：不同语言共享画面资源，分别保存脚本、出版元数据和文字样式。
+- 网页出版格式升级到字体包 2，冻结文本几何同时记录字体粗细与可读性效果。
 
-- Added Codex image creation and redraw from the new-page menu, style panel, and image context menus; candidates are reviewed before they change a project.
-- Creation can reference the images and scripts of up to four pages to preserve characters, visual style, and narrative continuity.
-- Creation and redraw offer Fast, Standard, and Deep response modes with connection, processing, generation, and candidate-saving progress.
-- Candidate review displays the token usage returned by Codex for the task, including input, cache, output, and reasoning counters.
-- Removed hosted CI workflows; builds and releases continue to run entirely locally.
+- Added five body-text readability modes—none, outline, soft halo, painted wash, and clear panel—with adjustable strength for complex illustrated backgrounds.
+- Added per-page text-width control and synchronization of position, color, font weight, and readability settings across body pages.
+- Added Yozai, Xiaolai, and LXGW WenKai Light; actual font weights now persist through projects, preview, PDF, and web publication packages.
+- Added multilingual projects and web publication: languages share artwork while keeping scripts, publication metadata, and text styles independent.
+- Upgraded web publications to font pack 2, preserving font weight and readability effects with frozen text geometry.
 
 ### 下载内容 / Downloads
 

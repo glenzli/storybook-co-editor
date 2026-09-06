@@ -109,6 +109,7 @@ function buildPublishedTextLayers(page: ReturnType<typeof buildStoryPages>[numbe
     style: {
       font: getPublishedFontId(layout.fontFamily),
       fontFamily: layout.fontFamily,
+      fontWeight: layout.fontWeight,
       fontSize: layout.fontSize,
       lineHeight: layout.lineHeight,
       color: layout.color,
@@ -116,14 +117,17 @@ function buildPublishedTextLayers(page: ReturnType<typeof buildStoryPages>[numbe
       strokeColor: layout.stroke?.color ?? null,
       strokeWidth: layout.stroke?.width ?? 0,
       shadow: layout.shadow,
+      backdropKind: layout.backdrop?.kind ?? null,
       backdropColor: layout.backdrop?.color ?? null,
       backdropX: layout.backdrop?.x ?? null,
       backdropY: layout.backdrop?.y ?? null,
       backdropWidth: layout.backdrop?.width ?? null,
       backdropHeight: layout.backdrop?.height ?? null,
-      backdropPaddingX: layout.fontSize * 0.5,
-      backdropPaddingY: layout.fontSize * 0.2,
+      backdropPaddingX: layout.backdrop?.paddingX ?? layout.fontSize * 0.5,
+      backdropPaddingY: layout.backdrop?.paddingY ?? layout.fontSize * 0.2,
       backdropRadius: layout.backdrop?.radius ?? 0,
+      backdropFeather: layout.backdrop?.feather ?? 0,
+      backdropPath: layout.backdrop?.path ?? null,
     },
   }));
 }

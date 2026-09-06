@@ -5,7 +5,8 @@ import {
   normalizeProjectLanguageTag,
 } from './languages';
 
-export const PROJECT_SCHEMA_VERSION = '20260906.01';
+export const PROJECT_SCHEMA_VERSION = '20260906.02';
+const PREVIOUS_DATED_SCHEMA_VERSION = '20260906.01';
 
 type LegacyProjectState = Partial<ProjectState> & {
   author_name?: string;
@@ -57,6 +58,10 @@ export function migrateProjectState(rawState: unknown): ProjectState {
   }
 
   if (state.schema_version === 3) {
+    state.schema_version = PROJECT_SCHEMA_VERSION;
+  }
+
+  if (state.schema_version === PREVIOUS_DATED_SCHEMA_VERSION) {
     state.schema_version = PROJECT_SCHEMA_VERSION;
   }
 

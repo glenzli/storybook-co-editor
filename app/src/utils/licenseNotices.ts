@@ -2,6 +2,8 @@ import notoSansScLicense from '../assets/fonts/google/OFL-Noto-Sans-SC.txt?raw';
 import notoSerifScLicense from '../assets/fonts/google/OFL-Noto-Serif-SC.txt?raw';
 import zcoolKuaiLeLicense from '../assets/fonts/google/OFL-ZCOOL-KuaiLe.txt?raw';
 import lxgwWenKaiLicense from '../assets/fonts/lxgw/OFL-LXGW-WenKai.txt?raw';
+import yozaiLicense from '../assets/fonts/handwriting/OFL-Yozai.txt?raw';
+import xiaolaiLicense from '../assets/fonts/handwriting/OFL-Xiaolai.txt?raw';
 import smileySansLicense from '../assets/fonts/display/OFL-Smiley-Sans.txt?raw';
 import zcoolQingKeHuangYouLicense from '../assets/fonts/display/OFL-ZCOOL-QingKe-HuangYou.txt?raw';
 import zcoolXiaoWeiLicense from '../assets/fonts/display/OFL-ZCOOL-XiaoWei.txt?raw';
@@ -69,6 +71,26 @@ export const FONT_LICENSE_NOTICES: FontLicenseNotice[] = [
     bundledFiles: 'app/src/assets/fonts/display/SmileySans-Oblique.ttf.woff2',
     licenseFile: 'app/src/assets/fonts/display/OFL-Smiley-Sans.txt',
     licenseText: smileySansLicense,
+  },
+  {
+    id: 'yozai',
+    name: 'Yozai',
+    label: '悠哉字体',
+    license: 'SIL Open Font License 1.1',
+    sourceUrl: 'https://github.com/lxgw/yozai-font',
+    bundledFiles: 'app/src/assets/fonts/handwriting/yozai-light/ and yozai-regular/',
+    licenseFile: 'app/src/assets/fonts/handwriting/OFL-Yozai.txt',
+    licenseText: yozaiLicense,
+  },
+  {
+    id: 'xiaolai',
+    name: 'Xiaolai',
+    label: '小赖字体',
+    license: 'SIL Open Font License 1.1',
+    sourceUrl: 'https://github.com/lxgw/kose-font',
+    bundledFiles: 'app/src/assets/fonts/handwriting/xiaolai/',
+    licenseFile: 'app/src/assets/fonts/handwriting/OFL-Xiaolai.txt',
+    licenseText: xiaolaiLicense,
   },
   {
     id: 'zcool-qingke-huangyou',

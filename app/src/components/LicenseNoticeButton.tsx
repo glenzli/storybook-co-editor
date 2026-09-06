@@ -17,6 +17,8 @@ interface LicenseNoticeButtonProps {
 const NOTICE_TRANSLATION_KEYS: Record<string, string> = {
   lopdf: 'lopdf',
   'lxgw-wenkai': 'lxgwWenkai',
+  yozai: 'yozai',
+  xiaolai: 'xiaolai',
   'smiley-sans': 'smileySans',
   'zcool-qingke-huangyou': 'zcoolQingKeHuangYou',
   'zcool-xiaowei': 'zcoolXiaoWei',

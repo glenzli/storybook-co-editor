@@ -1,4 +1,4 @@
-import { memo } from 'react';
+import { memo, useEffect, useRef, useState } from 'react';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { Trash2 } from 'lucide-react';
@@ -6,18 +6,8 @@ import { useTranslation } from 'react-i18next';
 import { useThumbnail } from '../hooks/useThumbnail';
 import type { ProAdjustments } from '../utils/imageProcessor';
 import type { ImageAdjustments } from '../project/model';
-
-export interface TextOverlayInfo {
-  text: string;
-  color: string;
-  fontSize: number;
-  fontFamily: string;
-  hasShadow: boolean;
-  hasBackdrop: boolean;
-  strokeColor: string;
-  offsetX: number;
-  offsetY: number;
-}
+import { StoryTextOverlay } from './StoryTextOverlay';
+import type { StoryTextLayer } from '../utils/storyPageRenderer';
 
 interface SortableImageItemProps {
   id: string;
@@ -28,13 +18,15 @@ interface SortableImageItemProps {
   onContextMenu?: (e: React.MouseEvent, id: string, idx: number) => void;
   hasTitle?: boolean;
   imageAdjustment?: ImageAdjustments;
-  textOverlays?: TextOverlayInfo[];
+  textOverlays?: StoryTextLayer[];
   canvasSize?: number; // canvas width for scaling text
 }
 
 
 export const SortableImageItem = memo(function SortableImageItem({ id, idx, isSelected, onSelect, onDelete, onContextMenu, hasTitle, imageAdjustment, textOverlays, canvasSize }: SortableImageItemProps) {
   const { t } = useTranslation();
+  const pageRef = useRef<HTMLDivElement>(null);
+  const [textScale, setTextScale] = useState(0.2);
   const {
     attributes,
     listeners,
@@ -88,6 +80,20 @@ export const SortableImageItem = memo(function SortableImageItem({ id, idx, isSe
 
   const displaySrc = hasAdj && thumb ? thumb : rawSrc;
 
+  useEffect(() => {
+    const element = pageRef.current;
+    if (!element) return;
+    const update = () => {
+      if (element.offsetWidth > 0) {
+        setTextScale(element.offsetWidth / (canvasSize || 1024));
+      }
+    };
+    update();
+    const observer = new ResizeObserver(update);
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [canvasSize]);
+
   return (
     <div 
       id={`sidebar-item-${idx}`}
@@ -104,72 +110,17 @@ export const SortableImageItem = memo(function SortableImageItem({ id, idx, isSe
       <div className="absolute top-1 left-1 bg-black/60 text-white text-[10px] font-bold px-1.5 py-0.5 rounded backdrop-blur-sm z-10">
         {idx === 0 ? 'Cover' : (hasTitle && idx === 1 ? 'Title' : (hasTitle ? idx - 1 : idx))}
       </div>
-      <div className="relative w-full overflow-hidden" style={{ backgroundColor: bgColor !== 'transparent' ? bgColor : undefined }}>
+      <div ref={pageRef} className="relative w-full overflow-hidden" style={{ backgroundColor: bgColor !== 'transparent' ? bgColor : undefined }}>
         <img 
           src={displaySrc} 
           alt={`Page ${idx}`} 
           className={`w-full h-auto object-contain rounded-md ${id.startsWith('blank://') ? 'bg-white' : ''}`} 
           draggable={false} 
         />
-        {/* Text overlay — Cover/Title only */}
-        {textOverlays && textOverlays.length > 0 && (() => {
-          const cw = canvasSize || 1024;
-          return (
-            <div
-              ref={(el) => {
-                if (!el) return;
-                const update = () => {
-                  const w = el.offsetWidth;
-                  if (w > 0) el.style.setProperty('--s', String(w / cw));
-                };
-                update();
-                // Observe resize for sidebar drag
-                const ro = new ResizeObserver(update);
-                ro.observe(el);
-                (el as HTMLDivElement & { __ro?: ResizeObserver }).__ro?.disconnect();
-                (el as HTMLDivElement & { __ro?: ResizeObserver }).__ro = ro;
-              }}
-              style={{
-                position: 'absolute',
-                inset: 0,
-                display: 'flex',
-                flexDirection: 'column',
-                justifyContent: 'flex-end',
-                alignItems: 'center',
-                paddingBottom: `${(40 / cw) * 100}%`,
-                paddingLeft: `${(48 / cw) * 100}%`,
-                paddingRight: `${(48 / cw) * 100}%`,
-                pointerEvents: 'none',
-                gap: '1px',
-              }}
-            >
-              {textOverlays.map((t, i) => {
-                const fs = t.fontSize;
-                return (
-                  <div key={i} className="text-center whitespace-pre-wrap" style={{
-                    fontFamily: t.fontFamily,
-                    fontSize: `calc(${fs} * var(--s, 0.2) * 1px)`,
-                    lineHeight: 1.5,
-                    color: t.color,
-                    ...(t.hasBackdrop ? {
-                      background: t.strokeColor.replace('0.8)', '0.35)'),
-                      padding: `calc(${fs * 0.2} * var(--s, 0.2) * 1px) calc(${fs * 0.5} * var(--s, 0.2) * 1px)`,
-                      borderRadius: `calc(${fs * 0.3} * var(--s, 0.2) * 1px)`,
-                    } : {}),
-                    ...(t.hasShadow ? {
-                      WebkitTextStroke: `calc(${fs * 0.04} * var(--s, 0.2) * 1px) ${t.strokeColor}`,
-                      paintOrder: 'stroke fill',
-                    } : {}),
-                    maxWidth: '100%',
-                    transform: `translate(calc(${t.offsetX} * var(--s, 0.2) * 1px), calc(${t.offsetY} * var(--s, 0.2) * 1px))`,
-                  }}>
-                    {t.text}
-                  </div>
-                );
-              })}
-            </div>
-          );
-        })()}
+        {/* Cover/title text uses the same rendering component as the main canvas. */}
+        {textOverlays?.map(layer => (
+          <StoryTextOverlay key={layer.id} layer={layer} scale={textScale} />
+        ))}
       </div>
       
       <button 

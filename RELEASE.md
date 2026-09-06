@@ -1,6 +1,6 @@
 # Manual Release Guide
 
-This project uses a manual GitLab and GitHub Release flow. macOS packaging stays local because Tauri desktop builds depend on the local macOS toolchain and signing/notarization choices.
+This project publishes releases on GitHub and mirrors the source branch to GitLab. macOS packaging stays local because Tauri desktop builds depend on the local macOS toolchain and signing/notarization choices.
 
 ## Release Checklist
 
@@ -13,7 +13,7 @@ git status --short
 2. Confirm all public versions match.
 
 ```bash
-rg -n '"version": "1.3.0"|version = "1.3.0"|v1.3.0' \
+rg -n '"version": "1.4.0"|version = "1.4.0"|v1.4.0' \
   app/package.json \
   app/src-tauri/tauri.conf.json \
   app/src-tauri/Cargo.toml \
@@ -33,13 +33,13 @@ rg -n '"version": "1.3.0"|version = "1.3.0"|v1.3.0' \
 The script writes artifacts to `release/`:
 
 ```text
-storybook-co-editor_1.3.0_aarch64.dmg
+storybook-co-editor_1.4.0_aarch64.dmg
 storybook-co-editor.app
 storybook-co-editor.app.zip
-storybook-co-editor-extension-v1.3.0.zip
-storybook-co-editor-licenses-v1.3.0.zip
+storybook-co-editor-extension-v1.4.0.zip
+storybook-co-editor-licenses-v1.4.0.zip
 SHA256SUMS.txt
-RELEASE_NOTES_v1.3.0.md
+RELEASE_NOTES_v1.4.0.md
 ```
 
 4. Smoke test the build.
@@ -56,44 +56,30 @@ RELEASE_NOTES_v1.3.0.md
 - Export an unencrypted electronic PDF with the open-reading preset.
 - Export a small print PDF from the print tab.
 
-5. Create and push the version tag.
+5. Push the release commit to both source remotes.
 
 ```bash
-git tag -a v1.3.0 -m "Storybook Co-Editor v1.3.0"
-git push gitlab main v1.3.0
-git push github main v1.3.0
+git push gitlab main
+git push github main
 ```
 
-6. Create a GitLab Release.
+6. Create the GitHub tag and Release with one CLI invocation. Set `RELEASE_COMMIT` to the exact commit SHA that was pushed to both remotes.
 
 ```bash
-glab release create v1.3.0 \
-  release/storybook-co-editor_1.3.0_aarch64.dmg \
+RELEASE_COMMIT="$(git rev-parse HEAD)"
+gh release create v1.4.0 \
+  release/storybook-co-editor_1.4.0_aarch64.dmg \
   release/storybook-co-editor.app.zip \
-  release/storybook-co-editor-extension-v1.3.0.zip \
-  release/storybook-co-editor-licenses-v1.3.0.zip \
+  release/storybook-co-editor-extension-v1.4.0.zip \
+  release/storybook-co-editor-licenses-v1.4.0.zip \
   release/SHA256SUMS.txt \
   --repo glenzli/storybook-co-editor \
-  --name "Storybook Co-Editor v1.3.0" \
-  --notes-file release/RELEASE_NOTES_v1.3.0.md
+  --title "Storybook Co-Editor v1.4.0" \
+  --notes-file release/RELEASE_NOTES_v1.4.0.md \
+  --target "$RELEASE_COMMIT"
 ```
 
-7. Create a GitHub Release with one CLI invocation.
-
-```bash
-gh release create v1.3.0 \
-  release/storybook-co-editor_1.3.0_aarch64.dmg \
-  release/storybook-co-editor.app.zip \
-  release/storybook-co-editor-extension-v1.3.0.zip \
-  release/storybook-co-editor-licenses-v1.3.0.zip \
-  release/SHA256SUMS.txt \
-  --repo glenzli/storybook-co-editor \
-  --title "Storybook Co-Editor v1.3.0" \
-  --notes-file release/RELEASE_NOTES_v1.3.0.md \
-  --verify-tag
-```
-
-8. Review both releases.
+7. Review the GitHub release and confirm both remote `main` branches point to the release commit.
 
 ## Notes For Users
 

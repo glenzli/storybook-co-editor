@@ -34,12 +34,11 @@ import { AiIntegrationDialog } from './components/ai/AiIntegrationDialog';
 import { CodexImageDialog, type CodexImageRequest } from './components/ai/CodexImageDialog';
 import { useAiSettings } from './components/ai/aiSettings';
 import { useCodexAvailability } from './components/ai/codexModels';
-import { getFontFamilyStack, waitForProjectFonts } from './utils/fonts';
+import { waitForProjectFonts } from './utils/fonts';
 import { StoryTextOverlay } from './components/StoryTextOverlay';
 import {
   buildStoryPages,
   getDefaultExportFilename,
-  getStrokeColor,
 } from './utils/storyPageRenderer';
 import { hasStoryTitle, parseStoryScript } from './story/script';
 import {
@@ -320,21 +319,11 @@ export default function EditorScreen() {
 
   // Compute text overlay info for thumbnails — Cover/Title only
   const textOverlays = useMemo(() => {
-    const result: Record<number, import('./components/SortableImageItem').TextOverlayInfo[]> = {};
+    const result: Record<number, import('./utils/storyPageRenderer').StoryTextLayer[]> = {};
 
     storyPages.filter(page => page.role !== 'body').forEach(page => {
       if (page.textLayers.length === 0) return;
-      result[page.index] = page.textLayers.map(layer => ({
-        text: layer.text,
-        color: layer.color,
-        fontSize: layer.fontSize,
-        fontFamily: getFontFamilyStack(layer.fontFamily),
-        hasShadow: layer.hasShadow,
-        hasBackdrop: layer.hasBackdrop,
-        strokeColor: getStrokeColor(layer.color),
-        offsetX: layer.offsetX,
-        offsetY: layer.offsetY,
-      }));
+      result[page.index] = page.textLayers;
     });
 
     return result;
@@ -1068,7 +1057,7 @@ export default function EditorScreen() {
                   </div>
               )}
               <div className="flex items-center gap-4 text-xs font-mono text-muted-foreground/80">
-                  <span className="font-bold text-foreground/50">STORYBOOK CO-EDITOR v1.3.0</span>
+                  <span className="font-bold text-foreground/50">STORYBOOK CO-EDITOR v1.4.0</span>
                   <span>{t('editor.bridgeConnected')}</span>
               </div>
           </div>
