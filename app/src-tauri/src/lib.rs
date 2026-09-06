@@ -2,6 +2,7 @@ mod codex_app_server;
 mod codex_image_edit;
 mod codex_mcp_config;
 mod codex_polish;
+mod codex_text_design;
 mod mcp_server;
 mod pdf_security;
 mod project_archive;
@@ -32,6 +33,7 @@ pub fn run() {
         .plugin(tauri_plugin_fs::init())
         .setup(|app| {
             app.manage(mcp_server::McpTokenState::default());
+            app.manage(codex_text_design::TextDesignTasks::default());
             app.manage(ProjectManager {
                 active_workspace: Mutex::new(None),
                 operation_lock: Mutex::new(()),
@@ -53,6 +55,8 @@ pub fn run() {
             mcp_server::rotate_mcp_access_token,
             codex_mcp_config::install_mcp_into_codex,
             codex_polish::list_codex_models,
+            codex_text_design::review_text_design,
+            codex_text_design::cancel_text_design,
             codex_polish::polish_story_with_codex,
             codex_polish::translate_story_with_codex,
             codex_image_edit::redraw_image_with_codex,

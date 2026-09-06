@@ -70,4 +70,13 @@ describe('migrateProjectState', () => {
       schema_version: PROJECT_SCHEMA_VERSION,
     });
   });
+  it('preserves composite effects and upgrades the preceding project schema', () => {
+    const effects = { outline: 30, halo: 45, backdrop: 'wash', strength: 55, seed: 231, roughness: 60, feather: 75 };
+    const language = { ...createProjectLanguage('en', '[Cover]\nTitle'),
+      cover_text_settings: { text_effects: effects } };
+    const result = migrateProjectState({ ...fixture, schema_version: '20260906.02', default_language: 'en', languages: { en: language } });
+    expect(result.schema_version).toBe(PROJECT_SCHEMA_VERSION);
+    expect(result.languages?.en.cover_text_settings?.text_effects).toEqual(effects);
+  });
+
 });

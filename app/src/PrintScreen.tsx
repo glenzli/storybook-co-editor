@@ -409,7 +409,7 @@ export default function PrintScreen({ projectState, requestPdfExport }: PrintScr
                     );
                 })()}
                 {page.kind === 'story' && page.story.textLayers.map(layer => (
-                    <StoryTextOverlay key={layer.id} layer={layer} scale={S} hideOnPdfExport />
+                    <StoryTextOverlay key={layer.id} layer={layer} pageWidth={page.story.width} pageHeight={page.story.height} scale={S} hideOnPdfExport />
                 ))}
             </div>
         );

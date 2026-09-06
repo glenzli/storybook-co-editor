@@ -28,6 +28,7 @@ interface LeftSidebarProps {
   hasTitle?: boolean;
   imageAdjustments?: Record<string, ImageAdjustments>;
   textOverlays?: Record<number, StoryTextLayer[]>;
+  canvasHeight?: number;
   canvasSize?: number;
 }
 
@@ -51,7 +52,7 @@ export function LeftSidebar({
   hasTitle,
   imageAdjustments,
   textOverlays,
-  canvasSize
+  canvasSize, canvasHeight
 }: LeftSidebarProps) {
   const { t } = useTranslation();
   const sensors = useSensors(
@@ -196,6 +197,7 @@ export function LeftSidebar({
                     imageAdjustment={imageAdjustments?.[String(idx)]}
                     textOverlays={textOverlays?.[idx]}
                     canvasSize={canvasSize}
+                    canvasHeight={canvasHeight}
                   />
                 ))}
               </SortableContext>

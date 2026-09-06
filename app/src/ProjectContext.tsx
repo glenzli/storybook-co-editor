@@ -9,7 +9,7 @@ import { useTranslation } from 'react-i18next';
 import { localizeAppError } from './i18n';
 import type { ProjectInfo, ProjectState } from './project/model';
 import { migrateProjectState } from './project/migrate';
-import { ProjectHistory } from './project/history';
+import { ProjectHistory, sameProjectContent } from './project/history';
 import {
     dispatchExternalProjectUpdate,
     type ExternalProjectUpdate,
@@ -56,7 +56,7 @@ export const ProjectProvider = ({ children }: { children: ReactNode }) => {
     const [isDirty, setIsDirty] = useState(false);
     const [isSaving, setIsSaving] = useState(false);
     const [saveProgress, setSaveProgress] = useState<{ current: number, total: number } | null>(null);
-    const historyRef = useRef(new ProjectHistory<ProjectState>(value => structuredClone(value)));
+    const historyRef = useRef(new ProjectHistory<ProjectState>(value => structuredClone(value), 50, sameProjectContent));
     const historyWorkspaceRef = useRef<string | null>(null);
     const activeWorkspaceRef = useRef<string | null>(null);
     const pendingExternalUpdateRef = useRef<ExternalProjectUpdate | null>(null);

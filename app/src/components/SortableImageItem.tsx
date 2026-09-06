@@ -19,11 +19,12 @@ interface SortableImageItemProps {
   hasTitle?: boolean;
   imageAdjustment?: ImageAdjustments;
   textOverlays?: StoryTextLayer[];
+  canvasHeight?: number;
   canvasSize?: number; // canvas width for scaling text
 }
 
 
-export const SortableImageItem = memo(function SortableImageItem({ id, idx, isSelected, onSelect, onDelete, onContextMenu, hasTitle, imageAdjustment, textOverlays, canvasSize }: SortableImageItemProps) {
+export const SortableImageItem = memo(function SortableImageItem({ id, idx, isSelected, onSelect, onDelete, onContextMenu, hasTitle, imageAdjustment, textOverlays, canvasSize, canvasHeight }: SortableImageItemProps) {
   const { t } = useTranslation();
   const pageRef = useRef<HTMLDivElement>(null);
   const [textScale, setTextScale] = useState(0.2);
@@ -119,7 +120,7 @@ export const SortableImageItem = memo(function SortableImageItem({ id, idx, isSe
         />
         {/* Cover/title text uses the same rendering component as the main canvas. */}
         {textOverlays?.map(layer => (
-          <StoryTextOverlay key={layer.id} layer={layer} scale={textScale} />
+          <StoryTextOverlay key={layer.id} layer={layer} pageWidth={canvasSize || 1024} pageHeight={canvasHeight || 1024} scale={textScale} />
         ))}
       </div>
       

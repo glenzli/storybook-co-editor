@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
-pub const PROJECT_SCHEMA_VERSION: &str = "20260906.02";
+pub const PROJECT_SCHEMA_VERSION: &str = "20260907.01";
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
 #[serde(untagged)]
@@ -11,8 +11,23 @@ pub enum ProjectSchemaVersion {
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct TextEffects {
+    pub outline: f64,
+    pub halo: f64,
+    pub backdrop: String,
+    pub strength: f64,
+    pub seed: u32,
+    pub roughness: f64,
+    pub feather: f64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub color: Option<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(default)]
 pub struct TextSettings {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub text_effects: Option<TextEffects>,
     pub font_family: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub font_weight: Option<u16>,
@@ -35,6 +50,7 @@ pub struct TextSettings {
 impl Default for TextSettings {
     fn default() -> Self {
         Self {
+            text_effects: None,
             font_family: "serif".to_string(),
             font_weight: None,
             font_size: 20.0,
@@ -54,6 +70,8 @@ impl Default for TextSettings {
 
 #[derive(Serialize, Deserialize, Clone, Default)]
 pub struct PageTextOverride {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub text_effects: Option<TextEffects>,
     #[serde(default)]
     pub offset_x: f64,
     #[serde(default)]
@@ -547,6 +565,7 @@ mod tests {
         language.page_text_overrides.insert(
             "1".to_string(),
             super::PageTextOverride {
+                text_effects: None,
                 offset_x: 24.0,
                 offset_y: -18.0,
                 text_color: Some("#13283a".to_string()),
@@ -571,5 +590,37 @@ mod tests {
         assert_eq!(page_override.readability_mode.as_deref(), Some("wash"));
         assert_eq!(page_override.readability_strength, Some(80.0));
         assert_eq!(page_override.max_width_percent, Some(48.0));
+    }
+    #[test]
+    fn composite_effects_round_trip_per_language_and_page() {
+        let mut state = ProjectState::default();
+        let effects = serde_json::json!({"outline": 25, "halo": 45, "backdrop": "wash", "strength": 60,
+            "seed": 230, "roughness": 55, "feather": 75, "color": "#ffeedd"});
+        state
+            .languages
+            .get_mut("zh-CN")
+            .unwrap()
+            .inner_text_settings
+            .text_effects = Some(serde_json::from_value(effects.clone()).unwrap());
+        let serialized = serde_json::to_value(&state).unwrap();
+        let decoded: ProjectState = serde_json::from_value(serialized.clone()).unwrap();
+        assert_eq!(
+            serialized["languages"]["zh-CN"]["inner_text_settings"]["text_effects"]["seed"],
+            230
+        );
+        assert_eq!(
+            decoded.languages["zh-CN"]
+                .inner_text_settings
+                .text_effects
+                .as_ref()
+                .unwrap()
+                .halo,
+            45.0
+        );
+        let page: super::PageTextOverride = serde_json::from_value(
+            serde_json::json!({"offset_x": 0, "offset_y": 0, "text_effects": effects}),
+        )
+        .unwrap();
+        assert_eq!(page.text_effects.unwrap().color.as_deref(), Some("#ffeedd"));
     }
 }

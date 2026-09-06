@@ -1,3 +1,5 @@
+import { TextDesignDialog } from './components/ai/TextDesignDialog';
+import { candidatePatch } from './text-design/candidates';
 import { useEffect, useState, useMemo, useRef, useCallback } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import type { DragEndEvent } from '@dnd-kit/core';
@@ -329,7 +331,9 @@ export default function EditorScreen() {
     return result;
   }, [storyPages]);
 
+  const [textDesign, setTextDesign] = useState<{ page: import('./utils/storyPageRenderer').StoryPage; key: string } | null>(null);
   const selectedPage = selectedIdx !== null ? storyPages[selectedIdx] : undefined;
+  const textDesignKey = JSON.stringify([activeWorkspaceId, resolvedContentLanguage, selectedPage]);
   const currentText = selectedPage?.textLayers.find(layer => layer.id === 'main')?.text || '';
 
   // Measure viewport and compute canvas scale
@@ -857,6 +861,7 @@ export default function EditorScreen() {
             imageAdjustments={projectState?.image_adjustments}
             textOverlays={textOverlays}
             canvasSize={canvasW}
+            canvasHeight={canvasH}
           />
           {/* Center: Main Canvas */}
           <main ref={viewportRef} className="flex-1 bg-muted relative flex items-center justify-center p-8 overflow-hidden">
@@ -916,6 +921,8 @@ export default function EditorScreen() {
                     <StoryTextOverlay
                       key={layer.id}
                       layer={layer}
+                      pageWidth={selectedPage.width}
+                      pageHeight={selectedPage.height}
                       textRef={layer.id === 'main' ? textRef : authorTextRef}
                       interactive
                     />
@@ -963,6 +970,7 @@ export default function EditorScreen() {
             setSelectedIdx={setSelectedIdx}
             selectedImage={selectedIdx === null ? null : images[selectedIdx] || null}
             isAiAvailable={isAiAvailable}
+            onTextDesign={() => { if (selectedPage?.textLayers.some(l => l.id === 'main')) setTextDesign({ page: structuredClone(selectedPage), key: textDesignKey }); }}
             onRedrawImage={() => {
               if (selectedIdx === null || !images[selectedIdx]) return;
               openCodexRedraw(images[selectedIdx], selectedIdx);
@@ -980,6 +988,13 @@ export default function EditorScreen() {
         />
       )}
 
+      {textDesign && <TextDesignDialog page={textDesign.page} stale={textDesign.key !== textDesignKey}
+        aiAvailable={isAiAvailable} onClose={() => setTextDesign(null)} onApply={layer => {
+          if (activeProjectState && textDesign.key === textDesignKey) {
+            updateActiveProjectState(candidatePatch(activeProjectState, textDesign.page, layer));
+            setTextDesign(null);
+          }
+        }} />}
       <AiIntegrationDialog
         open={isAiIntegrationOpen}
         onClose={() => setIsAiIntegrationOpen(false)}

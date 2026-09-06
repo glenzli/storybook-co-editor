@@ -1,3 +1,4 @@
+import { effectsFromMode } from '../text-design/effects';
 import { useState, useEffect, useRef } from 'react';
 import { PenTool, Type, Maximize2, ChevronDown, ChevronRight, ChevronLeft, LayoutTemplate, Pipette, Trash2, Copy, ClipboardPaste, Sparkles } from 'lucide-react';
 import { HexColorPicker } from 'react-colorful';
@@ -128,6 +129,7 @@ interface RightSidebarProps {
   selectedImage: string | null;
   isAiAvailable: boolean;
   onRedrawImage: () => void;
+  onTextDesign: () => void;
 
   systemFonts: string[];
   extractedColors: string[];
@@ -509,6 +511,7 @@ export function RightSidebar({
   selectedImage,
   isAiAvailable,
   onRedrawImage,
+  onTextDesign,
   systemFonts,
   extractedColors,
   xyBounds,
@@ -809,11 +812,13 @@ export function RightSidebar({
                       </div>
 
                       <TextReadabilityControls
+                        effects={ats.text_effects}
+                        onEffectsChange={text_effects => updateAts({ text_effects })}
                         mode={resolveTextReadabilityMode(ats)}
                         strength={normalizeTextReadabilityStrength(ats.readability_strength)}
                         maxWidthPercent={normalizeStoryTextWidthPercent(ats.max_width_percent)}
                         pageSpecific={false}
-                        onModeChange={mode => updateAts({ readability_mode: mode })}
+                        onModeChange={mode => updateAts({ readability_mode: mode, text_effects: effectsFromMode(mode, normalizeTextReadabilityStrength(ats.readability_strength)) })}
                         onStrengthChange={readabilityStrength => updateAts({ readability_strength: readabilityStrength })}
                         onMaxWidthChange={maxWidthPercent => updateAts({ max_width_percent: maxWidthPercent })}
                       />
@@ -846,6 +851,7 @@ export function RightSidebar({
               </div>
               )}
 
+              <button type="button" className="w-full rounded border border-primary/50 p-2 text-sm text-primary" disabled={selectedIdx === null} onClick={onTextDesign}>{t('textDesign.open')}</button>
               {/* Text Styling Panel */}
               <div className="border-b border-border pb-2">
                 <button onClick={() => setOpenSections(s => ({...s, text: !s.text}))} className="flex items-center justify-between w-full py-1.5 hover:text-foreground transition-colors">
@@ -886,6 +892,7 @@ export function RightSidebar({
                             font_weight: currentSettings?.font_weight ?? defaultSettings.font_weight,
                             has_shadow: currentSettings?.has_shadow ?? defaultSettings.has_shadow,
                             has_backdrop: currentSettings?.has_backdrop ?? false,
+                            text_effects: currentSettings?.text_effects,
                             readability_mode: currentSettings?.readability_mode,
                             readability_strength: normalizeTextReadabilityStrength(currentSettings?.readability_strength),
                             max_width_percent: normalizeStoryTextWidthPercent(currentSettings?.max_width_percent),
@@ -971,11 +978,13 @@ export function RightSidebar({
                       </div>
 
                       <TextReadabilityControls
+                        effects={pageOverride?.text_effects ?? settings.text_effects}
+                        onEffectsChange={text_effects => updatePageOverride({ text_effects })}
                         mode={effectiveReadabilityMode}
                         strength={effectiveReadabilityStrength}
                         maxWidthPercent={effectiveMaxWidthPercent}
                         pageSpecific={!isCover && !isTitle}
-                        onModeChange={readabilityMode => updatePageOverride({ readability_mode: readabilityMode })}
+                        onModeChange={readabilityMode => updatePageOverride({ readability_mode: readabilityMode, text_effects: { ...effectsFromMode(readabilityMode, effectiveReadabilityStrength), seed: (selectedIdx ?? 0) + 1 } })}
                         onStrengthChange={readabilityStrength => updatePageOverride({ readability_strength: readabilityStrength })}
                         onMaxWidthChange={maxWidthPercent => updatePageOverride({ max_width_percent: maxWidthPercent })}
                       />
@@ -1027,6 +1036,7 @@ export function RightSidebar({
                               if (opts.readability) {
                                 currentOverride.readability_mode = effectiveReadabilityMode;
                                 currentOverride.readability_strength = effectiveReadabilityStrength;
+                                currentOverride.text_effects = pageOverride?.text_effects ?? settings.text_effects;
                               }
                               if (opts.width) currentOverride.max_width_percent = effectiveMaxWidthPercent;
                               overrides[String(i)] = currentOverride;

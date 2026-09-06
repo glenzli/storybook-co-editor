@@ -1,5 +1,9 @@
+import { createPigmentWash, drawPigmentWash, type PigmentPass } from '../text-design/pigment';
+import { getStoryTextReadabilityPaint, normalizeStoryTextWidthPercent, normalizeTextReadabilityStrength, resolveTextReadabilityMode, createAdaptiveWashPath } from '../text-design/effects';
+export { getStoryTextReadabilityPaint, normalizeStoryTextWidthPercent, normalizeTextReadabilityStrength, resolveTextReadabilityMode, getStrokeColor, getBackdropColor } from '../text-design/effects';
 import type {
   ImageAdjustments,
+  TextEffects,
   PageTextOverride,
   ProjectState,
   TextReadabilityMode,
@@ -20,6 +24,7 @@ export const STORY_TEXT_WASH_SVG_PATH = 'M3 21 C8 8 21 12 31 6 C43 1 55 10 66 5 
 
 export interface StoryTextLayer {
   id: 'main' | 'author';
+  effects?: TextEffects;
   text: string;
   fontFamily: string;
   fontWeight: number;
@@ -90,6 +95,7 @@ export interface StoryTextLayout {
     radius: number;
     feather: number;
     path: string | null;
+    pigment?: PigmentPass[];
   } | null;
 }
 
@@ -104,113 +110,6 @@ export interface StoryTextReadabilityPaint {
     radius: number;
     feather: number;
   };
-}
-
-function clamp(value: number, minimum: number, maximum: number): number {
-  return Math.min(maximum, Math.max(minimum, value));
-}
-
-function isTextReadabilityMode(value: unknown): value is TextReadabilityMode {
-  return value === 'none'
-    || value === 'outline'
-    || value === 'halo'
-    || value === 'wash'
-    || value === 'panel';
-}
-
-export function resolveTextReadabilityMode(settings?: TextSettings): TextReadabilityMode {
-  if (isTextReadabilityMode(settings?.readability_mode)) return settings.readability_mode;
-  if (settings?.has_backdrop) return 'panel';
-  return settings?.has_shadow === false ? 'none' : 'outline';
-}
-
-export function normalizeTextReadabilityStrength(value?: number): number {
-  return clamp(value ?? STORY_TEXT_DEFAULT_READABILITY_STRENGTH, 20, 100);
-}
-
-export function normalizeStoryTextWidthPercent(value?: number): number {
-  return clamp(
-    value ?? STORY_TEXT_DEFAULT_WIDTH_PERCENT,
-    STORY_TEXT_MIN_WIDTH_PERCENT,
-    STORY_TEXT_MAX_WIDTH_PERCENT,
-  );
-}
-
-function getTextBrightness(hexColor: string): number {
-  let hex = hexColor.replace('#', '');
-  if (hex.length === 3) hex = hex.split('').map(char => char + char).join('');
-  const red = Number.parseInt(hex.substring(0, 2), 16) || 0;
-  const green = Number.parseInt(hex.substring(2, 4), 16) || 0;
-  const blue = Number.parseInt(hex.substring(4, 6), 16) || 0;
-  return ((red * 299) + (green * 587) + (blue * 114)) / 1000;
-}
-
-function getContrastRgba(hexColor: string, alpha: number, warm: boolean): string {
-  if (getTextBrightness(hexColor) >= 128) {
-    return `rgba(${warm ? '18,32,46' : '0,0,0'},${alpha.toFixed(3)})`;
-  }
-  return `rgba(${warm ? '255,250,235' : '255,255,255'},${alpha.toFixed(3)})`;
-}
-
-export function getStrokeColor(hexColor: string): string {
-  return getContrastRgba(hexColor, 0.8, false);
-}
-
-export function getBackdropColor(color: string): string {
-  return getContrastRgba(color, 0.35, true);
-}
-
-export function getStoryTextReadabilityPaint(
-  mode: TextReadabilityMode,
-  color: string,
-  fontSize: number,
-  strength: number,
-): StoryTextReadabilityPaint {
-  const normalizedStrength = normalizeTextReadabilityStrength(strength);
-  if (mode === 'outline') {
-    return {
-      stroke: {
-        color: getContrastRgba(color, 0.72 + normalizedStrength * 0.0016, false),
-        width: fontSize * (0.045 + normalizedStrength * 0.00064),
-        lineJoin: 'round',
-      },
-      shadow: null,
-      backdrop: null,
-    };
-  }
-  if (mode === 'halo') {
-    return {
-      stroke: null,
-      shadow: {
-        color: getContrastRgba(color, 0.5 + normalizedStrength * 0.0025, true),
-        blur: fontSize * (0.09 + normalizedStrength * 0.0015),
-        spread: fontSize * (0.018 + normalizedStrength * 0.00025),
-      },
-      backdrop: null,
-    };
-  }
-  if (mode === 'panel' || mode === 'wash') {
-    const wash = mode === 'wash';
-    return {
-      stroke: null,
-      shadow: null,
-      backdrop: {
-        kind: mode,
-        color: getContrastRgba(
-          color,
-          wash
-            ? 0.18 + normalizedStrength * 0.0025
-            : 0.23 + normalizedStrength * 0.0022,
-          wash,
-        ),
-        paddingX: fontSize * (wash ? 0.68 : 0.5),
-        paddingY: fontSize * (wash ? 0.32 : 0.2),
-        radius: fontSize * (wash ? 0.5 : 0.3),
-        feather: wash ? fontSize * (0.035 + normalizedStrength * 0.0008) : 0,
-      },
-    };
-  }
-  return { stroke: null, shadow: null, backdrop: null };
 }
 
 export function createStoryTextWashPath(
@@ -265,6 +164,7 @@ function buildTextLayer(
     fontSize: settings?.font_size || defaultFontSize,
     color: (overrides?.text_color ?? settings?.text_color) || '#ffffff',
     readabilityMode,
+    effects: overrides?.text_effects ?? settings?.text_effects,
     readabilityStrength: normalizeTextReadabilityStrength(
       overrides?.readability_strength ?? settings?.readability_strength,
     ),
@@ -407,6 +307,7 @@ export function layoutStoryPageText(
       layer.color,
       fontSize,
       layer.readabilityStrength,
+      layer.effects,
     );
     const paddingX = readability.backdrop?.paddingX ?? 0;
     const paddingY = readability.backdrop?.paddingY ?? 0;
@@ -424,15 +325,19 @@ export function layoutStoryPageText(
           radius: readability.backdrop.radius,
           feather: readability.backdrop.feather,
           path: null as string | null,
+          pigment: undefined as PigmentPass[] | undefined,
         }
       : null;
     if (backdrop?.kind === 'wash') {
-      backdrop.path = createStoryTextWashPath(
+      backdrop.path = layer.effects ? createAdaptiveWashPath(backdrop.x, backdrop.y, backdrop.width, backdrop.height, frozenLines.map(line => ctx.measureText(line).width), paddingX, layer.effects) : createStoryTextWashPath(
         backdrop.x,
         backdrop.y,
         backdrop.width,
         backdrop.height,
       );
+    }
+    if (backdrop?.kind === 'wash' && layer.effects) {
+      backdrop.pigment = createPigmentWash(backdrop, frozenLines.map(line => ctx.measureText(line).width), layer.effects);
     }
     ctx.restore();
 
@@ -467,7 +372,9 @@ export function drawStoryPageText(
     ctx.textAlign = layout.alignment;
     ctx.textBaseline = layout.baseline;
 
-    if (layout.backdrop?.kind === 'wash' && layout.backdrop.path) {
+    if (layout.backdrop?.pigment && layout.backdrop.path) {
+      drawPigmentWash(ctx, layout.backdrop.path, layout.backdrop.color, layout.backdrop.pigment);
+    } else if (layout.backdrop?.kind === 'wash' && layout.backdrop.path) {
       ctx.save();
       ctx.fillStyle = layout.backdrop.color;
       ctx.filter = `blur(${layout.backdrop.feather}px)`;

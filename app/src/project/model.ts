@@ -1,6 +1,18 @@
 export type TextReadabilityMode = 'none' | 'outline' | 'halo' | 'wash' | 'panel';
 
+export interface TextEffects {
+  outline: number;
+  halo: number;
+  backdrop: 'none' | 'wash' | 'panel';
+  strength: number;
+  seed: number;
+  roughness: number;
+  feather: number;
+  color?: string;
+}
+
 export interface TextSettings {
+  text_effects?: TextEffects;
   font_size?: number;
   text_color?: string;
   font_family?: string;
@@ -17,6 +29,7 @@ export interface TextSettings {
 }
 
 export interface PageTextOverride {
+  text_effects?: TextEffects;
   offset_x: number;
   offset_y: number;
   text_color?: string;

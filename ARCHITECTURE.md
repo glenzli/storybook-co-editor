@@ -7,6 +7,8 @@ owner below; application roots compose owners and do not absorb their policies.
 
 - `app/src/project/`: TypeScript project data contract, migration, recent-project
   persistence, history, and externally-originated update propagation.
+- `app/src/text-design/`: Reproducible composite text treatments, adaptive wash
+  contours, bounded local candidate search and per-page application.
 - `app/src/story/`: Story script language and its parsing and validation policy.
 - `app/src/publication/`: Versioned web publication schema, frozen text layout,
   and `.scpub` export lifecycle.
@@ -35,6 +37,8 @@ owner below; application roots compose owners and do not absorb their policies.
   Storybook MCP registration into the user's Codex configuration.
 - `app/src-tauri/src/codex_app_server.rs`: Codex App Server process and JSON-RPC
   session lifecycle shared by local Codex features.
+- `app/src-tauri/src/codex_text_design.rs`: Cancellable, bounded visual review of
+  rendered candidates through Codex, with isolated temporary inputs and no project writes.
 - `app/src-tauri/src/codex_polish.rs`: Structured story-polish and translation
   proposals, including publication-field localization policy.
 - `app/src-tauri/src/codex_image_edit.rs`: Isolated source-image preparation,
