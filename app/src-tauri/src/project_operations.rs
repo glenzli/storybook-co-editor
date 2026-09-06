@@ -122,12 +122,22 @@ pub fn replace_story_script(
     app: &AppHandle,
     manager: &ProjectManager,
     expected_last_modified: &str,
+    language: Option<String>,
     script: String,
     source: &str,
 ) -> Result<ActiveProjectSnapshot, String> {
     validate_story_script(&script)?;
     update_active_project(app, manager, expected_last_modified, source, move |state| {
-        state.global_script = script;
+        let updates_legacy_language = state.languages.is_empty()
+            && language
+                .as_deref()
+                .map(|language| language == state.default_language_tag())
+                .unwrap_or(true);
+        if updates_legacy_language {
+            state.global_script = Some(script);
+        } else {
+            state.language_mut(language.as_deref())?.script = script;
+        }
         Ok(())
     })
 }
@@ -136,6 +146,7 @@ pub fn set_page_text_position(
     app: &AppHandle,
     manager: &ProjectManager,
     expected_last_modified: &str,
+    language: Option<String>,
     page_index: usize,
     offset_x: f64,
     offset_y: f64,
@@ -162,10 +173,24 @@ pub fn set_page_text_position(
             ));
         }
 
-        let override_entry = state
-            .page_text_overrides
-            .entry(page_index.to_string())
-            .or_insert_with(PageTextOverride::default);
+        let updates_legacy_language = state.languages.is_empty()
+            && language
+                .as_deref()
+                .map(|language| language == state.default_language_tag())
+                .unwrap_or(true);
+        let override_entry = if updates_legacy_language {
+            state
+                .page_text_overrides
+                .get_or_insert_with(Default::default)
+                .entry(page_index.to_string())
+                .or_insert_with(PageTextOverride::default)
+        } else {
+            state
+                .language_mut(language.as_deref())?
+                .page_text_overrides
+                .entry(page_index.to_string())
+                .or_insert_with(PageTextOverride::default)
+        };
         override_entry.offset_x = offset_x;
         override_entry.offset_y = offset_y;
         Ok(())

@@ -1,6 +1,15 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
+pub const PROJECT_SCHEMA_VERSION: &str = "20260906.01";
+
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+#[serde(untagged)]
+pub enum ProjectSchemaVersion {
+    Legacy(u32),
+    Dated(String),
+}
+
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(default)]
 pub struct TextSettings {
@@ -197,6 +206,18 @@ pub struct PublicationMetadata {
     pub copyright_page_mode: String,
 }
 
+#[derive(Serialize, Deserialize, Clone, Default)]
+#[serde(default)]
+pub struct ProjectLanguage {
+    pub script: String,
+    pub cover_text_settings: TextSettings,
+    pub title_text_settings: TextSettings,
+    pub inner_text_settings: TextSettings,
+    pub author_text_settings: TextSettings,
+    pub page_text_overrides: HashMap<String, PageTextOverride>,
+    pub publication_metadata: Option<PublicationMetadata>,
+}
+
 #[derive(Serialize, Deserialize, Clone)]
 #[serde(default)]
 pub struct ElectronicPdfSettings {
@@ -226,20 +247,25 @@ impl Default for ElectronicPdfSettings {
 #[derive(Serialize, Deserialize, Clone)]
 pub struct ProjectState {
     #[serde(default)]
-    pub schema_version: Option<u32>,
+    pub schema_version: Option<ProjectSchemaVersion>,
     pub project_name: String,
     pub last_modified: String,
     pub visible_images: Vec<String>,
     pub trashed_images: Vec<String>,
     #[serde(default)]
     pub source_url_map: HashMap<String, String>,
-    pub global_script: String,
-    #[serde(default)]
-    pub cover_text_settings: TextSettings,
-    #[serde(default)]
-    pub title_text_settings: TextSettings,
-    #[serde(default)]
-    pub inner_text_settings: TextSettings,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub default_language: Option<String>,
+    #[serde(default, skip_serializing_if = "HashMap::is_empty")]
+    pub languages: HashMap<String, ProjectLanguage>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub global_script: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cover_text_settings: Option<TextSettings>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub title_text_settings: Option<TextSettings>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub inner_text_settings: Option<TextSettings>,
     #[serde(default)]
     pub image_adjustments: HashMap<String, ImageAdjustments>,
     #[serde(default)]
@@ -248,13 +274,13 @@ pub struct ProjectState {
     pub canvas_width: u32,
     #[serde(default = "default_canvas_size")]
     pub canvas_height: u32,
-    #[serde(default)]
-    pub author_text_settings: TextSettings,
-    #[serde(default)]
-    pub page_text_overrides: HashMap<String, PageTextOverride>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub author_text_settings: Option<TextSettings>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub page_text_overrides: Option<HashMap<String, PageTextOverride>>,
     #[serde(default, skip_serializing_if = "HashMap::is_empty")]
     pub page_settings: HashMap<String, PageSettings>,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub publication_metadata: Option<PublicationMetadata>,
     #[serde(default)]
     pub electronic_pdf_settings: Option<ElectronicPdfSettings>,
@@ -262,32 +288,54 @@ pub struct ProjectState {
 
 impl Default for ProjectState {
     fn default() -> Self {
+        let default_language = "zh-CN".to_string();
+        let mut languages = HashMap::new();
+        languages.insert(
+            default_language.clone(),
+            ProjectLanguage {
+                script: String::new(),
+                cover_text_settings: TextSettings {
+                    font_size: 40.0,
+                    ..TextSettings::default()
+                },
+                title_text_settings: TextSettings {
+                    font_size: 32.0,
+                    ..TextSettings::default()
+                },
+                inner_text_settings: TextSettings::default(),
+                author_text_settings: TextSettings {
+                    font_size: 16.0,
+                    ..TextSettings::default()
+                },
+                page_text_overrides: HashMap::new(),
+                publication_metadata: Some(PublicationMetadata {
+                    version: Some(1),
+                    language: default_language.clone(),
+                    ..PublicationMetadata::default()
+                }),
+            },
+        );
         Self {
-            schema_version: Some(2),
+            schema_version: Some(ProjectSchemaVersion::Dated(
+                PROJECT_SCHEMA_VERSION.to_string(),
+            )),
             project_name: "Untitled".to_string(),
             last_modified: chrono::Utc::now().to_rfc3339(),
             visible_images: vec![],
             trashed_images: vec![],
             source_url_map: HashMap::new(),
-            global_script: "".to_string(),
-            cover_text_settings: TextSettings {
-                font_size: 40.0,
-                ..TextSettings::default()
-            },
-            title_text_settings: TextSettings {
-                font_size: 32.0,
-                ..TextSettings::default()
-            },
-            inner_text_settings: TextSettings::default(),
+            default_language: Some(default_language),
+            languages,
+            global_script: None,
+            cover_text_settings: None,
+            title_text_settings: None,
+            inner_text_settings: None,
             image_adjustments: HashMap::new(),
             print_settings: PrintSettings::default(),
             canvas_width: default_canvas_size(),
             canvas_height: default_canvas_size(),
-            author_text_settings: TextSettings {
-                font_size: 16.0,
-                ..TextSettings::default()
-            },
-            page_text_overrides: HashMap::new(),
+            author_text_settings: None,
+            page_text_overrides: None,
             page_settings: HashMap::new(),
             publication_metadata: None,
             electronic_pdf_settings: None,
@@ -295,9 +343,99 @@ impl Default for ProjectState {
     }
 }
 
+impl ProjectState {
+    pub fn default_language_tag(&self) -> String {
+        if let Some(language) = self
+            .default_language
+            .as_ref()
+            .filter(|language| self.languages.contains_key(*language))
+        {
+            return language.clone();
+        }
+        let mut languages: Vec<_> = self.languages.keys().cloned().collect();
+        languages.sort();
+        languages
+            .into_iter()
+            .next()
+            .or_else(|| {
+                self.publication_metadata
+                    .as_ref()
+                    .map(|metadata| metadata.language.clone())
+                    .filter(|language| !language.is_empty())
+            })
+            .unwrap_or_else(|| "zh-CN".to_string())
+    }
+
+    pub fn language(&self, requested: Option<&str>) -> Option<&ProjectLanguage> {
+        let language = requested
+            .map(ToOwned::to_owned)
+            .unwrap_or_else(|| self.default_language_tag());
+        self.languages.get(&language)
+    }
+
+    pub fn language_mut(
+        &mut self,
+        requested: Option<&str>,
+    ) -> Result<&mut ProjectLanguage, String> {
+        let language = requested
+            .map(ToOwned::to_owned)
+            .unwrap_or_else(|| self.default_language_tag());
+        self.languages
+            .get_mut(&language)
+            .ok_or_else(|| format!("LANGUAGE_NOT_FOUND: {language}"))
+    }
+
+    pub fn story_script(&self, requested: Option<&str>) -> Result<&str, String> {
+        if let Some(language) = self.language(requested) {
+            return Ok(&language.script);
+        }
+        if self.languages.is_empty()
+            && requested
+                .map(|language| language == self.default_language_tag())
+                .unwrap_or(true)
+        {
+            return Ok(self.global_script.as_deref().unwrap_or(""));
+        }
+        Err(format!(
+            "LANGUAGE_NOT_FOUND: {}",
+            requested.unwrap_or_default()
+        ))
+    }
+
+    pub fn page_text_override(
+        &self,
+        requested: Option<&str>,
+        page_index: usize,
+    ) -> Result<PageTextOverride, String> {
+        if let Some(language) = self.language(requested) {
+            return Ok(language
+                .page_text_overrides
+                .get(&page_index.to_string())
+                .cloned()
+                .unwrap_or_default());
+        }
+        if self.languages.is_empty()
+            && requested
+                .map(|language| language == self.default_language_tag())
+                .unwrap_or(true)
+        {
+            return Ok(self
+                .page_text_overrides
+                .as_ref()
+                .and_then(|overrides| overrides.get(&page_index.to_string()))
+                .cloned()
+                .unwrap_or_default());
+        }
+        Err(format!(
+            "LANGUAGE_NOT_FOUND: {}",
+            requested.unwrap_or_default()
+        ))
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use super::ProjectState;
+    use super::{ProjectSchemaVersion, ProjectState, PROJECT_SCHEMA_VERSION};
 
     fn assert_json_equivalent(actual: &serde_json::Value, expected: &serde_json::Value) {
         match (actual, expected) {
@@ -341,8 +479,43 @@ mod tests {
         let state: ProjectState = serde_json::from_value(source).unwrap();
 
         assert!(state.page_settings["1"].print_only);
-        assert_eq!(state.schema_version, Some(2));
+        assert_eq!(state.schema_version, Some(ProjectSchemaVersion::Legacy(2)));
         let serialized = serde_json::to_value(state).unwrap();
         assert_eq!(serialized["page_settings"]["1"]["print_only"], true);
+    }
+
+    #[test]
+    fn project_v2_exposes_its_legacy_default_language() {
+        let source: serde_json::Value =
+            serde_json::from_str(include_str!("../../../fixtures/project-v2.json")).unwrap();
+        let state: ProjectState = serde_json::from_value(source).unwrap();
+
+        assert_eq!(state.default_language_tag(), "en");
+        assert_eq!(
+            state.story_script(Some("en")).unwrap(),
+            "[Cover]\nContract Fixture\n\n[Author]\nExample Author\n\n[1]\nFirst page"
+        );
+    }
+
+    #[test]
+    fn new_project_uses_the_current_multilingual_contract() {
+        let state = ProjectState::default();
+
+        assert_eq!(
+            state.schema_version,
+            Some(ProjectSchemaVersion::Dated(
+                PROJECT_SCHEMA_VERSION.to_string()
+            ))
+        );
+        assert_eq!(state.default_language.as_deref(), Some("zh-CN"));
+        assert_eq!(state.languages.len(), 1);
+        assert_eq!(state.languages["zh-CN"].script, "");
+        assert_eq!(
+            state.languages["zh-CN"]
+                .publication_metadata
+                .as_ref()
+                .map(|metadata| metadata.language.as_str()),
+            Some("zh-CN")
+        );
     }
 }

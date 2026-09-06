@@ -2,7 +2,7 @@ use base64::Engine;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use sha2::{Digest, Sha256};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashSet};
 use std::fs::{File, OpenOptions};
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
@@ -13,6 +13,7 @@ use zip::ZipWriter;
 const MAX_ASSET_BYTES: usize = 64 * 1024 * 1024;
 const MAX_PACKAGE_BYTES: usize = 512 * 1024 * 1024;
 const MAX_MANIFEST_BYTES: usize = 16 * 1024 * 1024;
+const PUBLICATION_FORMAT_VERSION: &str = "20260906.01";
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -32,8 +33,9 @@ pub struct PublicationWriteResult {
 #[serde(rename_all = "camelCase")]
 struct ManifestEnvelope {
     format: String,
-    format_version: u64,
-    publication: Value,
+    format_version: String,
+    default_language: String,
+    languages: Vec<ManifestLanguage>,
     canvas: ManifestCanvas,
     font_pack: ManifestFontPack,
     pages: Vec<ManifestPage>,
@@ -56,7 +58,20 @@ struct ManifestFontPack {
 
 #[derive(Debug, Deserialize)]
 struct ManifestPage {
+    id: String,
     image: ManifestPageImage,
+}
+
+#[derive(Debug, Deserialize)]
+struct ManifestLanguage {
+    language: String,
+    publication: Value,
+    pages: Vec<ManifestLanguagePage>,
+}
+
+#[derive(Debug, Deserialize)]
+struct ManifestLanguagePage {
+    id: String,
 }
 
 #[derive(Debug, Deserialize)]
@@ -133,16 +148,44 @@ fn validate_manifest(
     let mut value: Value = serde_json::from_str(manifest_json)
         .map_err(|error| invalid(format!("manifest.json is invalid: {error}")))?;
     let manifest: ManifestEnvelope = serde_json::from_value(value.clone())
-        .map_err(|error| invalid(format!("manifest.json does not match v1: {error}")))?;
+        .map_err(|error| invalid(format!("manifest.json does not match the schema: {error}")))?;
 
-    if manifest.format != "storybook-publication" || manifest.format_version != 1 {
+    if manifest.format != "storybook-publication"
+        || manifest.format_version != PUBLICATION_FORMAT_VERSION
+    {
         return Err(invalid("unsupported publication format"));
     }
-    if !manifest.publication.is_object()
-        || manifest.canvas.width == 0
-        || manifest.canvas.height == 0
-    {
-        return Err(invalid("publication metadata or canvas is invalid"));
+    if manifest.canvas.width == 0 || manifest.canvas.height == 0 {
+        return Err(invalid("canvas is invalid"));
+    }
+    if manifest.default_language.is_empty() {
+        return Err(invalid("default language is missing"));
+    }
+    if manifest.languages.is_empty() {
+        return Err(invalid("publication languages are missing"));
+    }
+    let mut language_tags = HashSet::new();
+    for language in &manifest.languages {
+        if language.language.is_empty()
+            || !language.publication.is_object()
+            || !language_tags.insert(language.language.as_str())
+        {
+            return Err(invalid("publication language is invalid"));
+        }
+        if language.pages.len() != manifest.pages.len()
+            || language
+                .pages
+                .iter()
+                .zip(&manifest.pages)
+                .any(|(language_page, page)| language_page.id != page.id)
+        {
+            return Err(invalid(
+                "publication language pages do not match artwork pages",
+            ));
+        }
+    }
+    if !language_tags.contains(manifest.default_language.as_str()) {
+        return Err(invalid("default language is not included"));
     }
     if manifest.font_pack.id != "glenzli-books-webfonts"
         || manifest.font_pack.version != "1"
@@ -326,7 +369,7 @@ pub fn write_publication_package(
 
 #[cfg(test)]
 mod tests {
-    use super::{sha256_hex, write_package, PublicationArchiveAsset};
+    use super::{sha256_hex, write_package, PublicationArchiveAsset, PUBLICATION_FORMAT_VERSION};
     use base64::Engine;
     use serde_json::json;
     use std::fs::{self, File};
@@ -338,25 +381,34 @@ mod tests {
         let asset_sha = sha256_hex(asset);
         let mut value = json!({
             "format": "storybook-publication",
-            "formatVersion": 1,
+            "formatVersion": PUBLICATION_FORMAT_VERSION,
             "createdAt": "2026-09-04T00:00:00Z",
-            "publication": {
-                "id": "publication-fixture",
-                "title": "Fixture",
-                "contributors": [],
+            "defaultLanguage": "en",
+            "languages": [{
                 "language": "en",
-                "readingDirection": "ltr",
-                "description": null,
-                "keywords": [],
-                "publisher": null,
-                "publicationDate": null,
-                "edition": null,
-                "copyrightHolder": null,
-                "copyrightYear": null,
-                "copyrightNotice": null,
-                "license": { "name": null, "url": null },
-                "identifiers": []
-            },
+                "publication": {
+                    "id": "publication-fixture",
+                    "title": "Fixture",
+                    "contributors": [],
+                    "language": "en",
+                    "readingDirection": "ltr",
+                    "description": null,
+                    "keywords": [],
+                    "publisher": null,
+                    "publicationDate": null,
+                    "edition": null,
+                    "copyrightHolder": null,
+                    "copyrightYear": null,
+                    "copyrightNotice": null,
+                    "license": { "name": null, "url": null },
+                    "identifiers": []
+                },
+                "pages": [{
+                    "id": "page-fixture",
+                    "role": "cover",
+                    "textLayers": []
+                }]
+            }],
             "canvas": { "width": 64, "height": 64 },
             "fontPack": {
                 "id": "glenzli-books-webfonts",
@@ -366,7 +418,6 @@ mod tests {
             "pages": [{
                 "id": "page-fixture",
                 "order": 0,
-                "role": "cover",
                 "image": {
                     "src": "pages/0001.webp",
                     "width": 64,
@@ -375,8 +426,7 @@ mod tests {
                     "mimeType": "image/webp",
                     "bytes": asset.len(),
                     "sha256": asset_sha
-                },
-                "textLayers": []
+                }
             }],
             "resources": [{
                 "path": "pages/0001.webp",
@@ -405,8 +455,8 @@ mod tests {
         let root = std::env::temp_dir().join(format!("storybook-publication-{}", Uuid::new_v4()));
         fs::create_dir_all(&root).unwrap();
         let target = root.join("fixture.scpub");
-        let artwork = include_bytes!("../../../fixtures/publication-v1/pages/0001.webp");
-        let manifest = include_str!("../../../fixtures/publication-v1/manifest.json");
+        let artwork = include_bytes!("../../../fixtures/publication-20260906.01/pages/0001.webp");
+        let manifest = include_str!("../../../fixtures/publication-20260906.01/manifest.json");
 
         let result = write_package(
             target.to_str().unwrap(),

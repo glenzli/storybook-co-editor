@@ -1,8 +1,9 @@
 import { invoke } from '@tauri-apps/api/core';
-import { Check, Copy, Download, Eye, EyeOff, Loader2, Plug, RefreshCw, X } from 'lucide-react';
+import { Check, Copy, Download, Eye, EyeOff, Loader2, Plug, RefreshCw, Sparkles, X } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { localizeAppError } from '../../i18n';
+import type { AiProvider } from './aiSettings';
 
 interface McpConnectionInfo {
   endpoint: string;
@@ -13,9 +14,22 @@ interface McpConnectionInfo {
 interface AiIntegrationDialogProps {
   open: boolean;
   onClose: () => void;
+  aiEnabled: boolean;
+  aiProvider: AiProvider;
+  isAiProviderAvailable: boolean;
+  onAiEnabledChange: (enabled: boolean) => void;
+  onAiProviderChange: (provider: AiProvider) => void;
 }
 
-export function AiIntegrationDialog({ open, onClose }: AiIntegrationDialogProps) {
+export function AiIntegrationDialog({
+  open,
+  onClose,
+  aiEnabled,
+  aiProvider,
+  isAiProviderAvailable,
+  onAiEnabledChange,
+  onAiProviderChange,
+}: AiIntegrationDialogProps) {
   const { t } = useTranslation();
   const [info, setInfo] = useState<McpConnectionInfo | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -113,20 +127,72 @@ export function AiIntegrationDialog({ open, onClose }: AiIntegrationDialogProps)
         </header>
 
         <div className="p-5 overflow-y-auto space-y-5">
-          {!info && !error && (
-            <div className="h-36 flex items-center justify-center text-muted-foreground">
-              <Loader2 size={20} className="animate-spin" />
+          <section className="rounded-md border border-border bg-background p-4">
+            <div className="flex items-start justify-between gap-4">
+              <div className="flex items-start gap-2.5">
+                <Sparkles size={16} className="mt-0.5 shrink-0 text-primary" />
+                <div>
+                  <h3 className="text-sm font-medium">{t('ai.support')}</h3>
+                  <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                    {t('ai.supportDescription')}
+                  </p>
+                </div>
+              </div>
+              <label className="flex shrink-0 cursor-pointer items-center gap-2 text-xs">
+                <input
+                  type="checkbox"
+                  checked={aiEnabled}
+                  onChange={event => onAiEnabledChange(event.target.checked)}
+                  className="h-4 w-4 accent-primary"
+                />
+                {t('ai.enableSupport')}
+              </label>
             </div>
-          )}
 
-          {error && (
-            <div className="text-xs text-red-500 border border-red-500/30 bg-red-500/10 rounded p-3">
-              {t('ai.connectionFailed', { error })}
+            <label className="mt-4 flex flex-col gap-1.5">
+              <span className="text-xs font-medium">{t('ai.provider')}</span>
+              <select
+                value={aiProvider}
+                onChange={event => onAiProviderChange(event.target.value as AiProvider)}
+                disabled={!aiEnabled}
+                className="h-9 rounded border border-border bg-card px-2.5 text-sm outline-none focus:ring-1 focus:ring-primary disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <option value="codex">Codex</option>
+              </select>
+            </label>
+
+            <p className={`mt-2 text-xs ${aiEnabled && !isAiProviderAvailable ? 'text-amber-600 dark:text-amber-400' : 'text-muted-foreground'}`}>
+              {!aiEnabled
+                ? t('ai.supportDisabled')
+                : isAiProviderAvailable
+                  ? t('ai.providerAvailable', { provider: 'Codex' })
+                  : t('ai.providerUnavailable', { provider: 'Codex' })}
+            </p>
+          </section>
+
+          <section className="border-t border-border pt-5">
+            <div className="mb-4 flex items-start gap-2.5">
+              <Plug size={16} className="mt-0.5 shrink-0 text-muted-foreground" />
+              <div>
+                <h3 className="text-sm font-medium">{t('ai.mcpTitle')}</h3>
+                <p className="mt-1 text-xs leading-5 text-muted-foreground">{t('ai.mcpDescription')}</p>
+              </div>
             </div>
-          )}
 
-          {info && (
-            <>
+            {!info && !error && (
+              <div className="h-24 flex items-center justify-center text-muted-foreground">
+                <Loader2 size={20} className="animate-spin" />
+              </div>
+            )}
+
+            {error && (
+              <div className="text-xs text-red-500 border border-red-500/30 bg-red-500/10 rounded p-3">
+                {t('ai.connectionFailed', { error })}
+              </div>
+            )}
+
+            {info && (
+              <div className="space-y-5">
               <div>
                 <div className="flex items-center justify-between mb-1.5">
                   <label className="text-xs font-medium">{t('ai.endpoint')}</label>
@@ -224,8 +290,9 @@ export function AiIntegrationDialog({ open, onClose }: AiIntegrationDialogProps)
               <p className="text-xs text-muted-foreground leading-5">
                 {t('ai.securityNote')}
               </p>
-            </>
-          )}
+              </div>
+            )}
+          </section>
         </div>
       </section>
 

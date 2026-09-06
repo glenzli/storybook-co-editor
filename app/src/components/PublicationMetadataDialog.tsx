@@ -19,6 +19,7 @@ import {
 interface PublicationMetadataDialogProps {
   open: boolean;
   projectState: ProjectState;
+  fixedLanguage?: string;
   onClose: () => void;
   onSave: (metadata: PublicationMetadata | undefined) => void;
 }
@@ -41,6 +42,7 @@ const IDENTIFIER_SCHEMES: PublicationIdentifier['scheme'][] = ['ISBN', 'DOI', 'U
 export function PublicationMetadataDialog({
   open,
   projectState,
+  fixedLanguage,
   onClose,
   onSave,
 }: PublicationMetadataDialogProps) {
@@ -125,6 +127,7 @@ export function PublicationMetadataDialog({
   const handleSave = () => {
     onSave(normalizePublicationMetadata({
       ...draft,
+      language: fixedLanguage || draft.language,
       keywords: keywordText.split(/[，,]/).map(keyword => keyword.trim()).filter(Boolean),
     }));
     onClose();
@@ -201,7 +204,13 @@ export function PublicationMetadataDialog({
               <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
                 <label className="grid gap-1.5">
                   <span className={labelClass}>{t('publication.fields.language')}</span>
-                  <input className={inputClass} value={draft.language || ''} onChange={event => updateDraft({ language: event.target.value })} placeholder={t('publication.fields.languagePlaceholder')} />
+                  <input
+                    className={inputClass}
+                    value={fixedLanguage || draft.language || ''}
+                    onChange={event => updateDraft({ language: event.target.value })}
+                    placeholder={t('publication.fields.languagePlaceholder')}
+                    disabled={Boolean(fixedLanguage)}
+                  />
                 </label>
                 <label className="grid gap-1.5">
                   <span className={labelClass}>{t('publication.fields.publisher')}</span>

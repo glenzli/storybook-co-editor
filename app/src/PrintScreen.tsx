@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { useProject } from './ProjectContext';
-import type { PrintSettings } from './project/model';
+import type { PrintSettings, ProjectState } from './project/model';
 import { calculateImposition } from './print/imposition';
 import { ProImage } from './components/ProImage';
 import { Printer, Download, AlertTriangle, FileText, RefreshCw } from 'lucide-react';
@@ -18,13 +18,14 @@ import { useTranslation } from 'react-i18next';
 import { localizeAppError } from './i18n';
 
 interface PrintScreenProps {
+    projectState: ProjectState | null;
     requestPdfExport?: (exportAction: () => void) => void;
 }
 
-export default function PrintScreen({ requestPdfExport }: PrintScreenProps) {
+export default function PrintScreen({ projectState, requestPdfExport }: PrintScreenProps) {
     const { t, i18n } = useTranslation();
     const interfaceLanguage = i18n.resolvedLanguage;
-    const { projectState, updateProjectState } = useProject();
+    const { updateProjectState } = useProject();
 
     const settings = useMemo<PrintSettings>(() => {
         const s = projectState?.print_settings || {};

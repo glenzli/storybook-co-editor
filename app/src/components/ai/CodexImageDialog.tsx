@@ -42,6 +42,7 @@ interface CodexImageProgress {
 export type CodexImageRequest =
   | {
       kind: 'redraw';
+      language: string;
       pageIndex: number;
       sourceImage: string;
       sourceImageUrl: string;
@@ -49,6 +50,7 @@ export type CodexImageRequest =
     }
   | {
       kind: 'create';
+      language: string;
       width: number;
       height: number;
       expectedLastModified: string;
@@ -210,7 +212,7 @@ export function CodexImageDialog({ request, onClose, onCreated }: CodexImageDial
     localStorage.setItem(MODEL_STORAGE_KEY, selectedModel);
     localStorage.setItem(EFFORT_STORAGE_KEY, selectedEffort);
     try {
-      const language = i18n.resolvedLanguage || i18n.language;
+      const language = request.language;
       const proposal = redrawRequest
         ? await invoke<CodexImageResult>('redraw_image_with_codex', {
             sourceImage: redrawRequest.sourceImage,

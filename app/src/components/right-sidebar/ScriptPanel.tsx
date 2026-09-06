@@ -22,11 +22,12 @@ interface ScriptPanelProps {
   value: string;
   onChange: (value: string) => void;
   onCursorChange: (pageIndex: number | null) => void;
-  isCodexAvailable: boolean;
+  isAiAvailable: boolean;
+  contentLanguage: string;
 }
 
-export function ScriptPanel({ value, onChange, onCursorChange, isCodexAvailable }: ScriptPanelProps) {
-  const { t, i18n } = useTranslation();
+export function ScriptPanel({ value, onChange, onCursorChange, isAiAvailable, contentLanguage }: ScriptPanelProps) {
+  const { t } = useTranslation();
   const [localValue, setLocalValue] = useState(value);
   const [isPolishing, setIsPolishing] = useState(false);
   const [isPolishSetupOpen, setIsPolishSetupOpen] = useState(false);
@@ -95,7 +96,7 @@ export function ScriptPanel({ value, onChange, onCursorChange, isCodexAvailable 
     try {
       const result = await invoke<CodexPolishResult>('polish_story_with_codex', {
         script: localValue,
-        language: i18n.resolvedLanguage || i18n.language,
+        language: contentLanguage,
         model: selectedModel,
         instructions: polishInstructions.trim(),
       });
@@ -130,9 +131,9 @@ export function ScriptPanel({ value, onChange, onCursorChange, isCodexAvailable 
           <button
             type="button"
             onClick={() => setIsPolishSetupOpen(true)}
-            disabled={!isCodexAvailable || isPolishing || errors.length > 0 || !localValue.trim()}
+            disabled={!isAiAvailable || isPolishing || errors.length > 0 || !localValue.trim()}
             className="h-8 px-2.5 flex items-center gap-1.5 rounded border border-border bg-background text-xs font-medium text-foreground hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed flex-shrink-0"
-            title={!isCodexAvailable ? t('ai.codexUnavailable') : t('ai.polishDescription')}
+            title={!isAiAvailable ? t('ai.unavailable') : t('ai.polishDescription')}
           >
             {isPolishing
               ? <Loader2 size={13} className="animate-spin" />

@@ -97,14 +97,27 @@ export interface PageSettings {
   print_only?: boolean;
 }
 
+export interface ProjectLanguage {
+  script: string;
+  cover_text_settings?: TextSettings;
+  title_text_settings?: TextSettings;
+  inner_text_settings?: TextSettings;
+  author_text_settings?: TextSettings;
+  page_text_overrides?: Record<string, { offset_x: number; offset_y: number; text_color?: string }>;
+  publication_metadata?: PublicationMetadata;
+}
+
 export interface ProjectState {
-  schema_version?: number;
+  schema_version?: number | string;
   project_name: string;
   last_modified: string;
   visible_images: string[];
   trashed_images: string[];
   source_url_map?: Record<string, string>;
-  global_script: string;
+  default_language?: string;
+  languages?: Record<string, ProjectLanguage>;
+  /** v1-v2 project compatibility fields; v3 stores these under languages. */
+  global_script?: string;
   cover_text_settings?: TextSettings;
   title_text_settings?: TextSettings;
   inner_text_settings?: TextSettings;

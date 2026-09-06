@@ -103,8 +103,21 @@ function collectSettingFamilies(projectState: ProjectState | null | undefined): 
     projectState?.inner_text_settings,
     projectState?.author_text_settings,
   ];
+  Object.values(projectState?.languages || {}).forEach(language => {
+    settings.push(
+      language.cover_text_settings,
+      language.title_text_settings,
+      language.inner_text_settings,
+      language.author_text_settings,
+    );
+  });
   const families = settings.map(setting => setting?.font_family || 'serif');
-  if (projectState) families.push(getPublicationFontFamily(projectState));
+  if (projectState) {
+    families.push(getPublicationFontFamily(projectState));
+    Object.values(projectState.languages || {}).forEach(language => {
+      families.push(language.inner_text_settings?.font_family || 'serif');
+    });
+  }
 
   return [...new Set(families)];
 }

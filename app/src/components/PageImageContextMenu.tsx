@@ -11,7 +11,7 @@ export interface PageImageMenuTarget {
 interface PageImageContextMenuProps {
   target: PageImageMenuTarget;
   pageCount: number;
-  isCodexAvailable: boolean;
+  isAiAvailable: boolean;
   onDismiss: () => void;
   onRedraw: (id: string, index: number) => void;
   onCopy: (id: string, index: number) => void;
@@ -24,7 +24,7 @@ interface PageImageContextMenuProps {
 export function PageImageContextMenu({
   target,
   pageCount,
-  isCodexAvailable,
+  isAiAvailable,
   onDismiss,
   onRedraw,
   onCopy,
@@ -34,7 +34,7 @@ export function PageImageContextMenu({
   onMoveToBottom,
 }: PageImageContextMenuProps) {
   const { t } = useTranslation();
-  const canRedraw = isCodexAvailable && !target.id.startsWith('blank://');
+  const canRedraw = isAiAvailable && !target.id.startsWith('blank://');
   const left = Math.max(8, Math.min(target.x, window.innerWidth - 204));
   const top = Math.max(8, Math.min(target.y, window.innerHeight - 240));
   const showOrdering = onMoveToTop && onMoveToBottom;
@@ -75,9 +75,9 @@ export function PageImageContextMenu({
       )}
       <button
         type="button"
-        className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-primary transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
+        className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-primary transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:text-muted-foreground"
         disabled={!canRedraw}
-        title={!isCodexAvailable ? t('ai.codexUnavailable') : undefined}
+        title={!isAiAvailable ? t('ai.unavailable') : undefined}
         onClick={() => run(() => onRedraw(target.id, target.index))}
       >
         <Sparkles size={14} />

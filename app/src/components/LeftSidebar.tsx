@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { DndContext, closestCenter, PointerSensor, KeyboardSensor, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy, sortableKeyboardCoordinates } from '@dnd-kit/sortable';
-import { LayoutTemplate, Archive, Sun, Moon, ChevronLeft, ChevronRight, FilePlus } from 'lucide-react';
+import { LayoutTemplate, Archive, ChevronLeft, ChevronRight, FilePlus } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { SortableImageItem, type TextOverlayInfo } from './SortableImageItem';
 import { PageImageContextMenu, type PageImageMenuTarget } from './PageImageContextMenu';
@@ -13,9 +13,7 @@ interface LeftSidebarProps {
   images: string[];
   selectedIdx: number | null;
   setSelectedIdx: (idx: number | null) => void;
-  isCodexAvailable: boolean;
-  isDark: boolean;
-  setIsDark: (dark: boolean) => void;
+  isAiAvailable: boolean;
   handleDelete: (id: string) => void;
   handleMoveToTop?: (idx: number) => void;
   handleMoveToBottom?: (idx: number) => void;
@@ -38,9 +36,7 @@ export function LeftSidebar({
   images,
   selectedIdx,
   setSelectedIdx,
-  isCodexAvailable,
-  isDark,
-  setIsDark,
+  isAiAvailable,
   handleDelete,
   handleMoveToTop,
   handleMoveToBottom,
@@ -160,20 +156,17 @@ export function LeftSidebar({
                       handleInsertCodex();
                       setIsNewPageMenuOpen(false);
                     }}
-                    disabled={!isCodexAvailable}
-                    title={!isCodexAvailable ? t('ai.codexUnavailable') : undefined}
-                    className="w-full px-3 py-1.5 text-left text-primary hover:bg-muted transition-colors disabled:cursor-not-allowed disabled:opacity-50"
+                    disabled={!isAiAvailable}
+                    title={!isAiAvailable ? t('ai.unavailable') : undefined}
+                    className="w-full px-3 py-1.5 text-left text-primary hover:bg-muted transition-colors disabled:cursor-not-allowed disabled:text-muted-foreground"
                   >
-                    {t('sidebar.createWithCodex')}
+                    {t('sidebar.createWithAi')}
                   </button>
                 </div>
               )}
             </div>
             <button onClick={handleOpenTrash} title={t('sidebar.trash')} className="p-2 rounded-full hover:bg-muted text-muted-foreground transition-colors">
               <Archive size={16} />
-            </button>
-            <button onClick={() => setIsDark(!isDark)} title={t(isDark ? 'sidebar.lightMode' : 'sidebar.darkMode')} className="p-2 rounded-full hover:bg-muted text-muted-foreground transition-colors">
-              {isDark ? <Sun size={16} /> : <Moon size={16} />}
             </button>
           </div>
         </div>
@@ -221,7 +214,7 @@ export function LeftSidebar({
         <PageImageContextMenu
           target={contextMenu}
           pageCount={images.length}
-          isCodexAvailable={isCodexAvailable}
+          isAiAvailable={isAiAvailable}
           onDismiss={() => setContextMenu(null)}
           onMoveToTop={handleMoveToTop}
           onMoveToBottom={handleMoveToBottom}

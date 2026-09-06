@@ -10,6 +10,18 @@ import { getPaletteSync } from 'colorthief';
 import { useTranslation } from 'react-i18next';
 import { useProject } from './ProjectContext';
 import type { ElectronicPdfSettings, ProjectState } from './project/model';
+import {
+  addProjectLanguage,
+  DEFAULT_PROJECT_LANGUAGE,
+  getDefaultProjectLanguage,
+  getProjectLanguage,
+  getProjectLanguageTags,
+  removeProjectLanguage,
+  resolveProjectLanguageState,
+  routeProjectLanguageUpdates,
+  type ProjectLanguageSeed,
+  updateProjectLanguage,
+} from './project/languages';
 import { ProImage } from './components/ProImage';
 import { arrayMove } from '@dnd-kit/sortable';
 import { createLogger } from './utils/logger';
@@ -20,6 +32,7 @@ import { RightSidebar } from './components/RightSidebar';
 import { PageImageContextMenu, type PageImageMenuTarget } from './components/PageImageContextMenu';
 import { AiIntegrationDialog } from './components/ai/AiIntegrationDialog';
 import { CodexImageDialog, type CodexImageRequest } from './components/ai/CodexImageDialog';
+import { useAiSettings } from './components/ai/aiSettings';
 import { useCodexAvailability } from './components/ai/codexModels';
 import { getFontFamilyStack, waitForProjectFonts } from './utils/fonts';
 import { StoryTextOverlay } from './components/StoryTextOverlay';
@@ -42,7 +55,7 @@ import { hasPublicationMetadata } from './utils/publicationMetadata';
 import { ElectronicPdfExportDialog } from './components/ElectronicPdfExportDialog';
 import type { ElectronicPdfExportSecrets } from './utils/electronicPdfSettings';
 import { writeElectronicPdf } from './utils/pdfExportFinalizer';
-import { localizeAppError } from './i18n';
+import { getPublicationLanguage, localizeAppError } from './i18n';
 import {
   createMoveMapping,
   remapMovedIndex,
@@ -61,8 +74,16 @@ import {
 const logger = createLogger('App');
 
 export default function EditorScreen() {
-  const { t } = useTranslation();
-  const isCodexAvailable = useCodexAvailability();
+  const { t, i18n } = useTranslation();
+  const {
+    settings: aiSettings,
+    setEnabled: setAiEnabled,
+    setProvider: setAiProvider,
+  } = useAiSettings();
+  const isCodexAvailable = useCodexAvailability(
+    aiSettings.enabled && aiSettings.provider === 'codex',
+  );
+  const isAiAvailable = aiSettings.enabled && isCodexAvailable;
   const { activeWorkspaceId, projectState, updateProjectState, appendSourceUrlMap, saveProject, saveProjectAs, closeProject, currentProjectPath, isDirty, undo, redo, canUndo, canRedo, isSaving, saveProgress } = useProject();
   const [images, setImages] = useState<string[]>([]);
   const [selectedIdx, setSelectedIdx] = useState<number | null>(null);
@@ -72,6 +93,7 @@ export default function EditorScreen() {
   const [trashedImages, setTrashedImages] = useState<string[]>([]);
   const [isLoaded, setIsLoaded] = useState(false);
   const [systemFonts, setSystemFonts] = useState<string[]>([]);
+  const [activeContentLanguage, setActiveContentLanguage] = useState(DEFAULT_PROJECT_LANGUAGE);
   
   // Theme
   const [isDark, setIsDark] = useState(() => window.matchMedia('(prefers-color-scheme: dark)').matches);
@@ -118,13 +140,45 @@ export default function EditorScreen() {
 
 
 
-  const defaultScript = t('editor.defaultScript');
-
-  const [globalScript, setGlobalScript] = useState(defaultScript);
-  const publicationProjectState = useMemo(
-    () => projectState ? { ...projectState, global_script: globalScript } : null,
-    [projectState, globalScript],
+  const contentLanguages = useMemo(
+    () => projectState ? getProjectLanguageTags(projectState) : [DEFAULT_PROJECT_LANGUAGE],
+    [projectState],
   );
+  const defaultContentLanguage = projectState
+    ? getDefaultProjectLanguage(projectState)
+    : DEFAULT_PROJECT_LANGUAGE;
+  const defaultScript = i18n.getFixedT(getPublicationLanguage(defaultContentLanguage))('editor.defaultScript');
+  const resolvedContentLanguage = contentLanguages.includes(activeContentLanguage)
+    ? activeContentLanguage
+    : defaultContentLanguage;
+  const activeProjectState = useMemo(
+    () => projectState ? resolveProjectLanguageState(projectState, resolvedContentLanguage) : null,
+    [projectState, resolvedContentLanguage],
+  );
+  const globalScript = activeProjectState?.global_script || '';
+
+  const updateActiveProjectState = useCallback((updates: Partial<ProjectState>) => {
+    if (!projectState) return;
+    updateProjectState(routeProjectLanguageUpdates(projectState, resolvedContentLanguage, updates));
+  }, [projectState, resolvedContentLanguage, updateProjectState]);
+
+  const setGlobalScript = useCallback((script: string) => {
+    if (!projectState) return;
+    updateProjectState(updateProjectLanguage(projectState, resolvedContentLanguage, { script }));
+  }, [projectState, resolvedContentLanguage, updateProjectState]);
+
+  const handleAddContentLanguage = useCallback((language: string, seed?: ProjectLanguageSeed) => {
+    if (!projectState) return;
+    updateProjectState(addProjectLanguage(projectState, language, seed));
+    setActiveContentLanguage(language);
+  }, [projectState, updateProjectState]);
+
+  const handleRemoveContentLanguage = useCallback((language: string) => {
+    if (!projectState || contentLanguages.length <= 1) return;
+    const remaining = contentLanguages.filter(tag => tag !== language);
+    updateProjectState(removeProjectLanguage(projectState, language));
+    setActiveContentLanguage(remaining[0] || defaultContentLanguage);
+  }, [contentLanguages, defaultContentLanguage, projectState, updateProjectState]);
 
   useEffect(() => {
     const root = window.document.documentElement;
@@ -147,12 +201,14 @@ export default function EditorScreen() {
 
   useEffect(() => {
     if (projectState) {
+        const initialLanguage = getDefaultProjectLanguage(projectState);
+        setActiveContentLanguage(initialLanguage);
         const urls = projectState.visible_images.map((f: string) => f.startsWith('blank://') ? f : `http://127.0.0.1:14320/images/${f}`);
         const trashUrls = projectState.trashed_images.map((f: string) => f.startsWith('blank://') ? f : `http://127.0.0.1:14320/images/${f}`);
         setImages(urls);
         setTrashedImages(trashUrls);
-        if (projectState.global_script) {
-            setGlobalScript(projectState.global_script);
+        if (!getProjectLanguage(projectState, initialLanguage).script && projectState.visible_images.length === 0) {
+            updateProjectState(updateProjectLanguage(projectState, initialLanguage, { script: defaultScript }));
         }
         if (urls.length > 0 && selectedIdx === null) setSelectedIdx(0);
         setIsLoaded(true);
@@ -171,6 +227,12 @@ export default function EditorScreen() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeWorkspaceId]); // Run once when workspace changes
 
+  useEffect(() => {
+    if (!contentLanguages.includes(activeContentLanguage)) {
+      setActiveContentLanguage(defaultContentLanguage);
+    }
+  }, [activeContentLanguage, contentLanguages, defaultContentLanguage]);
+
   useEffect(() => subscribeExternalProjectUpdates(update => {
     if (update.workspace_id !== activeWorkspaceId) return;
     const urls = update.state.visible_images.map(filename => (
@@ -181,7 +243,6 @@ export default function EditorScreen() {
     ));
     setImages(urls);
     setTrashedImages(trashUrls);
-    setGlobalScript(update.state.global_script);
     setSelectedIdx(current => {
       if (urls.length === 0) return null;
       if (current === null) return 0;
@@ -196,11 +257,10 @@ export default function EditorScreen() {
         updateProjectState({
             visible_images: images.map(url => url.startsWith('blank://') ? url : url.split('/').pop()!),
             trashed_images: trashedImages.map(url => url.startsWith('blank://') ? url : url.split('/').pop()!),
-            global_script: globalScript
         });
       }, 500);
       return () => clearTimeout(tid);
-  }, [images, trashedImages, globalScript, isLoaded, updateProjectState]);
+  }, [images, trashedImages, isLoaded, updateProjectState]);
 
   // Load Image Metadata when selectedIdx changes
   useEffect(() => {
@@ -254,9 +314,9 @@ export default function EditorScreen() {
   const parsedStory = useMemo(() => parseStoryScript(globalScript), [globalScript]);
   const parsedAuthor = parsedStory.author;
   const storyPages = useMemo(() => {
-    if (!projectState) return [];
-    return buildStoryPages({ ...projectState, global_script: globalScript }, images);
-  }, [globalScript, images, projectState]);
+    if (!activeProjectState) return [];
+    return buildStoryPages(activeProjectState, images);
+  }, [activeProjectState, images]);
 
   // Compute text overlay info for thumbnails — Cover/Title only
   const textOverlays = useMemo(() => {
@@ -351,7 +411,7 @@ export default function EditorScreen() {
     }
     
     return () => ro.disconnect();
-  }, [selectedIdx, currentText, parsedAuthor, canvasW, canvasH, projectState?.cover_text_settings?.font_size, projectState?.inner_text_settings?.font_size, projectState?.author_text_settings?.font_size]);
+  }, [selectedIdx, currentText, parsedAuthor, canvasW, canvasH, activeProjectState?.cover_text_settings?.font_size, activeProjectState?.inner_text_settings?.font_size, activeProjectState?.author_text_settings?.font_size]);
 
 
   const shiftProjectDictionaries = useCallback((mapping: PageIndexMapping, numItems: number) => {
@@ -390,11 +450,10 @@ export default function EditorScreen() {
     electronicPdfSettings: ElectronicPdfSettings,
     secrets: ElectronicPdfExportSecrets,
   ) => {
-    if (!projectState || electronicPdfProgress || webPublicationProgress) return;
+    if (!activeProjectState || electronicPdfProgress || webPublicationProgress) return;
 
     const exportState: ProjectState = {
-      ...projectState,
-      global_script: globalScript,
+      ...activeProjectState,
       visible_images: images.map(source => (
         source.startsWith('blank://') ? source : source.split('/').pop()!
       )),
@@ -424,17 +483,17 @@ export default function EditorScreen() {
     } finally {
       setElectronicPdfProgress(null);
     }
-  }, [electronicPdfProgress, globalScript, images, projectState, t, webPublicationProgress]);
+  }, [activeProjectState, electronicPdfProgress, images, t, webPublicationProgress]);
 
   const requestPublicationExport = useCallback((exportAction: () => void) => {
-    if (!projectState) return;
-    if (!hasPublicationMetadata(projectState.publication_metadata)) {
+    if (!activeProjectState) return;
+    if (!hasPublicationMetadata(activeProjectState.publication_metadata)) {
       pendingPublicationExportRef.current = exportAction;
       setIsMissingMetadataPromptOpen(true);
       return;
     }
     exportAction();
-  }, [projectState]);
+  }, [activeProjectState]);
 
   const handleExportElectronicPdf = useCallback(() => {
     if (electronicPdfProgress || webPublicationProgress) return;
@@ -447,7 +506,6 @@ export default function EditorScreen() {
       void (async () => {
         const exportState: ProjectState = {
           ...projectState,
-          global_script: globalScript,
           visible_images: images.map(source => (
             source.startsWith('blank://') ? source : source.split('/').pop()!
           )),
@@ -461,7 +519,10 @@ export default function EditorScreen() {
         try {
           const filePath = await save({
             filters: [{ name: t('common.publicationPackage'), extensions: ['scpub'] }],
-            defaultPath: `${getDefaultExportFilename(exportState, t('export.webPublicationSuffix'))}.scpub`,
+            defaultPath: `${getDefaultExportFilename(
+              resolveProjectLanguageState(exportState, getDefaultProjectLanguage(exportState)),
+              t('export.webPublicationSuffix'),
+            )}.scpub`,
           });
           if (!filePath) return;
 
@@ -482,7 +543,7 @@ export default function EditorScreen() {
         }
       })();
     });
-  }, [electronicPdfProgress, globalScript, images, isElectronicPdfExportOpen, projectState, requestPublicationExport, t, webPublicationProgress]);
+  }, [electronicPdfProgress, images, isElectronicPdfExportOpen, projectState, requestPublicationExport, t, webPublicationProgress]);
 
   const handleExportImage = useCallback(async (id: string, idx: number) => {
       if (id.startsWith('blank://')) {
@@ -706,7 +767,7 @@ export default function EditorScreen() {
   };
 
   const openCodexCreate = useCallback(() => {
-    if (!isCodexAvailable || !projectState) return;
+    if (!isAiAvailable || !projectState) return;
     const referencePages = projectState.visible_images
       .map((image, pageIndex) => ({
         pageIndex,
@@ -719,27 +780,29 @@ export default function EditorScreen() {
       || referencePages[referencePages.length - 1];
     setCodexImageRequest({
       kind: 'create',
+      language: resolvedContentLanguage,
       width: canvasW,
       height: canvasH,
       expectedLastModified: projectState.last_modified,
       referencePages,
       initialReferencePageIndexes: selectedReference ? [selectedReference.pageIndex] : [],
     });
-  }, [canvasH, canvasW, images, isCodexAvailable, parsedStory.pageText, projectState, selectedIdx]);
+  }, [canvasH, canvasW, images, isAiAvailable, parsedStory.pageText, projectState, resolvedContentLanguage, selectedIdx]);
 
   const openCodexRedraw = useCallback((id: string, index: number) => {
-    if (!isCodexAvailable || !projectState || id.startsWith('blank://')) return;
+    if (!isAiAvailable || !projectState || id.startsWith('blank://')) return;
     const sourceImage = id.split('/').pop();
     if (!sourceImage) return;
     setSelectedIdx(index);
     setCodexImageRequest({
       kind: 'redraw',
+      language: resolvedContentLanguage,
       pageIndex: index,
       sourceImage,
       sourceImageUrl: id,
       expectedLastModified: projectState.last_modified,
     });
-  }, [isCodexAvailable, projectState]);
+  }, [isAiAvailable, projectState, resolvedContentLanguage]);
 
   useEffect(() => {
     if (!canvasContextMenu) return;
@@ -754,7 +817,7 @@ export default function EditorScreen() {
       
       {/* Top Menu Bar */}
       <EditorHeader
-        projectState={projectState}
+        projectState={activeProjectState}
         isDirty={isDirty}
         currentProjectPath={currentProjectPath}
         activeTab={activeTab}
@@ -774,8 +837,10 @@ export default function EditorScreen() {
         webPublicationProgress={webPublicationProgress}
         isPublicationExportBusy={Boolean(isElectronicPdfExportOpen || electronicPdfProgress || webPublicationProgress)}
         openPublicationMetadata={() => setIsPublicationMetadataOpen(true)}
-        hasPublicationMetadata={hasPublicationMetadata(projectState?.publication_metadata)}
+        hasPublicationMetadata={hasPublicationMetadata(activeProjectState?.publication_metadata)}
         openAiIntegration={() => setIsAiIntegrationOpen(true)}
+        isDark={isDark}
+        setIsDark={setIsDark}
       />
 
       {/* Main Area */}
@@ -788,9 +853,7 @@ export default function EditorScreen() {
             images={images}
             selectedIdx={selectedIdx}
             setSelectedIdx={setSelectedIdx}
-            isCodexAvailable={isCodexAvailable}
-            isDark={isDark}
-            setIsDark={setIsDark}
+            isAiAvailable={isAiAvailable}
             handleDelete={handleDelete}
             handleMoveToTop={handleMoveToTop}
             handleMoveToBottom={handleMoveToBottom}
@@ -801,7 +864,7 @@ export default function EditorScreen() {
             handleInsertBlank={handleInsertBlankPage}
             handleInsertCodex={openCodexCreate}
             handleRedraw={openCodexRedraw}
-            hasTitle={hasStoryTitle(projectState?.global_script || '')}
+            hasTitle={hasStoryTitle(globalScript)}
             imageAdjustments={projectState?.image_adjustments}
             textOverlays={textOverlays}
             canvasSize={canvasW}
@@ -882,7 +945,7 @@ export default function EditorScreen() {
             <PageImageContextMenu
               target={canvasContextMenu}
               pageCount={images.length}
-              isCodexAvailable={isCodexAvailable}
+              isAiAvailable={isAiAvailable}
               onDismiss={() => setCanvasContextMenu(null)}
               onRedraw={openCodexRedraw}
               onCopy={handleCopyToClipboard}
@@ -894,17 +957,23 @@ export default function EditorScreen() {
           <RightSidebar
             isRightOpen={isRightOpen}
             setIsRightOpen={setIsRightOpen}
-            projectState={projectState}
-            updateProjectState={updateProjectState}
+            projectState={activeProjectState}
+            updateProjectState={updateActiveProjectState}
             globalScript={globalScript}
             setGlobalScript={setGlobalScript}
+            contentLanguages={contentLanguages}
+            activeContentLanguage={resolvedContentLanguage}
+            defaultContentLanguage={defaultContentLanguage}
+            setActiveContentLanguage={setActiveContentLanguage}
+            addContentLanguage={handleAddContentLanguage}
+            removeContentLanguage={handleRemoveContentLanguage}
             imgMeta={imgMeta}
             canvasW={canvasW}
             canvasH={canvasH}
             selectedIdx={selectedIdx}
             setSelectedIdx={setSelectedIdx}
             selectedImage={selectedIdx === null ? null : images[selectedIdx] || null}
-            isCodexAvailable={isCodexAvailable}
+            isAiAvailable={isAiAvailable}
             onRedrawImage={() => {
               if (selectedIdx === null || !images[selectedIdx]) return;
               openCodexRedraw(images[selectedIdx], selectedIdx);
@@ -916,12 +985,20 @@ export default function EditorScreen() {
           />
       </div>
       ) : (
-        <PrintScreen requestPdfExport={requestPublicationExport} />
+        <PrintScreen
+          projectState={activeProjectState}
+          requestPdfExport={requestPublicationExport}
+        />
       )}
 
       <AiIntegrationDialog
         open={isAiIntegrationOpen}
         onClose={() => setIsAiIntegrationOpen(false)}
+        aiEnabled={aiSettings.enabled}
+        aiProvider={aiSettings.provider}
+        isAiProviderAvailable={isCodexAvailable}
+        onAiEnabledChange={setAiEnabled}
+        onAiProviderChange={setAiProvider}
       />
 
       <CodexImageDialog
@@ -1036,19 +1113,20 @@ export default function EditorScreen() {
         </div>
       )}
 
-      {publicationProjectState && (
+      {activeProjectState && (
         <PublicationMetadataDialog
           open={isPublicationMetadataOpen}
-          projectState={publicationProjectState}
+          projectState={activeProjectState}
+          fixedLanguage={resolvedContentLanguage}
           onClose={() => setIsPublicationMetadataOpen(false)}
-          onSave={(publicationMetadata) => updateProjectState({ publication_metadata: publicationMetadata })}
+          onSave={(publicationMetadata) => updateActiveProjectState({ publication_metadata: publicationMetadata })}
         />
       )}
 
       <ElectronicPdfExportDialog
         open={isElectronicPdfExportOpen}
         settings={projectState?.electronic_pdf_settings}
-        publicationMetadata={projectState?.publication_metadata}
+        publicationMetadata={activeProjectState?.publication_metadata}
         onClose={() => setIsElectronicPdfExportOpen(false)}
         onExport={(settings, secrets) => {
           setIsElectronicPdfExportOpen(false);

@@ -10,6 +10,7 @@ import {
 
 interface LicenseNoticeButtonProps {
   compact?: boolean;
+  menuItem?: boolean;
   className?: string;
 }
 
@@ -87,7 +88,7 @@ function LicenseNoticeCards({ notices }: { notices: FontLicenseNotice[] }) {
   );
 }
 
-export function LicenseNoticeButton({ compact = false, className = '' }: LicenseNoticeButtonProps) {
+export function LicenseNoticeButton({ compact = false, menuItem = false, className = '' }: LicenseNoticeButtonProps) {
   const { t } = useTranslation();
   const [isOpen, setIsOpen] = useState(false);
 
@@ -113,12 +114,12 @@ export function LicenseNoticeButton({ compact = false, className = '' }: License
       <button
         type="button"
         onClick={() => setIsOpen(true)}
-        className={`${compact ? 'p-1.5 rounded-md' : 'inline-flex items-center gap-2 rounded-md border border-border bg-card px-3 py-2 text-sm'} transition-colors ${className}`}
+        className={`${menuItem ? 'flex w-full items-center gap-2 px-3 py-2 text-xs' : compact ? 'p-1.5 rounded-md' : 'inline-flex items-center gap-2 rounded-md border border-border bg-card px-3 py-2 text-sm'} transition-colors ${className}`}
         title={t('notices.title')}
         aria-label={t('notices.title')}
       >
-        <Info size={compact ? 14 : 16} />
-        {!compact && <span>{t('notices.title')}</span>}
+        <Info size={compact || menuItem ? 14 : 16} />
+        {(!compact || menuItem) && <span>{t('notices.title')}</span>}
       </button>
 
       {isOpen && (

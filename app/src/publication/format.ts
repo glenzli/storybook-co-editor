@@ -1,7 +1,7 @@
 import type { ProjectState, PublicationContributor, PublicationIdentifier } from '../project/model';
 
 export const PUBLICATION_FORMAT = 'storybook-publication';
-export const PUBLICATION_VERSION = 1;
+export const PUBLICATION_VERSION = '20260906.01';
 
 export const PUBLICATION_FONT_REGISTRY = {
   id: 'glenzli-books-webfonts',
@@ -69,7 +69,6 @@ export interface PublishedTextLayer {
 export interface PublishedPage {
   id: string;
   order: number;
-  role: 'cover' | 'title' | 'body';
   image: {
     src: string;
     width: number;
@@ -79,7 +78,18 @@ export interface PublishedPage {
     bytes: number;
     sha256: string;
   };
+}
+
+export interface PublishedLanguagePage {
+  id: string;
+  role: 'cover' | 'title' | 'body';
   textLayers: PublishedTextLayer[];
+}
+
+export interface PublishedLanguage {
+  language: string;
+  publication: PublishedPublication;
+  pages: PublishedLanguagePage[];
 }
 
 export interface PublishedResource {
@@ -89,11 +99,12 @@ export interface PublishedResource {
   sha256: string;
 }
 
-export interface PublicationManifestV1 {
+export interface PublicationManifest {
   format: typeof PUBLICATION_FORMAT;
   formatVersion: typeof PUBLICATION_VERSION;
   createdAt: string;
-  publication: PublishedPublication;
+  defaultLanguage: string;
+  languages: PublishedLanguage[];
   canvas: { width: number; height: number };
   fontPack: typeof PUBLICATION_FONT_REGISTRY;
   pages: PublishedPage[];
@@ -107,6 +118,12 @@ export interface PublicationManifestV1 {
 export interface PublicationManifestInput {
   projectState: ProjectState;
   createdAt: string;
+  defaultLanguage: string;
+  languages: Array<{
+    language: string;
+    projectState: ProjectState;
+    pages: PublishedLanguagePage[];
+  }>;
   pages: PublishedPage[];
   resources: PublishedResource[];
 }
@@ -139,16 +156,19 @@ export function getPublishedFontId(fontFamily: string): string {
   return aliases[fontFamily] || 'noto-sans-sc';
 }
 
-function projectPublishedPublication(projectState: ProjectState): Omit<PublishedPublication, 'id'> {
+async function buildPublishedPublication(
+  projectState: ProjectState,
+  language: string,
+): Promise<PublishedPublication> {
   const metadata = projectState.publication_metadata;
-  const language = trimmed(metadata?.language) || 'und';
-  return {
+  const normalizedLanguage = trimmed(language) || trimmed(metadata?.language) || 'und';
+  const publicationWithoutId: Omit<PublishedPublication, 'id'> = {
     title: trimmed(metadata?.title) || projectState.project_name.trim() || 'Untitled',
     contributors: metadata?.contributors
       ?.map(contributor => ({ ...contributor, name: contributor.name.trim() }))
       .filter(contributor => contributor.name) ?? [],
-    language,
-    readingDirection: getPublicationReadingDirection(language),
+    language: normalizedLanguage,
+    readingDirection: getPublicationReadingDirection(normalizedLanguage),
     description: nullable(metadata?.description),
     keywords: metadata?.keywords?.map(keyword => keyword.trim()).filter(Boolean) ?? [],
     publisher: nullable(metadata?.publisher),
@@ -164,6 +184,18 @@ function projectPublishedPublication(projectState: ProjectState): Omit<Published
     identifiers: metadata?.identifiers
       ?.map(identifier => ({ ...identifier, value: identifier.value.trim() }))
       .filter(identifier => identifier.value) ?? [],
+  };
+  const preferredIdentifier = publicationWithoutId.identifiers[0];
+  const publicationIdSeed = preferredIdentifier
+    ? `${preferredIdentifier.scheme}:${preferredIdentifier.value}\n${normalizedLanguage}`
+    : JSON.stringify({
+        title: publicationWithoutId.title,
+        contributors: publicationWithoutId.contributors,
+        language: normalizedLanguage,
+      });
+  return {
+    id: `publication-${(await sha256Hex(publicationIdSeed)).slice(0, 20)}`,
+    ...publicationWithoutId,
   };
 }
 
@@ -196,31 +228,38 @@ export async function createPublishedPageId(sourceKey: string, occurrence = 0): 
 
 export async function buildPublicationManifest(
   input: PublicationManifestInput,
-): Promise<PublicationManifestV1> {
+): Promise<PublicationManifest> {
   if (input.pages.length !== input.resources.length) {
     throw new Error('PUBLICATION_RESOURCE_COUNT_MISMATCH');
   }
   if (input.resources.some(resource => !isSafePublicationPath(resource.path))) {
     throw new Error('PUBLICATION_UNSAFE_RESOURCE_PATH');
   }
+  if (input.languages.length === 0) throw new Error('PUBLICATION_NO_LANGUAGES');
+  if (!input.languages.some(language => language.language === input.defaultLanguage)) {
+    throw new Error('PUBLICATION_DEFAULT_LANGUAGE_MISSING');
+  }
+  if (new Set(input.languages.map(language => language.language)).size !== input.languages.length) {
+    throw new Error('PUBLICATION_DUPLICATE_LANGUAGE');
+  }
+  if (input.languages.some(language => (
+    language.pages.length !== input.pages.length
+    || language.pages.some((page, index) => page.id !== input.pages[index]?.id)
+  ))) {
+    throw new Error('PUBLICATION_LANGUAGE_PAGE_MISMATCH');
+  }
 
-  const publicationWithoutId = projectPublishedPublication(input.projectState);
-  const preferredIdentifier = publicationWithoutId.identifiers[0];
-  const publicationIdSeed = preferredIdentifier
-    ? `${preferredIdentifier.scheme}:${preferredIdentifier.value}`
-    : JSON.stringify({
-        title: publicationWithoutId.title,
-        contributors: publicationWithoutId.contributors,
-      });
-  const publication: PublishedPublication = {
-    id: `publication-${(await sha256Hex(publicationIdSeed)).slice(0, 20)}`,
-    ...publicationWithoutId,
-  };
+  const languages: PublishedLanguage[] = await Promise.all(input.languages.map(async language => ({
+    language: language.language,
+    publication: await buildPublishedPublication(language.projectState, language.language),
+    pages: language.pages,
+  })));
   const base = {
     format: PUBLICATION_FORMAT,
     formatVersion: PUBLICATION_VERSION,
     createdAt: input.createdAt,
-    publication,
+    defaultLanguage: input.defaultLanguage,
+    languages,
     canvas: {
       width: input.projectState.canvas_width || 1024,
       height: input.projectState.canvas_height || 1024,
@@ -228,7 +267,7 @@ export async function buildPublicationManifest(
     fontPack: PUBLICATION_FONT_REGISTRY,
     pages: input.pages,
     resources: input.resources,
-  } satisfies Omit<PublicationManifestV1, 'integrity'>;
+  } satisfies Omit<PublicationManifest, 'integrity'>;
   const publicationSha256 = await sha256Hex(canonicalJson(base));
   return {
     ...base,

@@ -107,15 +107,25 @@ struct StorybookMcp {
 struct EmptyInput {}
 
 #[derive(Deserialize, schemars::JsonSchema)]
+struct LanguageInput {
+    /// BCP 47 content language. Omit to use the project's default language.
+    language: Option<String>,
+}
+
+#[derive(Deserialize, schemars::JsonSchema)]
 struct ReplaceStoryScriptInput {
     /// The last_modified value returned by a preceding read.
     expected_last_modified: String,
+    /// BCP 47 content language. Omit to use the project's default language.
+    language: Option<String>,
     /// The complete replacement script, including all page tags.
     script: String,
 }
 
 #[derive(Deserialize, schemars::JsonSchema)]
 struct PageIndexInput {
+    /// BCP 47 content language. Omit to use the project's default language.
+    language: Option<String>,
     /// Zero-based editor page index. The cover is page 0.
     page_index: usize,
 }
@@ -124,6 +134,8 @@ struct PageIndexInput {
 struct SetPageTextPositionInput {
     /// The last_modified value returned by a preceding read.
     expected_last_modified: String,
+    /// BCP 47 content language. Omit to use the project's default language.
+    language: Option<String>,
     /// Zero-based editor page index. The cover is page 0.
     page_index: usize,
     /// Horizontal text offset in canvas pixels.
@@ -139,16 +151,20 @@ struct ProjectOverviewOutput {
     page_count: usize,
     canvas_width: u32,
     canvas_height: u32,
+    default_language: String,
+    languages: Vec<String>,
 }
 
 #[derive(Serialize, schemars::JsonSchema)]
 struct StoryScriptOutput {
+    language: String,
     script: String,
     last_modified: String,
 }
 
 #[derive(Serialize, schemars::JsonSchema)]
 struct PageLayoutOutput {
+    language: String,
     page_index: usize,
     image_filename: String,
     offset_x: f64,
@@ -193,18 +209,26 @@ impl StorybookMcp {
     ) -> Result<Json<ProjectOverviewOutput>, CallToolResult> {
         let snapshot =
             project_operations::active_project_from_app(&self.app).map_err(tool_error)?;
+        let default_language = snapshot.state.default_language_tag();
+        let mut languages: Vec<_> = snapshot.state.languages.keys().cloned().collect();
+        languages.sort();
+        if languages.is_empty() {
+            languages.push(default_language.clone());
+        }
         Ok(Json(ProjectOverviewOutput {
             project_name: snapshot.state.project_name,
             last_modified: snapshot.state.last_modified,
             page_count: snapshot.state.visible_images.len(),
             canvas_width: snapshot.state.canvas_width,
             canvas_height: snapshot.state.canvas_height,
+            default_language,
+            languages,
         }))
     }
 
     #[tool(
         name = "get_story_script",
-        description = "Read the complete active story script and its revision token.",
+        description = "Read one complete content-language story script and its revision token.",
         annotations(
             title = "Get story script",
             read_only_hint = true,
@@ -215,19 +239,27 @@ impl StorybookMcp {
     )]
     fn get_story_script(
         &self,
-        Parameters(_input): Parameters<EmptyInput>,
+        Parameters(input): Parameters<LanguageInput>,
     ) -> Result<Json<StoryScriptOutput>, CallToolResult> {
         let snapshot =
             project_operations::active_project_from_app(&self.app).map_err(tool_error)?;
+        let language = input
+            .language
+            .unwrap_or_else(|| snapshot.state.default_language_tag());
         Ok(Json(StoryScriptOutput {
-            script: snapshot.state.global_script,
+            language: language.clone(),
+            script: snapshot
+                .state
+                .story_script(Some(&language))
+                .map_err(tool_error)?
+                .to_string(),
             last_modified: snapshot.state.last_modified,
         }))
     }
 
     #[tool(
         name = "replace_story_script",
-        description = "Replace the complete story script. Read it first and pass its exact last_modified value to prevent overwriting concurrent edits.",
+        description = "Replace one content-language story script. Read it first and pass its exact last_modified value to prevent overwriting concurrent edits.",
         annotations(
             title = "Replace story script",
             read_only_hint = false,
@@ -245,6 +277,7 @@ impl StorybookMcp {
             &self.app,
             &manager,
             &input.expected_last_modified,
+            input.language,
             input.script,
             "mcp",
         )
@@ -278,14 +311,16 @@ impl StorybookMcp {
             .get(input.page_index)
             .cloned()
             .ok_or_else(|| tool_error(format!("PAGE_OUT_OF_RANGE: {}", input.page_index)))?;
+        let language = input
+            .language
+            .unwrap_or_else(|| snapshot.state.default_language_tag());
         let page_override = snapshot
             .state
-            .page_text_overrides
-            .get(&input.page_index.to_string())
-            .cloned()
-            .unwrap_or_default();
+            .page_text_override(Some(&language), input.page_index)
+            .map_err(tool_error)?;
 
         Ok(Json(PageLayoutOutput {
+            language,
             page_index: input.page_index,
             image_filename,
             offset_x: page_override.offset_x,
@@ -315,6 +350,7 @@ impl StorybookMcp {
             &self.app,
             &manager,
             &input.expected_last_modified,
+            input.language,
             input.page_index,
             input.offset_x,
             input.offset_y,
@@ -376,7 +412,9 @@ impl ServerHandler for StorybookMcp {
                 ACTIVE_PROJECT_URI => serde_json::to_string_pretty(&snapshot)
                     .map_err(|error| McpError::internal_error(error.to_string(), None))?,
                 STORY_SCRIPT_URI => serde_json::to_string_pretty(&serde_json::json!({
-                    "script": snapshot.state.global_script,
+                    "language": snapshot.state.default_language_tag(),
+                    "script": snapshot.state.story_script(None)
+                        .map_err(|error| McpError::internal_error(error, None))?,
                     "last_modified": snapshot.state.last_modified,
                 }))
                 .map_err(|error| McpError::internal_error(error.to_string(), None))?,

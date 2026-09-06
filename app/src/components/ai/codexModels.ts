@@ -12,10 +12,14 @@ export async function listCodexModels(): Promise<CodexModelOption[]> {
   return invoke<CodexModelOption[]>('list_codex_models');
 }
 
-export function useCodexAvailability(): boolean {
+export function useCodexAvailability(enabled: boolean): boolean {
   const [isCodexAvailable, setIsCodexAvailable] = useState(false);
 
   useEffect(() => {
+    if (!enabled) {
+      setIsCodexAvailable(false);
+      return;
+    }
     let cancelled = false;
     listCodexModels()
       .then(models => {
@@ -27,7 +31,7 @@ export function useCodexAvailability(): boolean {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [enabled]);
 
   return isCodexAvailable;
 }

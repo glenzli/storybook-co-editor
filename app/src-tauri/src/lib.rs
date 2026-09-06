@@ -10,6 +10,7 @@ mod project_model;
 mod project_operations;
 mod project_storage;
 mod publication_archive;
+mod publication_image;
 mod receiver;
 mod system_fonts;
 
@@ -53,6 +54,7 @@ pub fn run() {
             codex_mcp_config::install_mcp_into_codex,
             codex_polish::list_codex_models,
             codex_polish::polish_story_with_codex,
+            codex_polish::translate_story_with_codex,
             codex_image_edit::redraw_image_with_codex,
             codex_image_edit::create_image_with_codex,
             codex_image_edit::apply_codex_image_variant,
@@ -60,6 +62,7 @@ pub fn run() {
             codex_image_edit::discard_codex_image_variant,
             system_fonts::get_system_fonts,
             pdf_security::protect_pdf,
+            publication_image::encode_publication_webp,
             publication_archive::write_publication_package,
             greet
         ])

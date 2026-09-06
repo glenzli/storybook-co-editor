@@ -3,10 +3,12 @@ import { PenTool, Type, Maximize2, ChevronDown, ChevronRight, ChevronLeft, Layou
 import { HexColorPicker } from 'react-colorful';
 import { useTranslation } from 'react-i18next';
 import type { ImageAdjustments, ProjectState, SelectiveColor, TextSettings } from '../project/model';
+import type { ProjectLanguageSeed } from '../project/languages';
 import { isPagePrintOnly, setPagePrintOnly } from '../project/pageSettings';
 import { BUILT_IN_FONT_OPTIONS } from '../utils/fonts';
 import { hasStoryTitle } from '../story/script';
 import { ScriptPanel } from './right-sidebar/ScriptPanel';
+import { ContentLanguageSwitcher } from './ContentLanguageSwitcher';
 
 const useEyedropper = () => {
   const [isSupported] = useState(() => 'EyeDropper' in window);
@@ -95,13 +97,19 @@ interface RightSidebarProps {
   updateProjectState: (updates: Partial<ProjectState>) => void;
   globalScript: string;
   setGlobalScript: (script: string) => void;
+  contentLanguages: string[];
+  activeContentLanguage: string;
+  defaultContentLanguage: string;
+  setActiveContentLanguage: (language: string) => void;
+  addContentLanguage: (language: string, seed?: ProjectLanguageSeed) => void;
+  removeContentLanguage: (language: string) => void;
   imgMeta: { width: number, height: number, sizeMB: string } | null;
   canvasW: number;
   canvasH: number;
   selectedIdx: number | null;
   setSelectedIdx: (idx: number | null) => void;
   selectedImage: string | null;
-  isCodexAvailable: boolean;
+  isAiAvailable: boolean;
   onRedrawImage: () => void;
 
   systemFonts: string[];
@@ -377,13 +385,19 @@ export function RightSidebar({
   updateProjectState,
   globalScript,
   setGlobalScript,
+  contentLanguages,
+  activeContentLanguage,
+  defaultContentLanguage,
+  setActiveContentLanguage,
+  addContentLanguage,
+  removeContentLanguage,
   imgMeta,
   canvasW,
   canvasH,
   selectedIdx,
   setSelectedIdx,
   selectedImage,
-  isCodexAvailable,
+  isAiAvailable,
   onRedrawImage,
   systemFonts,
   extractedColors,
@@ -497,6 +511,16 @@ export function RightSidebar({
               className="absolute top-0 left-0 w-1.5 h-full cursor-col-resize hover:bg-primary/50 active:bg-primary z-50 transition-colors"
               onMouseDown={handleMouseDown}
             />
+            <ContentLanguageSwitcher
+              languages={contentLanguages}
+              activeLanguage={activeContentLanguage}
+              defaultLanguage={defaultContentLanguage}
+              projectState={projectState}
+              isAiAvailable={isAiAvailable}
+              onChange={setActiveContentLanguage}
+              onAdd={addContentLanguage}
+              onRemove={removeContentLanguage}
+            />
             {/* Tab Header */}
             <div className="flex w-full flex-shrink-0 relative">
               <button
@@ -530,7 +554,8 @@ export function RightSidebar({
                 value={globalScript}
                 onChange={setGlobalScript}
                 onCursorChange={setSelectedIdx}
-                isCodexAvailable={isCodexAvailable}
+                isAiAvailable={isAiAvailable}
+                contentLanguage={activeContentLanguage}
               />
             )}
 
@@ -540,8 +565,8 @@ export function RightSidebar({
               <button
                 type="button"
                 onClick={onRedrawImage}
-                disabled={!isCodexAvailable || !selectedImage || selectedImage.startsWith('blank://')}
-                title={!isCodexAvailable ? t('ai.codexUnavailable') : undefined}
+                disabled={!isAiAvailable || !selectedImage || selectedImage.startsWith('blank://')}
+                title={!isAiAvailable ? t('ai.unavailable') : undefined}
                 className="min-h-12 w-full flex items-center justify-center gap-2 rounded-md border border-border bg-background px-4 py-3 text-sm font-medium text-foreground hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <Sparkles size={16} className="text-primary" />

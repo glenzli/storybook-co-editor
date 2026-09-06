@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import fixtureManifestJson from '../../../fixtures/publication-v1/manifest.json?raw';
+import fixtureManifestJson from '../../../fixtures/publication-20260906.01/manifest.json?raw';
 import type { ProjectState } from '../project/model';
 import {
   buildPublicationManifest,
@@ -9,6 +9,7 @@ import {
   isSafePublicationPath,
   sha256Hex,
   type PublishedPage,
+  type PublishedLanguagePage,
   type PublishedResource,
 } from './format';
 
@@ -54,7 +55,6 @@ const projectState: ProjectState = {
 const pages: PublishedPage[] = [{
   id: 'page-contract',
   order: 0,
-  role: 'cover',
   image: {
     src: 'pages/0001.webp',
     width: 1024,
@@ -64,6 +64,11 @@ const pages: PublishedPage[] = [{
     bytes: 4,
     sha256: '054edec1d0211f624fed0cbca9d4f9400b0e491c43742af2c5b0abebf0c990d8',
   },
+}];
+
+const languagePages: PublishedLanguagePage[] = [{
+  id: 'page-contract',
+  role: 'cover',
   textLayers: [{
     id: 'main',
     text: 'Contract Fixture',
@@ -98,29 +103,44 @@ const resources: PublishedResource[] = [{
   sha256: '054edec1d0211f624fed0cbca9d4f9400b0e491c43742af2c5b0abebf0c990d8',
 }];
 
-describe('publication format v1', () => {
-  it('projects only published metadata and frozen page content', async () => {
+describe('publication format 20260906.01', () => {
+  it('separates shared artwork from language-specific metadata and text', async () => {
     const manifest = await buildPublicationManifest({
       projectState,
       createdAt: '2026-09-04T00:00:00Z',
+      defaultLanguage: 'en-US',
+      languages: [{ language: 'en-US', projectState, pages: languagePages }],
       pages,
       resources,
     });
     const serialized = JSON.stringify(manifest);
 
     expect(manifest.format).toBe('storybook-publication');
-    expect(manifest.formatVersion).toBe(1);
+    expect(manifest.formatVersion).toBe('20260906.01');
     expect(manifest.canvas).toEqual({ width: 1024, height: 768 });
     expect(manifest.fontPack.compatibility).toBe('storybook-co-editor-fonts-v1');
-    expect(manifest.publication.language).toBe('en-US');
-    expect(manifest.publication.readingDirection).toBe('ltr');
-    expect(manifest.pages[0].textLayers[0].lines[0]).toEqual({ text: 'Contract Fixture', x: 512, y: 728 });
+    expect(manifest.defaultLanguage).toBe('en-US');
+    expect(manifest.languages[0].publication.language).toBe('en-US');
+    expect(manifest.languages[0].publication.readingDirection).toBe('ltr');
+    expect(manifest.languages[0].pages[0].textLayers[0].lines[0]).toEqual({ text: 'Contract Fixture', x: 512, y: 728 });
+    expect(manifest.pages[0]).not.toHaveProperty('textLayers');
     expect(manifest.integrity.publicationSha256).toMatch(/^[a-f0-9]{64}$/);
     expect(serialized).not.toContain('/private/source');
     expect(serialized).not.toContain('trashed_images');
     expect(serialized).not.toContain('print_settings');
     expect(serialized).not.toContain('page_settings');
     expect(serialized).not.toContain('copyright_page_mode');
+  });
+
+  it('requires every language to cover the shared page set', async () => {
+    await expect(buildPublicationManifest({
+      projectState,
+      createdAt: '2026-09-04T00:00:00Z',
+      defaultLanguage: 'en-US',
+      languages: [{ language: 'en-US', projectState, pages: [] }],
+      pages,
+      resources,
+    })).rejects.toThrow('PUBLICATION_LANGUAGE_PAGE_MISMATCH');
   });
 
   it('uses stable content-derived page ids and logical font ids', async () => {
@@ -141,7 +161,7 @@ describe('publication format v1', () => {
     expect(await sha256Hex(new Uint8Array([0, 1, 2, 3]))).toBe(resources[0].sha256);
   });
 
-  it('keeps the expanded v1 fixture internally consistent', async () => {
+  it('keeps the contract fixture internally consistent', async () => {
     const fixture = JSON.parse(fixtureManifestJson);
     const { integrity, ...manifestContent } = fixture;
 
