@@ -146,17 +146,17 @@ This release provides the macOS desktop app and a manually installed Chrome exte
 
 ### 本次更新 / What's New
 
-- 新增无效果、描边、柔光、绘画底纹和清晰面板五种正文可读性模式，强度可调，适应复杂绘本背景。
-- 新增按页文本宽度控制，并可将位置、颜色、字体粗细和可读性设置同步到全部正文页。
-- 新增悠哉字体、小赖字体和霞鹜文楷 Light；字体粗细会真实写入项目、预览、PDF 和网页出版包。
-- 新增多语言项目与网页出版流程：不同语言共享画面资源，分别保存脚本、出版元数据和文字样式。
-- 网页出版格式升级到字体包 2，冻结文本几何同时记录字体粗细与可读性效果。
+- 改进文字设计建议与局部候选筛选，支持多层颜料底纹。
+- 网页出版包保留编辑器中的颜料绘制顺序、透明度、模糊与裁切效果。
+- 网页出版包按各语言设置导出版权页，与 PDF 共用文字排版。
+- 修复清单数字精度变化导致的完整性校验失败，保留已有格式兼容性。
+- 网页出版格式更新至 20260908.02，配套阅读器需支持该版本。
 
-- Added five body-text readability modes—none, outline, soft halo, painted wash, and clear panel—with adjustable strength for complex illustrated backgrounds.
-- Added per-page text-width control and synchronization of position, color, font weight, and readability settings across body pages.
-- Added Yozai, Xiaolai, and LXGW WenKai Light; actual font weights now persist through projects, preview, PDF, and web publication packages.
-- Added multilingual projects and web publication: languages share artwork while keeping scripts, publication metadata, and text styles independent.
-- Upgraded web publications to font pack 2, preserving font weight and readability effects with frozen text geometry.
+- Improved text-design suggestions and local candidate filtering, with layered pigment washes.
+- Web publications preserve the editor's pigment pass order, opacity, blur, and clipping.
+- Web publications include copyright pages according to each language's settings, sharing text layout with PDF exports.
+- Fixed integrity-check failures caused by numeric precision changes while retaining earlier format support.
+- Updated the web publication format to 20260908.02; consuming readers must support this version.
 
 ### 下载内容 / Downloads
 
