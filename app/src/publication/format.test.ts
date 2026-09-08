@@ -1,5 +1,6 @@
+import numericManifestJson from '../../../fixtures/publication-20260906.02/numeric-manifest.json?raw';
 import { describe, expect, it } from 'vitest';
-import fixtureManifestJson from '../../../fixtures/publication-20260906.02/manifest.json?raw';
+import fixtureManifestJson from '../../../fixtures/publication-20260908.02/manifest.json?raw';
 import type { ProjectState } from '../project/model';
 import {
   buildPublicationManifest,
@@ -82,6 +83,7 @@ const languagePages: PublishedLanguagePage[] = [{
       lineHeight: 60,
       color: '#ffffff',
       align: 'center',
+      baseline: 'bottom',
       strokeColor: 'rgba(0,0,0,0.8)',
       strokeWidth: 3.2,
       shadow: null,
@@ -96,6 +98,7 @@ const languagePages: PublishedLanguagePage[] = [{
       backdropRadius: 0,
       backdropFeather: 0,
       backdropPath: null,
+      backdropPigment: null,
     },
   }],
 }];
@@ -107,7 +110,7 @@ const resources: PublishedResource[] = [{
   sha256: '054edec1d0211f624fed0cbca9d4f9400b0e491c43742af2c5b0abebf0c990d8',
 }];
 
-describe('publication format 20260906.02', () => {
+describe('publication format 20260908.02', () => {
   it('separates shared artwork from language-specific metadata and text', async () => {
     const manifest = await buildPublicationManifest({
       projectState,
@@ -120,7 +123,7 @@ describe('publication format 20260906.02', () => {
     const serialized = JSON.stringify(manifest);
 
     expect(manifest.format).toBe('storybook-publication');
-    expect(manifest.formatVersion).toBe('20260906.02');
+    expect(manifest.formatVersion).toBe('20260908.02');
     expect(manifest.canvas).toEqual({ width: 1024, height: 768 });
     expect(manifest.fontPack.compatibility).toBe('storybook-co-editor-fonts-v2');
     expect(manifest.defaultLanguage).toBe('en-US');
@@ -145,6 +148,28 @@ describe('publication format 20260906.02', () => {
       pages,
       resources,
     })).rejects.toThrow('PUBLICATION_LANGUAGE_PAGE_MISMATCH');
+  });
+
+  it('accepts ordered language subsets and rejects duplicate, unknown, reversed, or unused artwork', async () => {
+    const fixture = JSON.parse(fixtureManifestJson);
+    const input = {
+      projectState, createdAt: fixture.createdAt, defaultLanguage: fixture.defaultLanguage,
+      pages: fixture.pages, resources: fixture.resources,
+      languages: fixture.languages.map((language: { language: string; pages: PublishedLanguagePage[] }) => ({
+        language: language.language, pages: language.pages, projectState,
+      })),
+    };
+    await expect(buildPublicationManifest(input)).resolves.toHaveProperty('formatVersion', '20260908.02');
+    for (const invalidPages of [
+      [input.languages[0].pages[0], input.languages[0].pages[0]],
+      [{ ...input.languages[0].pages[0], id: 'unknown-page' }],
+      [...input.languages[0].pages].reverse(),
+      [input.languages[0].pages[0]],
+    ]) {
+      await expect(buildPublicationManifest({ ...input,
+        languages: [{ ...input.languages[0], pages: invalidPages }, ...input.languages.slice(1)],
+      })).rejects.toThrow('PUBLICATION_LANGUAGE_PAGE_MISMATCH');
+    }
   });
 
   it('uses stable content-derived page ids and logical font ids', async () => {
@@ -173,4 +198,9 @@ describe('publication format 20260906.02', () => {
 
     expect(await sha256Hex(canonicalJson(manifestContent))).toBe(integrity.publicationSha256);
   });
+});
+
+it('shares the JavaScript numeric digest fixture with the native package writer', async () => {
+  const { integrity, ...base } = JSON.parse(numericManifestJson);
+  expect(await sha256Hex(canonicalJson(base))).toBe(integrity.publicationSha256);
 });

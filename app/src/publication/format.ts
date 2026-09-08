@@ -1,7 +1,7 @@
 import type { ProjectState, PublicationContributor, PublicationIdentifier } from '../project/model';
 
 export const PUBLICATION_FORMAT = 'storybook-publication';
-export const PUBLICATION_VERSION = '20260906.02';
+export const PUBLICATION_VERSION = '20260908.02';
 
 export const PUBLICATION_FONT_REGISTRY = {
   id: 'glenzli-books-webfonts',
@@ -35,8 +35,16 @@ export interface PublishedTextLine {
   y: number;
 }
 
+export interface PublishedPigmentPass {
+  path: string;
+  opacity: number;
+  blur: number;
+  clip: boolean;
+  strokeWidth: number | null;
+}
+
 export interface PublishedTextLayer {
-  id: 'main' | 'author';
+  id: string;
   text: string;
   lines: PublishedTextLine[];
   position: {
@@ -52,7 +60,8 @@ export interface PublishedTextLayer {
     fontSize: number;
     lineHeight: number;
     color: string;
-    align: 'center';
+    align: 'left' | 'center';
+    baseline: 'top' | 'bottom';
     strokeColor: string | null;
     strokeWidth: number;
     shadow: { color: string; blur: number; spread: number } | null;
@@ -67,6 +76,7 @@ export interface PublishedTextLayer {
     backdropRadius: number;
     backdropFeather: number;
     backdropPath: string | null;
+    backdropPigment: PublishedPigmentPass[] | null;
   };
 }
 
@@ -86,7 +96,7 @@ export interface PublishedPage {
 
 export interface PublishedLanguagePage {
   id: string;
-  role: 'cover' | 'title' | 'body';
+  role: 'cover' | 'title' | 'body' | 'copyright';
   textLayers: PublishedTextLayer[];
 }
 
@@ -248,10 +258,19 @@ export async function buildPublicationManifest(
   if (new Set(input.languages.map(language => language.language)).size !== input.languages.length) {
     throw new Error('PUBLICATION_DUPLICATE_LANGUAGE');
   }
-  if (input.languages.some(language => (
-    language.pages.length !== input.pages.length
-    || language.pages.some((page, index) => page.id !== input.pages[index]?.id)
-  ))) {
+  const pageIndexes = new Map(input.pages.map((page, index) => [page.id, index]));
+  const referencedPages = new Set<string>();
+  for (const language of input.languages) {
+    let previous = -1;
+    if (language.pages.length === 0) throw new Error('PUBLICATION_LANGUAGE_PAGE_MISMATCH');
+    for (const page of language.pages) {
+      const index = pageIndexes.get(page.id);
+      if (index === undefined || index <= previous) throw new Error('PUBLICATION_LANGUAGE_PAGE_MISMATCH');
+      previous = index;
+      referencedPages.add(page.id);
+    }
+  }
+  if (referencedPages.size !== input.pages.length || pageIndexes.size !== input.pages.length) {
     throw new Error('PUBLICATION_LANGUAGE_PAGE_MISMATCH');
   }
 

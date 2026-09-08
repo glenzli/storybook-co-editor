@@ -1,7 +1,7 @@
 import type { ProjectState, PublicationContributor } from '../project/model';
 import i18n, { getPublicationLanguage } from '../i18n';
-import { getFontFamilyStack, getPublicationFontFamily } from './fonts';
-import { hasPublicationMetadata } from './publicationMetadata';
+import { getFontFamilyStack, getPublicationFontFamily } from '../utils/fonts';
+import { hasPublicationMetadata } from '../utils/publicationMetadata';
 
 export type PublicationPageTarget = 'electronic' | 'print';
 
@@ -20,6 +20,10 @@ export interface PublicationPage {
   contributors: PublicationPageEntry[];
   details: PublicationPageEntry[];
   rights: string[];
+}
+
+export function copyrightPageInsertionIndex(pages: Array<{ role: string }>): number {
+  return pages[1]?.role === 'title' ? 2 : Math.min(1, pages.length);
 }
 
 function trimmed(value: string | undefined): string {
@@ -118,19 +122,88 @@ function wrapText(ctx: CanvasRenderingContext2D, text: string, maxWidth: number)
   return lines;
 }
 
-function drawWrappedText(
-  ctx: CanvasRenderingContext2D,
-  text: string,
-  x: number,
-  y: number,
-  maxWidth: number,
-  lineHeight: number,
-  maxLines?: number,
-): number {
-  const lines = wrapText(ctx, text, maxWidth);
-  const visibleLines = maxLines ? lines.slice(0, maxLines) : lines;
-  visibleLines.forEach((line, index) => ctx.fillText(line, x, y + index * lineHeight));
-  return y + visibleLines.length * lineHeight;
+export interface PublicationSeparator {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  color: string;
+}
+
+export interface PublicationTextBlock {
+  text: string;
+  lines: Array<{ text: string; x: number; y: number }>;
+  maxWidth: number;
+  fontSize: number;
+  fontWeight: number;
+  lineHeight: number;
+  color: string;
+  separator?: PublicationSeparator;
+}
+
+// PDF and web publication consume the same measured, top-aligned text blocks.
+export function layoutPublicationPage(ctx: CanvasRenderingContext2D, page: PublicationPage): PublicationTextBlock[] {
+  const blocks: PublicationTextBlock[] = [];
+  const scale = Math.max(page.width, page.height) / 1024;
+  const marginX = Math.max(48 * scale, page.width * 0.085);
+  const maxWidth = page.width - marginX * 2;
+  const contentRows = page.contributors.length + page.details.length + page.rights.length * 2;
+  const bodyFontSize = Math.max(11 * scale, Math.min(14 * scale, page.height * 0.42 / Math.max(contentRows, 12)));
+  const bodyLineHeight = bodyFontSize * 1.45;
+  const titleFontSize = Math.min(22 * scale, bodyFontSize * 1.5);
+  const headingFontSize = Math.max(9 * scale, bodyFontSize * 0.78);
+  const smallFontSize = Math.max(8 * scale, bodyFontSize * 0.68);
+  const fontFamily = getFontFamilyStack(page.fontFamily);
+  const footerY = page.height - page.height * 0.07;
+  const contentBottom = footerY - bodyLineHeight * 1.8;
+  let separator: PublicationSeparator | undefined;
+  const measure = (text: string, width: number, size: number, weight: number) => {
+    ctx.font = `${weight} ${size}px ${fontFamily}`;
+    return wrapText(ctx, text, width);
+  };
+  const addText = (text: string, x: number, y: number, width: number, size: number,
+    weight: number, color: string, lineHeight = bodyLineHeight, maxLines = 1) => {
+    const lines = measure(text, width, size, weight).slice(0, maxLines);
+    blocks.push({ text, lines: lines.map((line, index) => ({ text: line, x, y: y + index * lineHeight })),
+      maxWidth: width, fontSize: size, fontWeight: weight, color, lineHeight, separator });
+    separator = undefined;
+    return y + lines.length * lineHeight;
+  };
+
+  let y = page.height * 0.1;
+  addText(page.heading, marginX, y, maxWidth, headingFontSize, 500, '#555555');
+  y += bodyLineHeight * 1.35;
+  y = addText(page.title, marginX, y, maxWidth, titleFontSize, 600, '#111111', titleFontSize * 1.22, 3);
+  y += bodyLineHeight;
+  separator = { x: marginX, y, width: maxWidth, height: Math.max(1, scale * 0.75), color: '#b8b8b8' };
+  y += bodyLineHeight * 1.1;
+  const labelWidth = Math.min(maxWidth * 0.25, 150 * scale);
+  let wasTruncated = false;
+  for (const entry of [...page.contributors, ...page.details]) {
+    const count = Math.min(2, measure(entry.value, maxWidth - labelWidth, bodyFontSize, 400).length);
+    if (y + Math.max(1, count) * bodyLineHeight > contentBottom) { wasTruncated = true; break; }
+    addText(entry.label, marginX, y, labelWidth, bodyFontSize, 400, '#5a5a5a');
+    const nextY = addText(entry.value, marginX + labelWidth, y, maxWidth - labelWidth,
+      bodyFontSize, 400, '#111111', bodyLineHeight, 2);
+    y = Math.max(y + bodyLineHeight, nextY);
+  }
+  if (!wasTruncated && page.rights.length > 0 && y + bodyLineHeight * 2.65 > contentBottom) wasTruncated = true;
+  if (!wasTruncated && page.rights.length > 0) {
+    y += bodyLineHeight * 0.65;
+    separator = { x: marginX, y, width: maxWidth, height: Math.max(1, scale), color: '#c8c8c8' };
+    y += bodyLineHeight;
+    for (const [index, right] of page.rights.entries()) {
+      const weight = index === 0 ? 600 : 400;
+      const count = Math.min(4, measure(right, maxWidth, bodyFontSize, weight).length);
+      if (y + Math.max(1, count) * bodyLineHeight > contentBottom) { wasTruncated = true; break; }
+      y = addText(right, marginX, y, maxWidth, bodyFontSize, weight,
+        index === 0 ? '#111111' : '#444444', bodyLineHeight, 4);
+      y += bodyLineHeight * 0.35;
+    }
+  }
+  if (wasTruncated) addText(page.remainingMetadata, marginX, Math.min(y, contentBottom), maxWidth, smallFontSize, 400, '#777777');
+  addText('Storybook Co-Editor', marginX, footerY, maxWidth, smallFontSize, 400, '#666666');
+  return blocks;
 }
 
 export function renderPublicationPageToCanvas(page: PublicationPage): HTMLCanvasElement {
@@ -139,107 +212,20 @@ export function renderPublicationPageToCanvas(page: PublicationPage): HTMLCanvas
   canvas.height = page.height;
   const ctx = canvas.getContext('2d');
   if (!ctx) throw new Error(i18n.t('errors.canvasUnavailable'));
-
-  const scale = Math.max(page.width, page.height) / 1024;
-  const marginX = Math.max(48 * scale, page.width * 0.085);
-  const maxWidth = page.width - marginX * 2;
-  const contentRows = page.contributors.length + page.details.length + page.rights.length * 2;
-  const bodyFontSize = Math.max(
-    11 * scale,
-    Math.min(14 * scale, page.height * 0.42 / Math.max(contentRows, 12)),
-  );
-  const bodyLineHeight = bodyFontSize * 1.45;
-  const titleFontSize = Math.min(22 * scale, bodyFontSize * 1.5);
-  const headingFontSize = Math.max(9 * scale, bodyFontSize * 0.78);
-  const smallFontSize = Math.max(8 * scale, bodyFontSize * 0.68);
-  const fontFamily = getFontFamilyStack(page.fontFamily);
-  const footerY = page.height - page.height * 0.07;
-  const contentBottom = footerY - bodyLineHeight * 1.8;
-
+  const blocks = layoutPublicationPage(ctx, page);
   ctx.fillStyle = '#ffffff';
   ctx.fillRect(0, 0, page.width, page.height);
   ctx.textAlign = 'left';
   ctx.textBaseline = 'top';
-
-  let y = page.height * 0.1;
-  ctx.fillStyle = '#555555';
-  ctx.font = `500 ${headingFontSize}px ${fontFamily}`;
-  ctx.fillText(page.heading, marginX, y);
-  y += bodyLineHeight * 1.35;
-
-  ctx.fillStyle = '#111111';
-  ctx.font = `600 ${titleFontSize}px ${fontFamily}`;
-  y = drawWrappedText(ctx, page.title, marginX, y, maxWidth, titleFontSize * 1.22, 3);
-  y += bodyLineHeight;
-
-  ctx.fillStyle = '#b8b8b8';
-  ctx.fillRect(marginX, y, maxWidth, Math.max(1, scale * 0.75));
-  y += bodyLineHeight * 1.1;
-
-  const entries = [...page.contributors, ...page.details];
-  const labelWidth = Math.min(maxWidth * 0.25, 150 * scale);
-  ctx.font = `${bodyFontSize}px ${fontFamily}`;
-  let wasTruncated = false;
-
-  for (const entry of entries) {
-    const entryLineCount = Math.min(
-      2,
-      wrapText(ctx, entry.value, maxWidth - labelWidth).length,
-    );
-    if (y + Math.max(1, entryLineCount) * bodyLineHeight > contentBottom) {
-      wasTruncated = true;
-      break;
+  for (const block of blocks) {
+    if (block.separator) {
+      const rect = block.separator;
+      ctx.fillStyle = rect.color;
+      ctx.fillRect(rect.x, rect.y, rect.width, rect.height);
     }
-    ctx.fillStyle = '#5a5a5a';
-    ctx.fillText(entry.label, marginX, y);
-    ctx.fillStyle = '#111111';
-    const nextY = drawWrappedText(
-      ctx,
-      entry.value,
-      marginX + labelWidth,
-      y,
-      maxWidth - labelWidth,
-      bodyLineHeight,
-      2,
-    );
-    y = Math.max(y + bodyLineHeight, nextY);
+    ctx.fillStyle = block.color;
+    ctx.font = `${block.fontWeight} ${block.fontSize}px ${getFontFamilyStack(page.fontFamily)}`;
+    for (const line of block.lines) ctx.fillText(line.text, line.x, line.y);
   }
-
-  if (!wasTruncated && page.rights.length > 0) {
-    if (y + bodyLineHeight * 2.65 > contentBottom) {
-      wasTruncated = true;
-    }
-  }
-
-  if (!wasTruncated && page.rights.length > 0) {
-    y += bodyLineHeight * 0.65;
-    ctx.fillStyle = '#c8c8c8';
-    ctx.fillRect(marginX, y, maxWidth, Math.max(1, scale));
-    y += bodyLineHeight;
-
-    for (let index = 0; index < page.rights.length; index += 1) {
-      const right = page.rights[index];
-      ctx.font = `${index === 0 ? 600 : 400} ${bodyFontSize}px ${fontFamily}`;
-      const rightLineCount = Math.min(4, wrapText(ctx, right, maxWidth).length);
-      if (y + Math.max(1, rightLineCount) * bodyLineHeight > contentBottom) {
-        wasTruncated = true;
-        break;
-      }
-      ctx.fillStyle = index === 0 ? '#111111' : '#444444';
-      y = drawWrappedText(ctx, right, marginX, y, maxWidth, bodyLineHeight, 4);
-      y += bodyLineHeight * 0.35;
-    }
-  }
-
-  if (wasTruncated) {
-    ctx.fillStyle = '#777777';
-    ctx.font = `${smallFontSize}px ${fontFamily}`;
-    ctx.fillText(page.remainingMetadata, marginX, Math.min(y, contentBottom));
-  }
-
-  ctx.fillStyle = '#666666';
-  ctx.font = `${smallFontSize}px ${fontFamily}`;
-  ctx.fillText('Storybook Co-Editor', marginX, footerY);
-
   return canvas;
 }

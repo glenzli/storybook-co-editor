@@ -41,13 +41,9 @@ edited. New project schema: `20260907.01`; legacy dated schemas are migrated.
 边缘变化和柔和度可调。「换一种底纹」更新种子。底纹由三层透明罩染、边缘浓淡色池、柔和积色与轻微颗粒组成；保存种子可复现浸染效果。旧项目在主动修改效果前保持原有底纹。项目版本更新为 `20260907.01`。
 
 Canvas rendering and SVG editor overlays use the shared frozen text layout. Web
-publication keeps its `20260906.02` ABI: combined stroke/shadow and the resolved wash
-path fit existing fields; no procedural seed is required by a reader. The project
-retains editable effects, while publication stores their resolved paint and geometry.
+publication `20260908.01` stores the same ordered pigment passes, including clipping,
+opacity, blur and stroke widths. A reader renders these resolved passes without
+re-running the editable seed or text layout. Older `20260906.02` packages retain
+their simplified single-color washes.
 
-Editor SVG, local candidate Canvas previews and PDF share frozen pigment passes.
-The `20260906.02` web publication ABI retains the simplified single-color wash
-contour, without pigment texture; language-specific washes are never baked into
-shared page artwork. Full pigment publication needs a future reader contract update.
-
-编辑器、候选预览和 PDF 共用浸染绘制数据；网页出版仍输出兼容旧阅读器的单色底纹轮廓，暂不包含浸染纹理。
+编辑器、候选预览、PDF 与新版网页出版包共用冻结后的浸染绘制数据；阅读器直接还原多层底纹，不重跑种子或文字排版。旧版 `20260906.02` 包继续按原有单色底纹显示。

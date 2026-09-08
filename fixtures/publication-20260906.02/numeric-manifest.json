@@ -1,0 +1,124 @@
+{
+  "format": "storybook-publication",
+  "formatVersion": "20260906.02",
+  "createdAt": "2026-09-04T00:00:00Z",
+  "defaultLanguage": "en-US",
+  "languages": [
+    {
+      "language": "en-US",
+      "publication": {
+        "id": "publication-contract-fixture",
+        "title": "Contract Fixture",
+        "contributors": [
+          {
+            "role": "author",
+            "name": "Example Author"
+          }
+        ],
+        "language": "en-US",
+        "readingDirection": "ltr",
+        "description": "Published contract fixture.",
+        "keywords": [],
+        "publisher": null,
+        "publicationDate": null,
+        "edition": null,
+        "copyrightHolder": null,
+        "copyrightYear": null,
+        "copyrightNotice": null,
+        "license": {
+          "name": null,
+          "url": null
+        },
+        "identifiers": []
+      },
+      "pages": [
+        {
+          "id": "page-contract-fixture",
+          "role": "cover",
+          "textLayers": [
+            {
+              "id": "main",
+              "text": "Contract Fixture",
+              "lines": [
+                {
+                  "text": "Contract Fixture",
+                  "x": 397.09999999999997,
+                  "y": 200
+                }
+              ],
+              "position": {
+                "x": 160,
+                "y": 200,
+                "maxWidth": 224,
+                "anchor": "center-bottom"
+              },
+              "style": {
+                "font": "noto-serif-sc",
+                "fontFamily": "serif",
+                "fontWeight": 400,
+                "fontSize": 24,
+                "lineHeight": 36,
+                "color": "#ffffff",
+                "align": "center",
+                "strokeColor": "rgba(0,0,0,0.8)",
+                "strokeWidth": 1.92,
+                "shadow": {
+                  "color": "rgba(0,0,0,0.5)",
+                  "blur": 1e-7,
+                  "spread": 1.0000000000000002
+                },
+                "backdropKind": null,
+                "backdropColor": null,
+                "backdropX": null,
+                "backdropY": null,
+                "backdropWidth": null,
+                "backdropHeight": null,
+                "backdropPaddingX": 12,
+                "backdropPaddingY": 4.8,
+                "backdropRadius": 0,
+                "backdropFeather": 6.24,
+                "backdropPath": null
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "canvas": {
+    "width": 320,
+    "height": 240
+  },
+  "fontPack": {
+    "id": "glenzli-books-webfonts",
+    "version": "2",
+    "compatibility": "storybook-co-editor-fonts-v2"
+  },
+  "pages": [
+    {
+      "id": "page-contract-fixture",
+      "order": 0,
+      "image": {
+        "src": "pages/0001.webp",
+        "width": 320,
+        "height": 240,
+        "alt": null,
+        "mimeType": "image/webp",
+        "bytes": 86,
+        "sha256": "03cbcfa783b6be7afcbbedcf3fded666fac25dbe240a26e3b21942459080d1eb"
+      }
+    }
+  ],
+  "resources": [
+    {
+      "path": "pages/0001.webp",
+      "mimeType": "image/webp",
+      "bytes": 86,
+      "sha256": "03cbcfa783b6be7afcbbedcf3fded666fac25dbe240a26e3b21942459080d1eb"
+    }
+  ],
+  "integrity": {
+    "algorithm": "sha256",
+    "publicationSha256": "c0fc3fd3e560b800766968cc94f5f6f4c4c3dfb01d401fa3270b191b8352b05e"
+  }
+}

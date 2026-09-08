@@ -1,6 +1,6 @@
 use base64::Engine;
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
+use serde_json::{value::RawValue, Value};
 use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, HashSet};
 use std::fs::{File, OpenOptions};
@@ -13,7 +13,7 @@ use zip::ZipWriter;
 const MAX_ASSET_BYTES: usize = 64 * 1024 * 1024;
 const MAX_PACKAGE_BYTES: usize = 512 * 1024 * 1024;
 const MAX_MANIFEST_BYTES: usize = 16 * 1024 * 1024;
-const PUBLICATION_FORMAT_VERSION: &str = "20260906.02";
+const PUBLICATION_FORMAT_VERSION: &str = "20260908.02";
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -142,16 +142,67 @@ fn validate_target_path(target_path: &str) -> Result<PathBuf, String> {
     Ok(target)
 }
 
+// The producer uses JSON.stringify numbers. Parsing through f64 before hashing
+// changes decimal precision/exponent spelling. Keep those tokens from the wire;
+// normalize containers/strings and sort keys by JavaScript's UTF-16 ordering.
+fn canonical_json_bytes(source: &str) -> Result<Vec<u8>, String> {
+    fn write(raw: &RawValue, output: &mut Vec<u8>) -> Result<(), serde_json::Error> {
+        match raw.get().as_bytes().first() {
+            Some(b'{') => {
+                let object: BTreeMap<String, Box<RawValue>> = serde_json::from_str(raw.get())?;
+                let mut entries: Vec<_> = object.iter().collect();
+                entries.sort_by(|(a, _), (b, _)| a.encode_utf16().cmp(b.encode_utf16()));
+                output.push(b'{');
+                for (index, (key, value)) in entries.into_iter().enumerate() {
+                    if index > 0 {
+                        output.push(b',');
+                    }
+                    serde_json::to_writer(&mut *output, key)?;
+                    output.push(b':');
+                    write(value, output)?;
+                }
+                output.push(b'}');
+            }
+            Some(b'[') => {
+                let array: Vec<Box<RawValue>> = serde_json::from_str(raw.get())?;
+                output.push(b'[');
+                for (index, value) in array.iter().enumerate() {
+                    if index > 0 {
+                        output.push(b',');
+                    }
+                    write(value, output)?;
+                }
+                output.push(b']');
+            }
+            Some(b'"') => {
+                let value: String = serde_json::from_str(raw.get())?;
+                serde_json::to_writer(output, &value)?;
+            }
+            _ => output.extend_from_slice(raw.get().as_bytes()),
+        }
+        Ok(())
+    }
+    let raw: Box<RawValue> = serde_json::from_str(source)
+        .map_err(|error| invalid(format!("manifest cannot be canonicalized: {error}")))?;
+    let mut output = Vec::with_capacity(source.len());
+    write(&raw, &mut output)
+        .map_err(|error| invalid(format!("manifest cannot be canonicalized: {error}")))?;
+    Ok(output)
+}
+
 fn validate_manifest(
     manifest_json: &str,
 ) -> Result<(ManifestEnvelope, BTreeMap<String, ManifestResource>), String> {
-    let mut value: Value = serde_json::from_str(manifest_json)
+    let value: Value = serde_json::from_str(manifest_json)
         .map_err(|error| invalid(format!("manifest.json is invalid: {error}")))?;
     let manifest: ManifestEnvelope = serde_json::from_value(value.clone())
         .map_err(|error| invalid(format!("manifest.json does not match the schema: {error}")))?;
 
     if manifest.format != "storybook-publication"
-        || manifest.format_version != PUBLICATION_FORMAT_VERSION
+        || !matches!(
+            manifest.format_version.as_str(),
+            "20260906.02" | "20260908.01" | PUBLICATION_FORMAT_VERSION
+        )
     {
         return Err(invalid("unsupported publication format"));
     }
@@ -172,7 +223,25 @@ fn validate_manifest(
         {
             return Err(invalid("publication language is invalid"));
         }
-        if language.pages.len() != manifest.pages.len()
+        if manifest.format_version == PUBLICATION_FORMAT_VERSION {
+            let mut previous = None;
+            if language.pages.is_empty() {
+                return Err(invalid("publication language pages are empty"));
+            }
+            for language_page in &language.pages {
+                let index = manifest
+                    .pages
+                    .iter()
+                    .position(|page| page.id == language_page.id)
+                    .ok_or_else(|| invalid("publication language page has no artwork"))?;
+                if previous.is_some_and(|previous| index <= previous) {
+                    return Err(invalid(
+                        "publication language pages are not an ordered subset",
+                    ));
+                }
+                previous = Some(index);
+            }
+        } else if language.pages.len() != manifest.pages.len()
             || language
                 .pages
                 .iter()
@@ -183,6 +252,16 @@ fn validate_manifest(
                 "publication language pages do not match artwork pages",
             ));
         }
+    }
+    if manifest.pages.iter().any(|page| {
+        !manifest
+            .languages
+            .iter()
+            .any(|language| language.pages.iter().any(|entry| entry.id == page.id))
+    }) {
+        return Err(invalid(
+            "publication artwork is not referenced by any language",
+        ));
     }
     if !language_tags.contains(manifest.default_language.as_str()) {
         return Err(invalid("default language is not included"));
@@ -199,12 +278,12 @@ fn validate_manifest(
         return Err(invalid("manifest integrity is invalid"));
     }
 
-    value
-        .as_object_mut()
-        .ok_or_else(|| invalid("manifest.json must be an object"))?
-        .remove("integrity");
-    let canonical = serde_json::to_vec(&value)
+    let mut raw: BTreeMap<String, Box<RawValue>> = serde_json::from_str(manifest_json)
         .map_err(|error| invalid(format!("manifest cannot be canonicalized: {error}")))?;
+    raw.remove("integrity");
+    let raw_base = serde_json::to_string(&raw)
+        .map_err(|error| invalid(format!("manifest cannot be canonicalized: {error}")))?;
+    let canonical = canonical_json_bytes(&raw_base)?;
     if sha256_hex(&canonical) != manifest.integrity.publication_sha256 {
         return Err(invalid(
             "publication digest does not match manifest content",
@@ -451,12 +530,46 @@ mod tests {
     }
 
     #[test]
+    fn writes_copyright_fixture_with_language_specific_page_subset() {
+        let root = std::env::temp_dir().join(format!("storybook-copyright-{}", Uuid::new_v4()));
+        fs::create_dir_all(&root).unwrap();
+        let manifest = include_str!("../../../fixtures/publication-20260908.02/manifest.json");
+        let assets = vec![
+            asset(
+                "pages/0001.webp",
+                include_bytes!("../../../fixtures/publication-20260908.02/pages/0001.webp"),
+            ),
+            asset(
+                "pages/0002.webp",
+                include_bytes!("../../../fixtures/publication-20260908.02/pages/0002.webp"),
+            ),
+        ];
+        write_package(
+            root.join("fixture.scpub").to_str().unwrap(),
+            manifest,
+            assets,
+        )
+        .unwrap();
+        let mut value: serde_json::Value = serde_json::from_str(manifest).unwrap();
+        let language = &mut value["languages"][0]["pages"];
+        language.as_array_mut().unwrap().reverse();
+        let error = write_package(
+            root.join("invalid.scpub").to_str().unwrap(),
+            &value.to_string(),
+            vec![],
+        )
+        .unwrap_err();
+        assert!(error.contains("ordered subset"));
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
     fn writes_valid_publication_zip() {
         let root = std::env::temp_dir().join(format!("storybook-publication-{}", Uuid::new_v4()));
         fs::create_dir_all(&root).unwrap();
         let target = root.join("fixture.scpub");
-        let artwork = include_bytes!("../../../fixtures/publication-20260906.02/pages/0001.webp");
-        let manifest = include_str!("../../../fixtures/publication-20260906.02/manifest.json");
+        let artwork = include_bytes!("../../../fixtures/publication-20260908.01/pages/0001.webp");
+        let manifest = include_str!("../../../fixtures/publication-20260908.01/manifest.json");
 
         let result = write_package(
             target.to_str().unwrap(),
@@ -485,6 +598,17 @@ mod tests {
         assert_eq!(stored_artwork, artwork);
 
         fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn validates_javascript_numeric_manifest_without_rounding() {
+        let manifest =
+            include_str!("../../../fixtures/publication-20260906.02/numeric-manifest.json");
+        assert!(super::validate_manifest(manifest).is_ok());
+        let changed = manifest.replace("1.0000000000000002", "1.0000000000000004");
+        assert!(super::validate_manifest(&changed)
+            .unwrap_err()
+            .contains("digest does not match"));
     }
 
     #[test]

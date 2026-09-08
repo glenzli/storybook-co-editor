@@ -1,5 +1,6 @@
 import { invoke } from '@tauri-apps/api/core';
 import type { ProjectState } from '../project/model';
+import { waitForProjectFonts } from '../utils/fonts';
 import {
   getDefaultProjectLanguage,
   getProjectLanguageTags,
@@ -21,6 +22,11 @@ import {
   type PublishedResource,
   type PublishedTextLayer,
 } from './format';
+
+import {
+  buildPublicationPage, copyrightPageInsertionIndex, layoutPublicationPage,
+  shouldIncludeCopyrightPage, type PublicationPage,
+} from './copyrightPage';
 
 export interface PublicationExportProgress {
   current: number;
@@ -47,7 +53,8 @@ export interface ExportWebPublicationOptions {
 }
 
 export function getWebPublicationPageCount(projectState: ProjectState): number {
-  return getElectronicStoryPageCount(projectState);
+  const state = resolveProjectLanguageState(projectState, getDefaultProjectLanguage(projectState));
+  return getElectronicStoryPageCount(projectState) + Number(shouldIncludeCopyrightPage(state, 'electronic'));
 }
 
 function canvasToPng(canvas: HTMLCanvasElement): Promise<Blob> {
@@ -89,7 +96,7 @@ async function canvasToWebpBytes(canvas: HTMLCanvasElement): Promise<Uint8Array>
   return base64ToBytes(webpBase64);
 }
 
-function buildPublishedTextLayers(page: ReturnType<typeof buildStoryPages>[number]): PublishedTextLayer[] {
+export function buildPublishedTextLayers(page: ReturnType<typeof buildStoryPages>[number]): PublishedTextLayer[] {
   const measurementCanvas = document.createElement('canvas');
   measurementCanvas.width = page.width;
   measurementCanvas.height = page.height;
@@ -114,6 +121,7 @@ function buildPublishedTextLayers(page: ReturnType<typeof buildStoryPages>[numbe
       lineHeight: layout.lineHeight,
       color: layout.color,
       align: layout.alignment,
+      baseline: 'bottom',
       strokeColor: layout.stroke?.color ?? null,
       strokeWidth: layout.stroke?.width ?? 0,
       shadow: layout.shadow,
@@ -128,6 +136,32 @@ function buildPublishedTextLayers(page: ReturnType<typeof buildStoryPages>[numbe
       backdropRadius: layout.backdrop?.radius ?? 0,
       backdropFeather: layout.backdrop?.feather ?? 0,
       backdropPath: layout.backdrop?.path ?? null,
+      backdropPigment: layout.backdrop?.pigment?.map(pass => ({
+        ...pass,
+        strokeWidth: pass.strokeWidth ?? null,
+      })) ?? null,
+    },
+  }));
+}
+
+export function buildPublishedCopyrightTextLayers(page: PublicationPage): PublishedTextLayer[] {
+  const ctx = document.createElement('canvas').getContext('2d');
+  if (!ctx) throw new Error('PUBLICATION_CANVAS_UNAVAILABLE');
+  return layoutPublicationPage(ctx, page).map((block, index) => ({
+    id: `copyright-${index}`,
+    text: block.lines.map(line => line.text).join('\n'),
+    lines: block.lines,
+    position: { x: block.lines[0]?.x ?? 0, y: block.lines[0]?.y ?? 0,
+      maxWidth: block.maxWidth, anchor: 'center-bottom' },
+    style: {
+      font: getPublishedFontId(page.fontFamily), fontFamily: page.fontFamily,
+      fontWeight: block.fontWeight, fontSize: block.fontSize, lineHeight: block.lineHeight,
+      color: block.color, align: 'left', baseline: 'top', strokeColor: null, strokeWidth: 0, shadow: null,
+      backdropKind: block.separator ? 'panel' : null, backdropColor: block.separator?.color ?? null,
+      backdropX: block.separator?.x ?? null, backdropY: block.separator?.y ?? null,
+      backdropWidth: block.separator?.width ?? null, backdropHeight: block.separator?.height ?? null,
+      backdropPaddingX: 0, backdropPaddingY: 0, backdropRadius: 0, backdropFeather: 0,
+      backdropPath: null, backdropPigment: null,
     },
   }));
 }
@@ -142,26 +176,43 @@ export async function exportWebPublication({
   const defaultLanguage = getDefaultProjectLanguage(projectState);
   const defaultProjectState = resolveProjectLanguageState(projectState, defaultLanguage);
   const storyPages = buildStoryPages(defaultProjectState, imageSources);
-  const totalPages = storyPages.filter(page => !isPagePrintOnly(projectState, page.index)).length;
-  if (totalPages === 0) throw new Error('PUBLICATION_NO_PAGES');
+  const electronicPages = storyPages.filter(page => !isPagePrintOnly(projectState, page.index));
+  if (electronicPages.length === 0) throw new Error('PUBLICATION_NO_PAGES');
+  const languageStates = getProjectLanguageTags(projectState).map(language => ({
+    language, state: resolveProjectLanguageState(projectState, language),
+  }));
+  await Promise.all(languageStates.map(({ state }) => waitForProjectFonts(state)));
+  const includeCopyright = languageStates.some(({ state }) => shouldIncludeCopyrightPage(state, 'electronic'));
+  const sharedPages: Array<(typeof storyPages)[number] | null> = [...electronicPages];
+  if (includeCopyright) sharedPages.splice(copyrightPageInsertionIndex(electronicPages), 0, null);
+  const totalPages = sharedPages.length;
   const resources: PublishedResource[] = [];
   const archiveAssets: PublicationArchiveAsset[] = [];
   const pages: PublishedPage[] = [];
   const pageIds = new Map<number, string>();
   const sourceOccurrences = new Map<string, number>();
 
+  // Count source occurrences before filtering, so print-only changes do not change story IDs.
   for (const page of storyPages) {
-    const sourceIndex = page.index;
-    const sourceKey = projectState.visible_images[sourceIndex] || `blank:${sourceIndex}`;
+    const sourceKey = projectState.visible_images[page.index] || `blank:${page.index}`;
     const occurrence = sourceOccurrences.get(sourceKey) ?? 0;
     sourceOccurrences.set(sourceKey, occurrence + 1);
-    if (isPagePrintOnly(projectState, sourceIndex)) continue;
-
+    pageIds.set(page.index, await createPublishedPageId(sourceKey, occurrence));
+  }
+  const copyrightPageId = await createPublishedPageId('synthetic:copyright', 0);
+  for (const page of sharedPages) {
     const outputIndex = pages.length;
-    const pageId = await createPublishedPageId(sourceKey, occurrence);
-    pageIds.set(sourceIndex, pageId);
+    const pageId = page ? pageIds.get(page.index)! : copyrightPageId;
     const artworkPath = `pages/${String(outputIndex + 1).padStart(4, '0')}.webp`;
-    const artworkCanvas = await renderStoryPageArtworkToCanvas(page);
+    const artworkCanvas = page ? await renderStoryPageArtworkToCanvas(page) : document.createElement('canvas');
+    if (!page) {
+      artworkCanvas.width = defaultProjectState.canvas_width || 1024;
+      artworkCanvas.height = defaultProjectState.canvas_height || 1024;
+      const ctx = artworkCanvas.getContext('2d');
+      if (!ctx) throw new Error('PUBLICATION_CANVAS_UNAVAILABLE');
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, artworkCanvas.width, artworkCanvas.height);
+    }
     const artworkBytes = await canvasToWebpBytes(artworkCanvas);
     const sha256 = await sha256Hex(artworkBytes);
 
@@ -170,8 +221,8 @@ export async function exportWebPublication({
       order: outputIndex,
       image: {
         src: artworkPath,
-        width: page.width,
-        height: page.height,
+        width: artworkCanvas.width,
+        height: artworkCanvas.height,
         alt: null,
         mimeType: 'image/webp',
         bytes: artworkBytes.byteLength,
@@ -188,20 +239,19 @@ export async function exportWebPublication({
     onProgress?.({ current: outputIndex + 1, total: totalPages });
   }
 
-  const languages = getProjectLanguageTags(projectState).map(language => {
-    const languageProjectState = resolveProjectLanguageState(projectState, language);
-    const languagePages: PublishedLanguagePage[] = buildStoryPages(languageProjectState, imageSources)
-      .filter(page => !isPagePrintOnly(projectState, page.index))
-      .map(page => ({
-        id: pageIds.get(page.index)!,
-        role: page.role,
-        textLayers: buildPublishedTextLayers(page),
-      }));
-    return {
-      language,
-      projectState: languageProjectState,
-      pages: languagePages,
-    };
+  const languages = languageStates.map(({ language, state }) => {
+    const languageStoryPages = new Map(buildStoryPages(state, imageSources).map(page => [page.index, page]));
+    const languagePages: PublishedLanguagePage[] = sharedPages.flatMap<PublishedLanguagePage>(page => {
+      if (!page) {
+        return shouldIncludeCopyrightPage(state, 'electronic')
+          ? [{ id: copyrightPageId, role: 'copyright' as const,
+            textLayers: buildPublishedCopyrightTextLayers(buildPublicationPage(state)) }]
+          : [];
+      }
+      const localized = languageStoryPages.get(page.index)!;
+      return [{ id: pageIds.get(page.index)!, role: localized.role, textLayers: buildPublishedTextLayers(localized) }];
+    });
+    return { language, projectState: state, pages: languagePages };
   });
   const manifest = await buildPublicationManifest({
     projectState,

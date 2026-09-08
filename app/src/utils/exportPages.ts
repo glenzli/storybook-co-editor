@@ -1,17 +1,17 @@
 import type { ProjectState } from '../project/model';
 import {
   buildPublicationPage,
+  copyrightPageInsertionIndex,
   renderPublicationPageToCanvas,
   shouldIncludeCopyrightPage,
   type PublicationPage,
   type PublicationPageTarget,
-} from './publicationPageRenderer';
+} from '../publication/copyrightPage';
 import {
   buildStoryPages,
   renderStoryPageToCanvas,
   type StoryPage,
 } from './storyPageRenderer';
-import { parseStoryScript } from '../story/script';
 import { isPagePrintOnly } from '../project/pageSettings';
 
 export type ExportPage =
@@ -39,10 +39,7 @@ export function buildExportPages(
 
   if (shouldIncludeCopyrightPage(projectState, target)) {
     const publication = buildPublicationPage(projectState);
-    const parsed = parseStoryScript(projectState.global_script || '');
-    const insertAt = parsed.hasTitle && storyPages[1]?.role === 'title'
-      ? 2
-      : Math.min(1, storyPages.length);
+    const insertAt = copyrightPageInsertionIndex(storyPages);
     pages.splice(insertAt, 0, {
       kind: 'copyright',
       width: publication.width,

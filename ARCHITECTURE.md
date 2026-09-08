@@ -11,7 +11,7 @@ owner below; application roots compose owners and do not absorb their policies.
   contours, bounded local candidate search and per-page application.
 - `app/src/story/`: Story script language and its parsing and validation policy.
 - `app/src/publication/`: Versioned web publication schema, frozen text layout,
-  and `.scpub` export lifecycle.
+  shared copyright-page layout, and `.scpub` export lifecycle.
 - `app/src/editor/`: Editor-specific collection projection and asynchronous
   receive lifecycles.
 - `app/src/components/right-sidebar/`: Cohesive right-sidebar interaction
@@ -53,8 +53,8 @@ TypeScript migration test and Rust serialization test. MCP and Codex operations
 do not change the project schema. Codex image candidates remain outside `.scproj`
 until the user confirms replacement.
 
-`fixtures/publication-20260906.01/` is the cross-language web publication
-contract. Its manifest digest and packaged WebP digest are checked by TypeScript
+`fixtures/publication-20260908.02/` is the current cross-language web publication
+contract; earlier versioned fixtures remain compatibility evidence. Its manifest digest and packaged WebP digest are checked by TypeScript
 and Rust.
 
 ## Growth Rules

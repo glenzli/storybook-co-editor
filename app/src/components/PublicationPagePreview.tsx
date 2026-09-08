@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { renderPublicationPageToCanvas, type PublicationPage } from '../utils/publicationPageRenderer';
+import { renderPublicationPageToCanvas, type PublicationPage } from '../publication/copyrightPage';
 
 interface PublicationPagePreviewProps {
   page: PublicationPage;

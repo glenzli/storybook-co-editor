@@ -10,6 +10,8 @@ const mocks = vi.hoisted(() => ({
   renderStoryPageArtworkToCanvas: vi.fn(),
 }));
 
+vi.mock('../i18n', () => ({ default: { t: (key: string) => key, getFixedT: (language: string) => (key: string) => `${language}:${key}` }, getPublicationLanguage: (language: string) => language }));
+
 vi.mock('@tauri-apps/api/core', () => ({ invoke: mocks.invoke }));
 vi.mock('../utils/storyPageRenderer', () => ({
   buildStoryPages: mocks.buildStoryPages,
@@ -17,7 +19,7 @@ vi.mock('../utils/storyPageRenderer', () => ({
   renderStoryPageArtworkToCanvas: mocks.renderStoryPageArtworkToCanvas,
 }));
 
-import { exportWebPublication } from './export';
+import { exportWebPublication, getWebPublicationPageCount } from './export';
 
 const projectState: ProjectState = {
   schema_version: PROJECT_SCHEMA_VERSION,
@@ -29,11 +31,11 @@ const projectState: ProjectState = {
   languages: {
     'zh-CN': {
       script: '[Cover]\n出版物',
-      publication_metadata: { title: '出版物', language: 'zh-CN' },
+      publication_metadata: { title: '出版物', language: 'zh-CN', copyright_page_mode: 'none' },
     },
     'en-US': {
       script: '[Cover]\nPublication',
-      publication_metadata: { title: 'Publication', language: 'en-US' },
+      publication_metadata: { title: 'Publication', language: 'en-US', copyright_page_mode: 'none' },
     },
   },
   canvas_width: 100,
@@ -116,10 +118,11 @@ describe('web publication export', () => {
     mocks.buildStoryPages.mockReset().mockReturnValue([storyPage(0), storyPage(1), storyPage(2)]);
     mocks.layoutStoryPageText.mockReset().mockReturnValue([]);
     mocks.renderStoryPageArtworkToCanvas.mockReset().mockResolvedValue({
+      width: 100, height: 100,
       toBlob: (callback: (blob: Blob) => void) => callback(new Blob([new Uint8Array([1])], { type: 'image/png' })),
     });
     vi.stubGlobal('document', {
-      createElement: () => ({ width: 0, height: 0, getContext: () => ({}) }),
+      createElement: () => ({ width: 0, height: 0, getContext: () => ({ measureText: (text: string) => ({ width: text.length * 0.8 }), fillRect: vi.fn() }), toBlob: (callback: (blob: Blob) => void) => callback(new Blob([new Uint8Array([1])], { type: 'image/png' })) }),
     });
     vi.stubGlobal('btoa', () => 'AQ==');
     vi.stubGlobal('atob', () => String.fromCharCode(1));
@@ -149,7 +152,7 @@ describe('web publication export', () => {
     const manifest = JSON.parse(args.manifestJson);
 
     expect(command).toBe('write_publication_package');
-    expect(manifest.formatVersion).toBe('20260906.02');
+    expect(manifest.formatVersion).toBe('20260908.02');
     expect(manifest.defaultLanguage).toBe('zh-CN');
     expect(manifest.languages.map((language: { language: string }) => language.language)).toEqual([
       'zh-CN',
@@ -181,4 +184,51 @@ describe('web publication export', () => {
       [{ current: 2, total: 2 }],
     ]);
   });
+  it.each(['electronic', 'all'] as const)('includes localized copyright for %s and respects another language opting out', async mode => {
+    const state: ProjectState = { ...projectState, canvas_width: 1024, canvas_height: 1024,
+      languages: {
+        ...projectState.languages,
+        'zh-CN': { ...projectState.languages!['zh-CN'], publication_metadata: {
+          title: '出版物', language: 'zh-CN', copyright_page_mode: mode,
+          copyright_holder: 'Author', copyright_year: '2026', license_name: 'CC BY-NC-ND 4.0',
+          identifiers: [{ scheme: 'DOI', value: '10.1234/example' }],
+        } },
+      },
+    };
+    const progress = vi.fn();
+    await exportWebPublication({ projectState: state, imageSources: state.visible_images,
+      targetPath: '/tmp/book.scpub', onProgress: progress });
+    const manifest = JSON.parse(mocks.invoke.mock.calls[mocks.invoke.mock.calls.length - 1][1].manifestJson);
+    expect(manifest.pages).toHaveLength(3);
+    expect(manifest.pages.map((page: { image: { src: string } }) => page.image.src)).toEqual([
+      'pages/0001.webp', 'pages/0002.webp', 'pages/0003.webp',
+    ]);
+    const [zh, en] = manifest.languages;
+    expect(zh.pages.map((page: { role: string }) => page.role)).toEqual(['cover', 'copyright', 'body']);
+    expect(en.pages.map((page: { id: string }) => page.id)).toEqual([manifest.pages[0].id, manifest.pages[2].id]);
+    const copyright = zh.pages[1].textLayers;
+    expect(copyright.map((layer: { text: string }) => layer.text).join(' ')).toContain('© 2026 Author');
+    expect(copyright.map((layer: { text: string }) => layer.text).join(' ')).toContain('10.1234/example');
+    expect(copyright.every((layer: { style: { baseline: string; align: string } }) =>
+      layer.style.baseline === 'top' && layer.style.align === 'left')).toBe(true);
+    expect(getWebPublicationPageCount(state)).toBe(3);
+    expect(progress.mock.calls[progress.mock.calls.length - 1]).toEqual([{ current: 3, total: 3 }]);
+  });
+
+  it('places copyright after a title page and freezes both language editions', async () => {
+    mocks.buildStoryPages.mockReturnValue([storyPage(0), { ...storyPage(1), role: 'title' }, storyPage(2)]);
+    const state: ProjectState = { ...projectState, page_settings: {}, canvas_width: 1024, canvas_height: 1024,
+      languages: Object.fromEntries(Object.entries(projectState.languages!).map(([tag, language]) =>
+        [tag, { ...language, publication_metadata: { ...language.publication_metadata,
+          copyright_page_mode: 'electronic', copyright_holder: 'Glen Li', copyright_year: '2026' } }])),
+    };
+    await exportWebPublication({ projectState: state, imageSources: state.visible_images, targetPath: '/tmp/book.scpub' });
+    const manifest = JSON.parse(mocks.invoke.mock.calls[mocks.invoke.mock.calls.length - 1][1].manifestJson);
+    for (const language of manifest.languages) {
+      expect(language.pages.map((page: { role: string }) => page.role)).toEqual(['cover', 'title', 'copyright', 'body']);
+    }
+    expect(manifest.languages[0].pages[2].textLayers[0].text).not.toBe(manifest.languages[1].pages[2].textLayers[0].text);
+    expect(manifest.languages[0].pages[2].id).toBe(manifest.languages[1].pages[2].id);
+  });
+
 });
