@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { createAdaptiveWashPath, effectsFromMode, getStoryTextReadabilityPaint, normalizeEffects } from './effects';
+import { createAdaptiveWashPath, effectsFromMode, getDefaultBackdropTint, getStoryTextReadabilityPaint, normalizeEffects, normalizeTextReadabilityStrength } from './effects';
 import { buildStoryPages, layoutStoryPageText } from '../utils/storyPageRenderer';
 import type { ProjectState, TextEffects } from '../project/model';
 
@@ -83,10 +83,35 @@ describe('adaptive text effects', () => {
       getStoryTextReadabilityPaint('wash', '#000', 30, strength,
         { ...effectsFromMode('wash', strength), ...extra }).backdrop!;
     const alpha = (color: string) => Number(color.split(',').slice(-1)[0].replace(')', ''));
-    expect(alpha(paint(55).color)).toBeGreaterThan(0.7);
+    expect(alpha(paint(5).color)).toBeLessThan(0.05);
+    expect(alpha(paint(55).color)).toBeGreaterThan(0.5);
     expect(alpha(paint(100).color)).toBeGreaterThan(alpha(paint(20).color));
-    expect(paint(55, { color: '#aabbcc' }).color).toBe('rgba(170,187,204,0.747)');
+    expect(paint(55, { color: '#aabbcc' }).color).toBe('rgba(170,187,204,0.522)');
     expect(paint(55, { feather: 100 }).feather).toBeGreaterThan(paint(55, { feather: 0 }).feather);
+  });
+  it('supports zero wash strength without hiding independently configured outline or halo', () => {
+    expect(normalizeTextReadabilityStrength(0)).toBe(0);
+    expect(normalizeTextReadabilityStrength(-50)).toBe(0);
+    expect(normalizeTextReadabilityStrength(NaN)).toBe(55);
+    expect(normalizeEffects(effectsFromMode('wash', 0)).strength).toBe(0);
+    expect(getStoryTextReadabilityPaint('wash', '#000000', 30, 0).backdrop).toBeNull();
+    const combined = getStoryTextReadabilityPaint('wash', '#000000', 30, 0,
+      { ...effectsFromMode('wash', 0), outline: 30, halo: 25 });
+    expect(combined.backdrop).toBeNull();
+    expect(combined.stroke).not.toBeNull();
+    expect(combined.shadow).not.toBeNull();
+    expect(effectsFromMode('panel', 0).strength).toBe(20);
+    expect(effectsFromMode('outline', 0).outline).toBe(20);
+  });
+  it('defaults to pure white behind dark text and softer edges while retaining saved choices', () => {
+    expect(getDefaultBackdropTint('#000')).toBe('#ffffff');
+    expect(getDefaultBackdropTint('#ffffff')).toBe('#12202e');
+    expect(getDefaultBackdropTint('#ffffff', 'panel')).toBe('#000000');
+    expect(getStoryTextReadabilityPaint('wash', '#000000', 30, 55).backdrop!.color).toBe('rgba(255,255,255,0.522)');
+    const defaults = effectsFromMode('wash', 55);
+    expect(defaults.feather).toBe(80);
+    const saved = { ...defaults, feather: 55, color: '#ffeedd', strength: 8 };
+    expect(normalizeEffects(JSON.parse(JSON.stringify(saved)))).toEqual(saved);
   });
   it('bounds persisted and model-directed effect values', () => {
     const result = normalizeEffects({ ...effectsFromMode('halo', 50), halo: Infinity, outline: -90, seed: -3, roughness: 1000, color: 'url(secret)' });

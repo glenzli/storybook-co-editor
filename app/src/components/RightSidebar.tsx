@@ -813,6 +813,7 @@ export function RightSidebar({
 
                       <TextReadabilityControls
                         effects={ats.text_effects}
+                        textColor={ats.text_color || '#ffffff'}
                         onEffectsChange={text_effects => updateAts({ text_effects })}
                         mode={resolveTextReadabilityMode(ats)}
                         strength={normalizeTextReadabilityStrength(ats.readability_strength)}
@@ -979,6 +980,7 @@ export function RightSidebar({
 
                       <TextReadabilityControls
                         effects={pageOverride?.text_effects ?? settings.text_effects}
+                        textColor={effectiveColor}
                         onEffectsChange={text_effects => updatePageOverride({ text_effects })}
                         mode={effectiveReadabilityMode}
                         strength={effectiveReadabilityStrength}

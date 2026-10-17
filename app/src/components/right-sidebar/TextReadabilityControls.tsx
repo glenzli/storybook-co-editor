@@ -1,4 +1,4 @@
-import { effectsFromMode, normalizeEffects } from '../../text-design/effects';
+import { effectsFromMode, getDefaultBackdropTint, normalizeEffects } from '../../text-design/effects';
 import { useTranslation } from 'react-i18next';
 import type { TextEffects, TextReadabilityMode } from '../../project/model';
 import {
@@ -37,6 +37,7 @@ function RangeSetting({
         <div className="flex items-center gap-1 text-xs text-muted-foreground">
           <input
             type="number"
+            aria-label={label}
             min={minimum}
             max={maximum}
             value={Math.round(value)}
@@ -48,6 +49,7 @@ function RangeSetting({
       </div>
       <input
         type="range"
+        aria-label={label}
         min={minimum}
         max={maximum}
         step={1}
@@ -61,6 +63,7 @@ function RangeSetting({
 
 export function TextReadabilityControls({
   effects, onEffectsChange,
+  textColor,
   mode,
   strength,
   maxWidthPercent,
@@ -70,6 +73,7 @@ export function TextReadabilityControls({
   onMaxWidthChange,
 }: {
   effects?: TextEffects;
+  textColor: string;
   onEffectsChange: (effects: TextEffects | undefined) => void;
   mode: TextReadabilityMode;
   strength: number;
@@ -124,7 +128,7 @@ export function TextReadabilityControls({
         <RangeSetting
           label={t('rightSidebar.readabilityStrength')}
           value={strength}
-          minimum={20}
+          minimum={mode === 'wash' ? 0 : 20}
           maximum={100}
           onChange={onStrengthChange}
         />
@@ -141,11 +145,16 @@ export function TextReadabilityControls({
             </select>
           </label>
           {current.backdrop !== 'none' && <>
-            <RangeSetting label={t('rightSidebar.readabilityStrength')} value={current.strength} minimum={20} maximum={100} onChange={value => update({ strength: value })} />
-            <label className="flex items-center gap-2">{t('textDesign.tint')}<input type="color" value={current.color || '#fff5df'} onChange={e => update({ color: e.target.value })} /></label>
+            <RangeSetting label={t('rightSidebar.readabilityStrength')} value={current.strength} minimum={current.backdrop === 'wash' ? 0 : 20} maximum={100} onChange={value => update({ strength: value })} />
+            {current.backdrop === 'wash' && <p className="text-[10px] leading-4 text-muted-foreground">{t('textDesign.washStrengthHint')}</p>}
+            <label className="flex items-center gap-2">{t('textDesign.tint')}<input type="color" value={current.color || getDefaultBackdropTint(textColor, current.backdrop)} onChange={e => update({ color: e.target.value })} /></label>
             {current.backdrop === 'wash' && <>
               <RangeSetting label={t('textDesign.roughness')} value={current.roughness} minimum={0} maximum={100} onChange={roughness => update({ roughness })} />
               <RangeSetting label={t('textDesign.feather')} value={current.feather} minimum={0} maximum={100} onChange={feather => update({ feather })} />
+              <button type="button" className="border rounded p-2" onClick={() => {
+                const defaults = effectsFromMode('wash', current.strength);
+                update({ roughness: defaults.roughness, feather: defaults.feather });
+              }}>{t('textDesign.resetEdges')}</button>
               <button type="button" className="border rounded p-2" onClick={() => update({ seed: (current.seed + 1) >>> 0 })}>{t('textDesign.newWash')}</button>
             </>}
           </>}

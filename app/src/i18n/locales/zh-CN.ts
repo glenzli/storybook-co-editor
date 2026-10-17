@@ -10,6 +10,8 @@ export const zhCN = {
     "tint": "底纹色调",
     "roughness": "边缘变化",
     "feather": "边缘柔和度",
+    washStrengthHint: '强度越低，底纹越透明；0% 隐藏底纹。',
+    resetEdges: '恢复默认边缘',
     "newWash": "换一种底纹",
     "lockPosition": "保留位置和文字宽度",
     "generate": "生成候选",

@@ -1,6 +1,7 @@
 import type { TextEffects, TextReadabilityMode, TextSettings } from '../project/model';
 import type { StoryTextReadabilityPaint } from '../utils/storyPageRenderer';
 const STORY_TEXT_DEFAULT_READABILITY_STRENGTH = 55;
+const DEFAULT_WASH_FEATHER = 80;
 const STORY_TEXT_DEFAULT_WIDTH_PERCENT = 90;
 const STORY_TEXT_MIN_WIDTH_PERCENT = 30;
 const STORY_TEXT_MAX_WIDTH_PERCENT = 96;
@@ -23,7 +24,7 @@ export function resolveTextReadabilityMode(settings?: TextSettings): TextReadabi
 }
 
 export function normalizeTextReadabilityStrength(value?: number): number {
-  return clamp(value ?? STORY_TEXT_DEFAULT_READABILITY_STRENGTH, 20, 100);
+  return Number.isFinite(value) ? clamp(value!, 0, 100) : STORY_TEXT_DEFAULT_READABILITY_STRENGTH;
 }
 
 export function normalizeStoryTextWidthPercent(value?: number): number {
@@ -50,7 +51,17 @@ function getContrastRgba(hexColor: string, alpha: number, warm: boolean): string
   return `rgba(${warm ? '255,250,235' : '255,255,255'},${alpha.toFixed(3)})`;
 }
 
-function washFeather(fontSize: number, amount = 55): number {
+export function getDefaultBackdropTint(textColor: string, kind: 'wash' | 'panel' = 'wash'): string {
+  if (getTextBrightness(textColor) < 128) return '#ffffff';
+  return kind === 'wash' ? '#12202e' : '#000000';
+}
+
+function tintedRgba(tint: string, alpha: number): string {
+  const rgb = tint.slice(1).match(/../g)!.map(value => parseInt(value, 16));
+  return `rgba(${rgb.join(',')},${alpha.toFixed(3)})`;
+}
+
+function washFeather(fontSize: number, amount = DEFAULT_WASH_FEATHER): number {
   return fontSize * (0.12 + amount * 0.002);
 }
 
@@ -59,7 +70,7 @@ export function getStrokeColor(hexColor: string): string {
 }
 
 export function getBackdropColor(color: string): string {
-  return getContrastRgba(color, 0.35, true);
+  return tintedRgba(getDefaultBackdropTint(color), 0.35);
 }
 
 export function getStoryTextReadabilityPaint(
@@ -70,7 +81,8 @@ export function getStoryTextReadabilityPaint(
   effects?: TextEffects,
 ): StoryTextReadabilityPaint {
   if (effects) return compositePaint(effects, color, fontSize);
-  const normalizedStrength = normalizeTextReadabilityStrength(strength);
+  const normalizedStrength = Math.max(mode === 'wash' ? 0 : 20, normalizeTextReadabilityStrength(strength));
+  if (mode === 'wash' && normalizedStrength === 0) return { stroke: null, shadow: null, backdrop: null };
   if (mode === 'outline') {
     return {
       stroke: {
@@ -100,13 +112,9 @@ export function getStoryTextReadabilityPaint(
       shadow: null,
       backdrop: {
         kind: mode,
-        color: getContrastRgba(
-          color,
-          wash
-            ? 0.5 + normalizedStrength * 0.0045
-            : 0.23 + normalizedStrength * 0.0022,
-          wash,
-        ),
+        color: wash
+          ? tintedRgba(getDefaultBackdropTint(color), normalizedStrength * 0.0095)
+          : getContrastRgba(color, 0.23 + normalizedStrength * 0.0022, false),
         paddingX: fontSize * (wash ? 0.95 : 0.5),
         paddingY: fontSize * (wash ? 0.32 : 0.2),
         radius: fontSize * (wash ? 0.5 : 0.3),
@@ -125,17 +133,18 @@ export function normalizeEffects(effects: TextEffects): TextEffects {
   return {
     outline: finite(effects.outline, 0), halo: finite(effects.halo, 0),
     backdrop: effects.backdrop === 'wash' || effects.backdrop === 'panel' ? effects.backdrop : 'none',
-    strength: finite(effects.strength, 55, 20),
+    strength: finite(effects.strength, 55, effects.backdrop === 'wash' ? 0 : 20),
     seed: Math.floor(finite(effects.seed, 1, 0, 4294967295)),
-    roughness: finite(effects.roughness, 35), feather: finite(effects.feather, 55),
+    roughness: finite(effects.roughness, 35), feather: finite(effects.feather, DEFAULT_WASH_FEATHER),
     color: /^#[\da-f]{6}$/i.test(effects.color || '') ? effects.color : undefined,
   };
 }
 
 export function effectsFromMode(mode: TextReadabilityMode, strength: number): TextEffects {
+  strength = Math.max(mode === 'wash' ? 0 : 20, normalizeTextReadabilityStrength(strength));
   return normalizeEffects({ outline: mode === 'outline' ? strength : 0,
     halo: mode === 'halo' ? strength : 0, backdrop: mode === 'wash' || mode === 'panel' ? mode : 'none',
-    strength, seed: 1, roughness: 35, feather: 55 });
+    strength, seed: 1, roughness: 35, feather: DEFAULT_WASH_FEATHER });
 }
 
 function compositePaint(raw: TextEffects, color: string, fontSize: number): StoryTextReadabilityPaint {
@@ -146,11 +155,10 @@ function compositePaint(raw: TextEffects, color: string, fontSize: number): Stor
   if (paint.backdrop) {
     if (effects.backdrop === 'wash') paint.backdrop.feather = washFeather(fontSize, effects.feather);
     if (effects.color) {
-      const rgb = effects.color.slice(1).match(/../g)!.map(v => parseInt(v, 16));
       const alpha = effects.backdrop === 'wash'
-        ? 0.5 + effects.strength * 0.0045
+        ? effects.strength * 0.0095
         : 0.18 + effects.strength * 0.0025;
-      paint.backdrop.color = `rgba(${rgb.join(',')},${alpha.toFixed(3)})`;
+      paint.backdrop.color = tintedRgba(effects.color, alpha);
     }
   }
   return paint;

@@ -57,7 +57,7 @@ export function refinedLayer(layer: StoryTextLayer, action: Refinement): StoryTe
   if (action === 'stronger_halo') e.halo = Math.min(100, Math.max(25, e.halo + 20));
   if (action === 'lighter_outline') e.outline = Math.max(0, e.outline - 20);
   if (action === 'stronger_backdrop') { if (e.backdrop === 'none') e.backdrop = 'wash'; e.strength = Math.min(100, e.strength + 20); }
-  if (action === 'lighter_backdrop') e.strength = Math.max(20, e.strength - 20);
+  if (action === 'lighter_backdrop') e.strength = Math.max(e.backdrop === 'wash' ? 0 : 20, e.strength - 20);
   if (action === 'softer_wash') { e.backdrop = 'wash'; e.feather = Math.min(100, e.feather + 20); }
   return { ...layer, effects: e };
 }

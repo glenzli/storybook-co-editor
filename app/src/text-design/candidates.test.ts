@@ -35,4 +35,11 @@ describe('text candidate boundaries', () => {
     expect(next.page_text_overrides?.['1'].text_effects?.strength).toBe(60);
     expect(history.undo()).toEqual(state);
   });
+  it('can refine a painted wash all the way to transparent', () => {
+    const layer = { ...buildStoryPages(state)[1].textLayers[0], effects: effectsFromMode('wash', 10) };
+    const lighter = refinedLayer(layer, 'lighter_backdrop');
+    expect(lighter.effects?.strength).toBe(0);
+    expect(refinedLayer(lighter, 'stronger_backdrop').effects?.strength).toBe(20);
+    expect(lighter.text).toBe(layer.text);
+  });
 });

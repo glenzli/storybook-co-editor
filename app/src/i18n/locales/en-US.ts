@@ -10,6 +10,8 @@ export const enUS = {
     "tint": "Backdrop tint",
     "roughness": "Edge variation",
     "feather": "Edge softness",
+    washStrengthHint: 'Lower strength makes the wash more transparent; 0% hides it.',
+    resetEdges: 'Reset edges to default',
     "newWash": "Vary wash shape",
     "lockPosition": "Keep position and text width",
     "generate": "Generate candidates",
