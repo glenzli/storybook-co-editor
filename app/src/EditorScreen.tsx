@@ -1,5 +1,6 @@
 import { TextDesignDialog } from './components/ai/TextDesignDialog';
 import { candidatePatch } from './text-design/candidates';
+import { version as appVersion } from '../package.json';
 import { useEffect, useState, useMemo, useRef, useCallback } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import type { DragEndEvent } from '@dnd-kit/core';
@@ -64,6 +65,8 @@ import {
   type PageIndexMapping,
 } from './editor/pageCollection';
 import { usePluginReceive, type SavedImageEvent } from './editor/usePluginReceive';
+import { planImageImport, type ImportedImage } from './editor/localImageImport';
+import { useLocalImageImport } from './editor/useLocalImageImport';
 import { subscribeExternalProjectUpdates } from './project/externalUpdates';
 import { getElectronicStoryPageCount, setPagePrintOnly } from './project/pageSettings';
 import {
@@ -699,6 +702,33 @@ export default function EditorScreen() {
 
   const { receivingState, cancelReceive } = usePluginReceive(handleReceivedImage);
 
+  const handleImportedImages = useCallback((imported: ImportedImage[]) => {
+    if (!projectState) return { added: 0, duplicates: 0, trashed: 0 };
+    const current = {
+      ...projectState,
+      visible_images: images.map(url => url.startsWith('blank://') ? url : url.split('/').pop()!),
+      trashed_images: trashedImages.map(url => url.startsWith('blank://') ? url : url.split('/').pop()!),
+    };
+    const plan = planImageImport(current, imported, selectedIdx);
+    if (plan.added > 0) {
+      updateProjectState(plan.updates);
+      setImages(plan.updates.visible_images!.map(filename => (
+        filename.startsWith('blank://') ? filename : `http://127.0.0.1:14320/images/${filename}`
+      )));
+      setSelectedIdx(plan.selectedIndex);
+    }
+    return { added: plan.added, duplicates: plan.duplicates, trashed: plan.trashed };
+  }, [images, projectState, selectedIdx, trashedImages, updateProjectState]);
+
+  const localImport = useLocalImageImport({
+    workspaceId: activeWorkspaceId,
+    enabled: isLoaded && activeTab === 'edit' && !isSaving && !showTrashModal
+      && !isAiIntegrationOpen && !codexImageRequest && !textDesign
+      && !isElectronicPdfExportOpen && !isPublicationMetadataOpen && !isMissingMetadataPromptOpen,
+    dialogTitle: t('imageImport.chooseFiles'),
+    onImported: handleImportedImages,
+  });
+
   // Keyboard shortcuts: Cmd+S, Cmd+Z, Cmd+Shift+Z, Arrow keys
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -856,6 +886,9 @@ export default function EditorScreen() {
             handleDragEnd={handleDragEnd}
             handleInsertBlank={handleInsertBlankPage}
             handleInsertCodex={openCodexCreate}
+            handleImportImages={() => { void localImport.chooseFiles(); }}
+            handlePasteImage={() => { void localImport.pasteImage(); }}
+            isImporting={localImport.busy || isSaving || !isLoaded}
             handleRedraw={openCodexRedraw}
             hasTitle={hasStoryTitle(globalScript)}
             imageAdjustments={projectState?.image_adjustments}
@@ -988,6 +1021,27 @@ export default function EditorScreen() {
         />
       )}
 
+      {localImport.dragging && (
+        <div className="fixed inset-0 z-50 m-3 flex items-center justify-center rounded-xl border-2 border-dashed border-primary bg-background/90 pointer-events-none">
+          <p className="text-lg font-medium">{t('imageImport.dropHere')}</p>
+        </div>
+      )}
+      {(localImport.busy || localImport.feedback) && (
+        <div role="status" className="absolute top-14 right-4 z-40 max-w-md rounded-lg border border-border bg-card p-3 text-sm shadow-lg">
+          {localImport.busy ? t('imageImport.importing') : localImport.feedback && <>
+            <button type="button" onClick={localImport.dismissFeedback} className="float-right ml-4 text-muted-foreground hover:text-foreground" aria-label={t('common.close')}>×</button>
+            {localImport.feedback.error ? localizeAppError(localImport.feedback.error) : <>
+              <p>{t('imageImport.added', { count: localImport.feedback.added })}</p>
+              {localImport.feedback.duplicates > 0 && <p>{t('imageImport.duplicates', { count: localImport.feedback.duplicates })}</p>}
+              {localImport.feedback.trashed > 0 && <p>{t('imageImport.trashed', { count: localImport.feedback.trashed })}</p>}
+              {localImport.feedback.failures.length > 0 && <ul className="mt-1 max-h-40 overflow-y-auto text-destructive">
+                {localImport.feedback.failures.map((failure, index) => <li key={index}>{failure.name}: {localizeAppError(failure.error)}</li>)}
+              </ul>}
+            </>}
+          </>}
+        </div>
+      )}
+
       {textDesign && <TextDesignDialog page={textDesign.page} stale={textDesign.key !== textDesignKey}
         aiAvailable={isAiAvailable} onClose={() => setTextDesign(null)} onApply={layer => {
           if (activeProjectState && textDesign.key === textDesignKey) {
@@ -1072,7 +1126,7 @@ export default function EditorScreen() {
                   </div>
               )}
               <div className="flex items-center gap-4 text-xs font-mono text-muted-foreground/80">
-                  <span className="font-bold text-foreground/50">STORYBOOK CO-EDITOR v1.4.0</span>
+                  <span className="font-bold text-foreground/50">STORYBOOK CO-EDITOR v{appVersion}</span>
                   <span>{t('editor.bridgeConnected')}</span>
               </div>
           </div>

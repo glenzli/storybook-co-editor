@@ -1,5 +1,5 @@
 import { createPigmentWash, drawPigmentWash, type PigmentPass } from '../text-design/pigment';
-import { getStoryTextReadabilityPaint, normalizeStoryTextWidthPercent, normalizeTextReadabilityStrength, resolveTextReadabilityMode, createAdaptiveWashPath } from '../text-design/effects';
+import { getStoryTextReadabilityPaint, normalizeStoryTextWidthPercent, normalizeTextReadabilityStrength, resolveTextReadabilityMode, createAdaptiveWashPath, effectsFromMode } from '../text-design/effects';
 export { getStoryTextReadabilityPaint, normalizeStoryTextWidthPercent, normalizeTextReadabilityStrength, resolveTextReadabilityMode, getStrokeColor, getBackdropColor } from '../text-design/effects';
 import type {
   ImageAdjustments,
@@ -20,7 +20,6 @@ export const STORY_TEXT_DEFAULT_WIDTH_PERCENT = 90;
 export const STORY_TEXT_MIN_WIDTH_PERCENT = 30;
 export const STORY_TEXT_MAX_WIDTH_PERCENT = 96;
 export const STORY_TEXT_DEFAULT_READABILITY_STRENGTH = 55;
-export const STORY_TEXT_WASH_SVG_PATH = 'M3 21 C8 8 21 12 31 6 C43 1 55 10 66 5 C79 0 92 9 97 20 L99 73 C94 89 81 83 69 94 C55 101 43 91 31 97 C18 102 7 91 2 77 Z';
 
 export interface StoryTextLayer {
   id: 'main' | 'author';
@@ -110,26 +109,6 @@ export interface StoryTextReadabilityPaint {
     radius: number;
     feather: number;
   };
-}
-
-export function createStoryTextWashPath(
-  x: number,
-  y: number,
-  width: number,
-  height: number,
-): string {
-  const point = (xRatio: number, yRatio: number) => `${(x + width * xRatio).toFixed(2)} ${(y + height * yRatio).toFixed(2)}`;
-  return [
-    `M${point(0.03, 0.21)}`,
-    `C${point(0.08, 0.08)} ${point(0.21, 0.12)} ${point(0.31, 0.06)}`,
-    `C${point(0.43, 0.01)} ${point(0.55, 0.10)} ${point(0.66, 0.05)}`,
-    `C${point(0.79, 0)} ${point(0.92, 0.09)} ${point(0.97, 0.20)}`,
-    `L${point(0.99, 0.73)}`,
-    `C${point(0.94, 0.89)} ${point(0.81, 0.83)} ${point(0.69, 0.94)}`,
-    `C${point(0.55, 1.01)} ${point(0.43, 0.91)} ${point(0.31, 0.97)}`,
-    `C${point(0.18, 1.02)} ${point(0.07, 0.91)} ${point(0.02, 0.77)}`,
-    'Z',
-  ].join(' ');
 }
 
 export function getProAdjustments(adjustments?: ImageAdjustments): ProAdjustments {
@@ -329,15 +308,10 @@ export function layoutStoryPageText(
         }
       : null;
     if (backdrop?.kind === 'wash') {
-      backdrop.path = layer.effects ? createAdaptiveWashPath(backdrop.x, backdrop.y, backdrop.width, backdrop.height, frozenLines.map(line => ctx.measureText(line).width), paddingX, layer.effects) : createStoryTextWashPath(
-        backdrop.x,
-        backdrop.y,
-        backdrop.width,
-        backdrop.height,
-      );
-    }
-    if (backdrop?.kind === 'wash' && layer.effects) {
-      backdrop.pigment = createPigmentWash(backdrop, frozenLines.map(line => ctx.measureText(line).width), layer.effects);
+      const effects = layer.effects ?? effectsFromMode('wash', layer.readabilityStrength);
+      backdrop.path = createAdaptiveWashPath(backdrop.x, backdrop.y, backdrop.width, backdrop.height,
+        frozenLines.map(line => ctx.measureText(line).width), paddingX, effects);
+      backdrop.pigment = createPigmentWash(backdrop, effects);
     }
     ctx.restore();
 

@@ -24,6 +24,11 @@ describe('frozen publication pigment', () => {
     expect(published.style.shadow).toEqual(layout.shadow);
     expect(published.style.strokeWidth).toBe(layout.stroke!.width);
     expect(JSON.stringify(published)).not.toContain('seed');
+    page.textLayers.forEach(layer => { layer.effects = undefined; layer.readabilityMode = 'wash'; });
+    const [legacyLayout] = layoutStoryPageText(context, page);
+    const [legacyPublished] = JSON.parse(JSON.stringify(buildPublishedTextLayers(page)));
+    expect(legacyPublished.style.backdropPigment).toEqual(legacyLayout.backdrop!.pigment!.map(pass =>
+      ({ ...pass, strokeWidth: pass.strokeWidth ?? null })));
     page.textLayers.forEach(layer => { layer.effects = effectsFromMode('panel', 55); });
     expect(buildPublishedTextLayers(page)[0].style.backdropPigment).toBeNull();
   });

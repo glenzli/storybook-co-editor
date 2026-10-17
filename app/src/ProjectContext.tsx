@@ -303,7 +303,11 @@ export const ProjectProvider = ({ children }: { children: ReactNode }) => {
         const previous = historyRef.current.undo();
         if (!previous) return;
         isUndoRedoRef.current = true;
-        setProjectState(previous);
+        const restored = { ...previous, last_modified: new Date().toISOString() };
+        if (activeWorkspaceRef.current) {
+            pendingExternalUpdateRef.current = { workspace_id: activeWorkspaceRef.current, state: restored, source: 'history' };
+        }
+        setProjectState(restored);
         setIsDirty(true);
         refreshHistoryAvailability();
     }, [refreshHistoryAvailability]);
@@ -312,7 +316,11 @@ export const ProjectProvider = ({ children }: { children: ReactNode }) => {
         const next = historyRef.current.redo();
         if (!next) return;
         isUndoRedoRef.current = true;
-        setProjectState(next);
+        const restored = { ...next, last_modified: new Date().toISOString() };
+        if (activeWorkspaceRef.current) {
+            pendingExternalUpdateRef.current = { workspace_id: activeWorkspaceRef.current, state: restored, source: 'history' };
+        }
+        setProjectState(restored);
         setIsDirty(true);
         refreshHistoryAvailability();
     }, [refreshHistoryAvailability]);

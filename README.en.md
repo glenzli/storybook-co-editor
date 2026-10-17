@@ -30,6 +30,7 @@ The current version is `1.4.0`. Projects use the `.scproj` format, and the inter
 ## Current Capabilities
 
 - **Web capture**: read images from web pages, lazy-loaded elements, and common image links; send images or references from an overlay; and deduplicate them by content hash.
+- **Local images**: use **Import images** in the editor sidebar to select multiple files, or drop images into the window. Copy an image or screenshot and press `⌘V` (`Ctrl+V` on Windows/Linux) on the canvas, or choose **Paste image** from the new-page menu. PNG, JPEG, WebP, GIF, BMP, and TIFF are supported. Images are copied into the project, each batch can be undone, and text fields retain normal text paste.
 - **Storybook editing**: reorder pages and manage covers, title pages, body pages, blank pages, and trash. Text styles, page backgrounds, image scale, and image position can be set per page type or page. Outline, soft-halo, painted-wash, and clear-panel readability modes keep body text legible over complex art, with per-page text-width control.
 - **Script layout**: map script text to pages with `[Cover]`, `[Author]`, `[Title]`, and numbered tags. Equivalent Chinese tags are also supported.
 - **Image adjustments**: adjust brightness, exposure, contrast, highlights, shadows, saturation, temperature, tint, and selective HSL per page, with background processing based on a selected color.

@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { DndContext, closestCenter, PointerSensor, KeyboardSensor, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy, sortableKeyboardCoordinates } from '@dnd-kit/sortable';
-import { LayoutTemplate, Archive, ChevronLeft, ChevronRight, FilePlus } from 'lucide-react';
+import { LayoutTemplate, Archive, ChevronLeft, ChevronRight, FilePlus, ImagePlus } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { SortableImageItem } from './SortableImageItem';
 import { PageImageContextMenu, type PageImageMenuTarget } from './PageImageContextMenu';
@@ -24,6 +24,9 @@ interface LeftSidebarProps {
   handleDragEnd: (event: DragEndEvent) => void;
   handleInsertBlank: () => void;
   handleInsertCodex: () => void;
+  handleImportImages: () => void;
+  handlePasteImage: () => void;
+  isImporting: boolean;
   handleRedraw: (id: string, idx: number) => void;
   hasTitle?: boolean;
   imageAdjustments?: Record<string, ImageAdjustments>;
@@ -48,6 +51,9 @@ export function LeftSidebar({
   handleDragEnd,
   handleInsertBlank,
   handleInsertCodex,
+  handleImportImages,
+  handlePasteImage,
+  isImporting,
   handleRedraw,
   hasTitle,
   imageAdjustments,
@@ -127,6 +133,11 @@ export function LeftSidebar({
             <h2 className="font-bold whitespace-nowrap">{t('sidebar.pages')}</h2>
           </div>
           <div className="flex gap-1">
+            <button type="button" onClick={handleImportImages} disabled={isImporting}
+              title={t('imageImport.chooseFiles')} aria-label={t('imageImport.chooseFiles')}
+              className="p-2 rounded-full hover:bg-muted text-muted-foreground transition-colors disabled:opacity-50">
+              <ImagePlus size={16} />
+            </button>
             <div className="relative">
               <button
                 type="button"
@@ -142,6 +153,16 @@ export function LeftSidebar({
               </button>
               {isNewPageMenuOpen && (
                 <div className="absolute right-0 top-full z-50 mt-1 min-w-[164px] rounded-md border border-border bg-popover py-1 text-sm text-popover-foreground shadow-lg">
+                  <button type="button" disabled={isImporting} onClick={() => {
+                    handleImportImages(); setIsNewPageMenuOpen(false);
+                  }} className="w-full px-3 py-1.5 text-left hover:bg-muted transition-colors disabled:opacity-50">
+                    {t('imageImport.chooseFiles')}
+                  </button>
+                  <button type="button" disabled={isImporting} onClick={() => {
+                    handlePasteImage(); setIsNewPageMenuOpen(false);
+                  }} className="w-full px-3 py-1.5 text-left hover:bg-muted transition-colors disabled:opacity-50">
+                    {t('imageImport.paste')}
+                  </button>
                   <button
                     type="button"
                     onClick={() => {
@@ -175,7 +196,11 @@ export function LeftSidebar({
         <div className="flex-1 overflow-y-auto p-4 space-y-4 w-full relative">
           {images.length === 0 ? (
             <div className="text-muted-foreground text-sm text-center mt-10">
-              {t('sidebar.noPages')}<br/>{t('sidebar.sendFromExtension')}
+              {t('sidebar.noPages')}<br/>{t('imageImport.hint')}
+              <button type="button" onClick={handleImportImages} disabled={isImporting}
+                className="mt-3 rounded-md border border-border px-3 py-2 text-foreground hover:bg-muted disabled:opacity-50">
+                {t('imageImport.chooseFiles')}
+              </button>
             </div>
           ) : (
             <DndContext 

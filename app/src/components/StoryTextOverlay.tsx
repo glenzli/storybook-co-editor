@@ -40,11 +40,24 @@ export function StoryTextOverlay({ layer, pageWidth, pageHeight, scale = 1, text
     <svg role="img" aria-label={layer.text} width="100%" height="100%" viewBox={`${x} ${y} ${width} ${height}`}
       style={{ overflow: 'visible', display: 'block' }}>
       {layout.backdrop?.pigment && layout.backdrop.path ? <>
-        <defs><clipPath id={clipId}><path d={layout.backdrop.path} /></clipPath></defs>
+        <defs>
+          <clipPath id={clipId}><path d={layout.backdrop.path} /></clipPath>
+          {layout.backdrop.pigment.map((pass, index) => {
+            const wash = layout.backdrop!;
+            const bleed = Math.max(pass.blur * 4, pass.strokeWidth || 0);
+            // Explicit SVG filters work in WKWebView as well as Chromium. CSS blur on
+            // an overflowing SVG path can silently render as a hard edge in WebKit.
+            return <filter key={index} id={`${clipId}-wash-${index}`} filterUnits="userSpaceOnUse"
+              x={wash.x - bleed} y={wash.y - bleed} width={wash.width + bleed * 2} height={wash.height + bleed * 2}
+              colorInterpolationFilters="sRGB">
+              <feGaussianBlur stdDeviation={pass.blur} />
+            </filter>;
+          })}
+        </defs>
         {layout.backdrop.pigment.map((pass, index) => <g key={index} clipPath={pass.clip ? `url(#${clipId})` : undefined}>
           <path d={pass.path} opacity={pass.opacity} fill={pass.strokeWidth ? 'none' : layout.backdrop!.color}
             stroke={pass.strokeWidth ? layout.backdrop!.color : undefined} strokeWidth={pass.strokeWidth}
-            style={{ filter: `blur(${pass.blur}px)` }} />
+            filter={`url(#${clipId}-wash-${index})`} />
         </g>)}
       </> : layout.backdrop && (layout.backdrop.path
         ? <path d={layout.backdrop.path} fill={layout.backdrop.color} style={{ filter: `blur(${layout.backdrop.feather}px)` }} />

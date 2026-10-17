@@ -1,5 +1,5 @@
 import type { TextEffects } from '../project/model';
-import { createAdaptiveWashPath, normalizeEffects } from './effects';
+import { normalizeEffects } from './effects';
 
 /** Frozen paint passes shared by SVG previews and Canvas/PDF rendering. */
 export interface PigmentPass {
@@ -14,7 +14,7 @@ interface WashGeometry {
   paddingX: number; feather: number; path: string | null;
 }
 
-export function createPigmentWash(wash: WashGeometry, widths: number[], raw: TextEffects): PigmentPass[] {
+export function createPigmentWash(wash: WashGeometry, raw: TextEffects): PigmentPass[] {
   if (!wash.path || wash.width <= 0 || wash.height <= 0) return [];
   const effects = normalizeEffects(raw);
   let seed = effects.seed >>> 0;
@@ -22,27 +22,23 @@ export function createPigmentWash(wash: WashGeometry, widths: number[], raw: Tex
   const { x, y, width: w, height: h } = wash;
   const unit = Math.min(h, wash.paddingX * 3);
   const rough = effects.roughness / 100;
-  const passes: PigmentPass[] = [{ path: wash.path, opacity: 0.66, blur: wash.feather, clip: false }];
-  // Translucent glazes have independent wet edges, without thinning the readable body.
-  for (let i = 0; i < 3; i++) {
-    const dx = (random() - 0.5) * unit * 0.13;
-    const dy = (random() - 0.5) * unit * 0.09;
-    passes.push({ path: createAdaptiveWashPath(x + dx, y + dy, w, h, widths,
-      wash.paddingX, { ...effects, seed: Math.floor(random() * 4294967296) }),
-      opacity: 0.13, blur: wash.feather * (0.55 + random()), clip: false });
-  }
+  // Both coats share one contour, so long paragraphs cannot produce overlapping slabs.
+  const passes: PigmentPass[] = [
+    { path: wash.path, opacity: 0.24, blur: wash.feather * 2, clip: false },
+    { path: wash.path, opacity: 0.92, blur: wash.feather, clip: false },
+  ];
   const ellipse = (cx: number, cy: number, rx: number, ry: number) =>
     `M${cx - rx} ${cy}a${rx} ${ry} 0 1 0 ${rx * 2} 0a${rx} ${ry} 0 1 0 ${-rx * 2} 0Z`;
-  // Broad pools concentrate at the perimeter; no high-contrast noise underneath glyphs.
-  for (let i = 0; i < 16; i++) {
+  // Slight pigment variation belongs at the wet edge, outside the quiet reading surface.
+  for (let i = 0; i < 12; i++) {
     const cx = x + random() * w;
     const cy = y + (i % 2 ? 0.91 : 0.09) * h + (random() - 0.5) * h * 0.18;
-    passes.push({ path: ellipse(cx, cy, w * (0.035 + random() * 0.1), h * (0.12 + random() * 0.18)),
-      opacity: (0.1 + random() * 0.18) * (0.5 + rough * 0.5), blur: unit * 0.09, clip: true });
+    passes.push({ path: ellipse(cx, cy, w * (0.035 + random() * 0.08), unit * (0.1 + random() * 0.12)),
+      opacity: 0.015 + random() * rough * 0.045, blur: unit * 0.12, clip: true });
   }
   // Broken edge accumulation is softly clipped; it must never look like an outline.
-  passes.push({ path: wash.path, opacity: 0.16 + rough * 0.08,
-    blur: Math.max(wash.feather * 0.6, unit * 0.025), clip: true, strokeWidth: unit * 0.055 });
+  passes.push({ path: wash.path, opacity: 0.025 + rough * 0.035,
+    blur: Math.max(wash.feather, unit * 0.04), clip: true, strokeWidth: unit * 0.04 });
   let grains = '';
   for (let i = 0; i < 320; i++) {
     const cx = x + random() * w, t = random();
@@ -51,7 +47,7 @@ export function createPigmentWash(wash: WashGeometry, widths: number[], raw: Tex
     const radius = unit * (0.003 + random() * 0.007);
     grains += ellipse(cx, cy, radius, radius * 0.65);
   }
-  passes.push({ path: grains, opacity: 0.055 + rough * 0.04, blur: unit * 0.003, clip: true });
+  passes.push({ path: grains, opacity: 0.012 + rough * 0.018, blur: unit * 0.006, clip: true });
   return passes;
 }
 

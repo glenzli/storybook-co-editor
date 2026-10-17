@@ -13,7 +13,8 @@ owner below; application roots compose owners and do not absorb their policies.
 - `app/src/publication/`: Versioned web publication schema, frozen text layout,
   shared copyright-page layout, and `.scpub` export lifecycle.
 - `app/src/editor/`: Editor-specific collection projection and asynchronous
-  receive lifecycles.
+  receive lifecycles, including ordered local image insertion and native file
+  selection, drop and clipboard import admission.
 - `app/src/components/right-sidebar/`: Cohesive right-sidebar interaction
   regions, including script editing and Codex proposal review.
 - `app/src/components/ai/`: Editor AI preference, client connection controls,
@@ -31,6 +32,8 @@ owner below; application roots compose owners and do not absorb their policies.
   revision-checked external mutations shared by MCP and the frontend.
 - `app/src-tauri/src/receiver.rs`: Local extension protocol, receive batches,
   image ingestion, trash operations, and receiver events.
+- `app/src-tauri/src/local_image_import.rs`: Session-bound local file and clipboard
+  image validation, bounded decoding, content-addressed copying, and per-file results.
 - `app/src-tauri/src/mcp_server.rs`: Authenticated loopback MCP transport,
   access-token generation and rotation lifecycle, resources, and project tools.
 - `app/src-tauri/src/codex_mcp_config.rs`: Confirmed installation of the local

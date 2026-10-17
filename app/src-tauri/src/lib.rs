@@ -3,6 +3,7 @@ mod codex_image_edit;
 mod codex_mcp_config;
 mod codex_polish;
 mod codex_text_design;
+mod local_image_import;
 mod mcp_server;
 mod pdf_security;
 mod project_archive;
@@ -51,6 +52,8 @@ pub fn run() {
             project_manager::save_project,
             project_manager::close_project,
             project_manager::update_project_state,
+            local_image_import::import_local_images,
+            local_image_import::import_clipboard_image,
             mcp_server::get_mcp_connection_info,
             mcp_server::rotate_mcp_access_token,
             codex_mcp_config::install_mcp_into_codex,
