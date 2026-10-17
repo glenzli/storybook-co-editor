@@ -100,6 +100,10 @@ export const enUS = {
     openProjectDescription: 'Open a local .scproj project file',
     recentProjects: 'Recent projects',
     noRecentProjects: 'No recent projects',
+    removeRecentProject: 'Remove from recent projects',
+    removeRecentLabel: 'Remove {{name}} from recent projects',
+    removeRecentHint: 'Removing a recent entry keeps the local project file.',
+    removeRecentFailure: 'Could not remove the recent entry. Please try again.',
   },
   header: {
     unsavedChanges: 'Unsaved changes',

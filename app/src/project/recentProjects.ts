@@ -3,6 +3,7 @@ import { load } from '@tauri-apps/plugin-store';
 const MAX_RECENT_PROJECTS = 10;
 const SETTINGS_FILE = 'settings.json';
 const STORE_KEY = 'recentProjects';
+let pendingUpdate: Promise<void> = Promise.resolve();
 
 export interface RecentProject {
   path: string;
@@ -17,8 +18,32 @@ export async function loadRecentProjects(): Promise<RecentProject[]> {
 
 export async function saveRecentProjects(projects: RecentProject[]): Promise<void> {
   const store = await load(SETTINGS_FILE, { defaults: {}, autoSave: false });
+  const previous = await store.get<RecentProject[]>(STORE_KEY) ?? [];
   await store.set(STORE_KEY, projects);
-  await store.save();
+  try {
+    await store.save();
+  } catch (error) {
+    await store.set(STORE_KEY, previous);
+    throw error;
+  }
+}
+
+function updateRecentProjects(change: (projects: RecentProject[]) => RecentProject[]): Promise<RecentProject[]> {
+  const update = pendingUpdate.then(async () => {
+    const next = change(await loadRecentProjects());
+    await saveRecentProjects(next);
+    return next;
+  });
+  pendingUpdate = update.then(() => undefined, () => undefined);
+  return update;
+}
+
+export function rememberRecentProject(path: string, name: string): Promise<RecentProject[]> {
+  return updateRecentProjects(projects => withRecentProject(projects, path, name));
+}
+
+export function forgetRecentProject(path: string): Promise<RecentProject[]> {
+  return updateRecentProjects(projects => projects.filter(project => project.path !== path));
 }
 
 export function withRecentProject(

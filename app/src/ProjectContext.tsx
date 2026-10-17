@@ -16,8 +16,8 @@ import {
 } from './project/externalUpdates';
 import {
     loadRecentProjects,
-    saveRecentProjects,
-    withRecentProject,
+    rememberRecentProject,
+    forgetRecentProject,
     type RecentProject,
 } from './project/recentProjects';
 
@@ -28,6 +28,7 @@ interface ProjectContextType {
     createNewProject: () => Promise<void>;
     openProject: () => Promise<void>;
     openRecentProject: (path: string) => Promise<void>;
+    removeRecentProject: (path: string) => Promise<void>;
     saveProjectAs: () => Promise<void>;
     saveProject: (path?: string) => Promise<void>;
     closeProject: () => Promise<void>;
@@ -115,9 +116,11 @@ export const ProjectProvider = ({ children }: { children: ReactNode }) => {
     }, [projectState]);
 
     const addRecentProject = async (path: string, name: string) => {
-        const next = withRecentProject(recentProjects, path, name);
-        await saveRecentProjects(next);
-        setRecentProjects(next);
+        setRecentProjects(await rememberRecentProject(path, name));
+    };
+
+    const removeRecentProject = async (path: string) => {
+        setRecentProjects(await forgetRecentProject(path));
     };
 
     const createNewProject = async () => {
@@ -346,6 +349,7 @@ export const ProjectProvider = ({ children }: { children: ReactNode }) => {
             createNewProject,
             openProject,
             openRecentProject,
+            removeRecentProject,
             saveProjectAs,
             saveProject,
             closeProject,

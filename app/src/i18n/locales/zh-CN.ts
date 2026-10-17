@@ -100,6 +100,10 @@ export const zhCN = {
     openProjectDescription: '打开本地的 .scproj 项目文件',
     recentProjects: '最近使用的项目',
     noRecentProjects: '暂无最近项目',
+    removeRecentProject: '从最近项目中移除',
+    removeRecentLabel: '从最近项目中移除：{{name}}',
+    removeRecentHint: '移除记录不会删除本地绘本文件。',
+    removeRecentFailure: '未能移除最近记录，请重试。',
   },
   header: {
     unsavedChanges: '有未保存的修改',
